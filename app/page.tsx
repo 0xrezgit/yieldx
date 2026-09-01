@@ -1,1 +1,5 @@
-import Dashboard from './dashboard';export default function Page(){return <Dashboard/>}
+import Dashboard from './dashboard';
+
+export default function Page() {
+  return <Dashboard />;
+}
