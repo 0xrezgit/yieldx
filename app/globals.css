@@ -1,3 +1,72 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
-@tailwind base;@tailwind components;@tailwind utilities;
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0B0E11;color:#EAECEF;font:13px Inter,sans-serif}input{outline:none}input:focus{border-color:#5E6AD2!important;box-shadow:0 0 0 2px #5e6ad233}.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}.label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#A8B3BF}.card{background:#12161C;border:1px solid #262D37;border-radius:8px}.field{background:#1B2129;border:1px solid #3A4350;border-radius:5px;padding:8px 9px;color:#EAECEF;width:100%;font-family:'JetBrains Mono',monospace}.pill{border:1px solid #3A4350;border-radius:4px;padding:3px 7px;font-size:10px}.bar{height:5px;background:linear-gradient(90deg,#2EBD85 0 55%,#F59E0B 72%,#F6465D);border-radius:5px;position:relative}.needle{position:absolute;top:-3px;width:2px;height:11px;background:#fff}.state{display:flex;gap:5px;align-items:center;font-size:11px}.kpi{font-size:24px;font-weight:600}.btn{background:#5E6AD2;border:0;border-radius:5px;padding:8px 12px;color:white;font-weight:600}.ghost{background:transparent;border:1px solid #3A4350;border-radius:5px;padding:7px 11px;color:#A8B3BF}.tooltip{border-bottom:1px dotted #667085;cursor:help}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+@config '../tailwind.config.ts';
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — Quant Terminal (canonical, app-wide)                */
+/* ------------------------------------------------------------------ */
+@theme {
+  /* Typography stack */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Layout · content container (1500px → no arbitrary px utilities) */
+  --container-matrix: 1500px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: #0b0e11; /* bg-base */
+  color: #eaecEF; /* text-primary */
+  font-family: var(--font-sans);
+  font-size: 13px; /* body density */
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #5e6ad2;
+  color: #ffffff;
+}
+
+/* ------------------------------------------------------------------ */
+/* Form controls                                                       */
+/* ------------------------------------------------------------------ */
+input,
+select {
+  outline: none;
+}
+
+input::placeholder {
+  color: #667085; /* text-muted */
+}
+
+/* ------------------------------------------------------------------ */
+/* Scrollbars (subtle, theme-consistent)                               */
+/* ------------------------------------------------------------------ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3a4350 transparent;
+}
+
+*::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #3a4350; /* border-strong */
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
