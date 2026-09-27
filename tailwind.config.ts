@@ -1,37 +1,42 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Quant Terminal theme — canonical tokens.
- * Colors, fonts and sizing are defined here (loaded by app/globals.css
- * through `@config`) so both Tailwind v3 tooling and the v4 compiler
- * resolve the same scale. Do not add ad-hoc px values to TSX; extend
- * this file instead.
+ * YieldX theme tokens (loaded by src/app/globals.css through `@config`).
+ * Deep-navy surfaces, violet→cyan brand, one colour per strategy.
+ * Extend this file instead of adding ad-hoc colours in TSX.
  */
 export default {
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
         // Surfaces
-        base: '#0B0E11', // page background
-        surface: '#12161C', // cards
-        elevated: '#1B2129', // inputs, table header, hover
+        base: '#0A0F1E',
+        surface: '#111831',
+        elevated: '#1A2344',
         // Borders
-        default: '#262D37', // default border (cards)
-        strong: '#3A4350', // strong border (inputs, badges)
+        default: '#222C50',
+        strong: '#33406E',
         // Text
-        primary: '#EAECEF', // text-primary
-        secondary: '#A8B3BF', // text-secondary (labels, helper text)
-        muted: '#667085', // text-muted
-        // Accents
-        accent: '#5E6AD2',
-        success: '#2EBD85',
-        danger: '#F6465D',
-        warning: '#F59E0B',
+        primary: '#EEF2FF',
+        secondary: '#A9B4D6',
+        muted: '#6E79A0',
+        // Brand
+        accent: '#7C5CFF',
+        brand2: '#22D3EE',
+        // Status
+        success: '#34D399',
+        warning: '#FBBF24',
+        danger: '#FB7185',
         info: '#38BDF8',
+        // Strategies
+        'st-pt': '#38BDF8',
+        'st-loop': '#A78BFA',
+        'st-yt': '#F59E0B',
+        'st-clmm': '#34D399',
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        sans: ['Vazirmatn', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
     },

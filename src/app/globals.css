@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+@config '../../tailwind.config.ts';
+
+@theme {
+  /* Vazirmatn carries both Persian and Latin glyphs and has tabular digits. */
+  --font-sans: 'Vazirmatn', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --container-matrix: 1280px;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 500px at 85% -10%, rgb(124 92 255 / 0.16), transparent 60%),
+    radial-gradient(900px 400px at -10% 0%, rgb(34 211 238 / 0.08), transparent 60%),
+    #0a0f1e;
+  background-attachment: fixed;
+  color: #eef2ff;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #7c5cff;
+  color: #ffffff;
+}
+
+/* Numbers: fixed-width digits, isolated from surrounding RTL text. */
+.num {
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
+/* Brand gradient text / fills. */
+.brand-gradient {
+  background-image: linear-gradient(135deg, #7c5cff, #22d3ee);
+}
+
+/* Space for the mobile bottom bar + iPhone home indicator. */
+.pb-safe {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+.bottom-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+input,
+select,
+textarea {
+  outline: none;
+  font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6e79a0;
+}
+
+details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #33406e transparent;
+}
