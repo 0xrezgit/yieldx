@@ -58,6 +58,17 @@ export abstract class BaseAdapter implements ProtocolAdapter {
   }
 }
 
+/**
+ * Base (underlying) APYs above this are treated as broken API data, not yield —
+ * one bad number (e.g. 1 552 741%) would otherwise turn any YT into a fantasy profit.
+ */
+export const MAX_PLAUSIBLE_APY = 1000;
+
+/** The APY when it is a believable percentage, otherwise null (unknown). */
+export function plausibleAPY(x: number | null | undefined): number | null {
+  return x !== null && x !== undefined && Number.isFinite(x) && x > -100 && x <= MAX_PLAUSIBLE_APY ? x : null;
+}
+
 export const toPercent = (fraction: unknown): number => {
   const n = typeof fraction === 'string' ? Number(fraction) : (fraction as number);
   return Number.isFinite(n) ? n * 100 : NaN;

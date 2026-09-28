@@ -74,7 +74,8 @@ export default function Opportunities() {
                 days: m.daysToMaturity,
                 entryAPY: round(m.impliedAPY),
                 exitAPY: round(m.impliedAPY),
-                baseAPY: m.baseAPY === null ? s.calc.baseAPY : round(m.baseAPY),
+                // Unknown base APY → 0 (the calculator warns), never the previous market's value.
+                baseAPY: m.baseAPY === null || !Number.isFinite(m.baseAPY) ? 0 : round(m.baseAPY),
                 holdDays: Math.min(s.calc.holdDays, m.daysToMaturity),
                 ...(m.points
                   ? { pointsPerDay: m.points.pointsPerDay, pointsBasis: m.points.basis, ytMultiplier: m.points.ytMultiplier }
@@ -220,7 +221,7 @@ export default function Opportunities() {
             setCalc({ leverage: st.loop.leverage, borrowAPY: st.loop.borrowAPY, lltv: st.loop.lltv });
             pick(m, 'loop');
           }} />}
-          {tab === 'calc' && <CalculatorPanel c={st.calc} set={setCalc} markets={markets} onPick={(m) => pick(m)} loadingMarket={loadingMarket} />}
+          {tab === 'calc' && <CalculatorPanel screen={st.screen} c={st.calc} set={setCalc} markets={markets} onPick={(m) => pick(m)} loadingMarket={loadingMarket} />}
         </>
       )}
     </main>

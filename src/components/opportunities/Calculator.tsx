@@ -8,6 +8,7 @@ import thresholds from '../../config/thresholds.json';
 import { maxLoopLeverage, simulateLoop, simulatePt, simulateYt, ytEntryLimits, ytPriceFromAPY } from '../../lib/calculators/trade';
 import { ptPriceFromAPY } from '../../lib/calculators/implied-apy';
 import { formatCompact, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
+import { defaultScreenSettings, rankingExclusions, type ScreenSettings } from '../../lib/risk/opportunities';
 import type { OpportunityListing } from '../../lib/risk/opportunities';
 import { NumberField, SelectField } from '../ui/field';
 import { Num } from '../ui/num';
@@ -77,12 +78,15 @@ export function CalculatorPanel({
   markets,
   onPick,
   loadingMarket,
+  screen = defaultScreenSettings,
 }: {
   c: CalcState;
   set: SetCalc;
   markets: OpportunityListing[];
   onPick: (m: OpportunityListing) => void;
   loadingMarket: boolean;
+  /** Screening rules of the boards, to explain why a picked market isn't ranked. */
+  screen?: ScreenSettings;
 }) {
   const options = markets
     .filter((m) => !m.expired)
@@ -90,6 +94,7 @@ export function CalculatorPanel({
     .slice(0, 300);
   const key = (m: OpportunityListing) => `${m.protocol}:${m.id}`;
   const current = c.protocol ? `${c.protocol}:${c.marketId}` : '';
+  const issues = dataIssues(c, markets.find((m) => key(m) === current) ?? null, screen);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[22rem_minmax(0,1fr)] gap-4 items-start">
@@ -170,9 +175,12 @@ export function CalculatorPanel({
       </section>
 
       <div className="flex flex-col gap-4 min-w-0">
-        {c.mode === 'yt' && <YtResult c={c} />}
-        {c.mode === 'pt' && <PtResult c={c} />}
-        {c.mode === 'loop' && <LoopResult c={c} />}
+        <DataWarnings {...issues} />
+        <div className={`flex flex-col gap-4 ${issues.unreliable ? 'opacity-50' : ''}`}>
+          {c.mode === 'yt' && <YtResult c={c} unreliable={issues.unreliable} />}
+          {c.mode === 'pt' && <PtResult c={c} unreliable={issues.unreliable} />}
+          {c.mode === 'loop' && <LoopResult c={c} unreliable={issues.unreliable} />}
+        </div>
         <p className="text-xs text-muted">
           فرض‌ها: قیمت دلاری دارایی ثابت، بازده پایه در کل دوره ثابت، کارمزد روی هر خرید/فروش و بدون کارمزد در سررسید. اعداد تخمینی‌اند و
           توصیه‌ی مالی نیستند.
@@ -183,6 +191,69 @@ export function CalculatorPanel({
 }
 
 // ─── Shared result pieces ─────────────────────────────────────────────────────
+
+/** Base APY above this in the calculator is almost certainly a data error. */
+const SUSPICIOUS_BASE_APY = 200;
+
+/**
+ * Checks the inputs before the numbers are trusted: a base APY the API didn't
+ * give (or an absurd one), a market too thin to trade the capital, and why the
+ * market is missing from the boards. The math below is only as good as these.
+ */
+function dataIssues(c: CalcState, row: OpportunityListing | null, screen: ScreenSettings) {
+  const items: { kind: 'bad' | 'ok'; text: ReactNode }[] = [];
+  if (c.mode === 'yt') {
+    if (row && (row.baseAPY === null || !Number.isFinite(row.baseAPY))) {
+      items.push({ kind: 'ok', text: <>بازده پایه‌ی این بازار از API نیامده؛ خانه‌ی «بازده پایه» را از سایت پروژه پر کنید. بدون آن، سود YT قابل محاسبه نیست.</> });
+    }
+    if (c.baseAPY > SUSPICIOUS_BASE_APY) {
+      items.push({
+        kind: 'bad',
+        text: (
+          <>
+            بازده پایه‌ی <Num>{formatPercent(c.baseAPY, 0)}</Num> غیرعادی است و تقریباً قطعاً خطای داده است؛ نتیجه‌ی زیر با این عدد واقعی نیست.
+          </>
+        ),
+      });
+    }
+  }
+  if (row && row.liquidity !== null && c.capital > 0) {
+    const share = c.capital / Math.max(row.liquidity, 1e-9);
+    if (share > thresholds.liquidity.positionShareWarning) {
+      items.push({
+        kind: share > 0.1 ? 'bad' : 'ok',
+        text: (
+          <>
+            نقدینگی کل این بازار فقط <Num>{formatUSD(row.liquidity, 0)}</Num> است و سرمایه‌ی شما <Num>{formatPercent(share * 100, 0)}</Num> آن است؛ قیمت با معامله‌ی شما جابه‌جا می‌شود و نتیجه قابل اجرا نیست.
+          </>
+        ),
+      });
+    }
+  }
+  const excluded = row ? rankingExclusions(row, screen) : [];
+  if (excluded.length) {
+    items.push({ kind: 'ok', text: <>این بازار در رتبه‌بندی و فهرست فرصت‌ها نیست، چون {excluded.join('؛ ')}.</> });
+  }
+  return { items, unreliable: items.some((i) => i.kind === 'bad') };
+}
+
+function DataWarnings({ items, unreliable }: ReturnType<typeof dataIssues>) {
+  if (!items.length) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      {items.map((i, k) => (
+        <Verdict key={k} kind={i.kind}>
+          {i.text}
+        </Verdict>
+      ))}
+      {unreliable && (
+        <p className="text-sm text-secondary">
+          اعداد زیر فقط حاصل ریاضی همین ورودی‌ها هستند و به‌خاطر مشکل بالا <b className="text-danger">قابل اتکا نیستند</b>؛ جمع‌بندی سبز/زرد نمایش داده نمی‌شود.
+        </p>
+      )}
+    </div>
+  );
+}
 
 function Headline({ items }: { items: { label: string; value: ReactNode; hint?: ReactNode; tone?: string }[] }) {
   return (
@@ -198,6 +269,11 @@ function Headline({ items }: { items: { label: string; value: ReactNode; hint?: 
       </div>
     </div>
   );
+}
+
+/** A result's green/amber/red conclusion — withheld when the inputs are known to be bad. */
+function ResultVerdict({ off, ...props }: { off: boolean; kind: 'good' | 'ok' | 'bad' | 'info'; children: ReactNode }) {
+  return off ? null : <Verdict {...props} />;
 }
 
 function Verdict({ kind, children }: { kind: 'good' | 'ok' | 'bad' | 'info'; children: ReactNode }) {
@@ -265,7 +341,7 @@ const OFFSETS = [-3, -1.5, 0, 1.5, 3];
 
 // ─── YT ────────────────────────────────────────────────────────────────────────
 
-function YtResult({ c }: { c: CalcState }) {
+function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolean }) {
   const input = {
     capital: c.capital,
     underlyingPrice: c.underlyingPrice,
@@ -280,7 +356,7 @@ function YtResult({ c }: { c: CalcState }) {
     pointsBasis: c.pointsBasis,
     valuePerPoint: c.valuePerMillion / 1e6,
   };
-  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0 && c.underlyingPrice > 0)) return <Verdict kind="info">سرمایه، روز تا سررسید و نرخ ورود باید بیشتر از صفر باشند.</Verdict>;
+  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0 && c.underlyingPrice > 0)) return <ResultVerdict off={unreliable} kind="info">سرمایه، روز تا سررسید و نرخ ورود باید بیشتر از صفر باشند.</ResultVerdict>;
 
   const t = simulateYt(input);
   const limits = ytEntryLimits(input, c.lossBudget);
@@ -329,7 +405,7 @@ function YtResult({ c }: { c: CalcState }) {
           { label: 'با ایردراپ', value: <Num>{money(t.total)}</Num>, hint: c.valuePerMillion > 0 ? 'با ارزش فرضی' : 'ارزش پوینت = ۰', tone: tone(t.total) },
         ]}
       />
-      <Verdict kind={kind}>{verdict}</Verdict>
+      <ResultVerdict off={unreliable} kind={kind}>{verdict}</ResultVerdict>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl bg-success/8 border border-success/25 px-3 py-2.5">
@@ -379,8 +455,8 @@ function YtResult({ c }: { c: CalcState }) {
 
 // ─── PT ────────────────────────────────────────────────────────────────────────
 
-function PtResult({ c }: { c: CalcState }) {
-  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0)) return <Verdict kind="info">سرمایه، روز تا سررسید و نرخ ورود باید بیشتر از صفر باشند.</Verdict>;
+function PtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolean }) {
+  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0)) return <ResultVerdict off={unreliable} kind="info">سرمایه، روز تا سررسید و نرخ ورود باید بیشتر از صفر باشند.</ResultVerdict>;
   const input = { capital: c.capital, daysToMaturity: c.days, entryAPY: c.entryAPY, holdDays: c.holdDays, exitAPY: c.exitAPY, feePercent: c.fee };
   const t = simulatePt(input);
   const early = !t.toMaturity;
@@ -398,7 +474,7 @@ function PtResult({ c }: { c: CalcState }) {
           { label: 'سالانه', value: <Num>{formatPercent(t.annualized, 2)}</Num>, tone: 'text-st-pt' },
         ]}
       />
-      <Verdict kind={t.profit >= 0 ? 'good' : 'bad'}>
+      <ResultVerdict off={unreliable} kind={t.profit >= 0 ? 'good' : 'bad'}>
         {early ? (
           <>
             فروش زودتر از سررسید فقط وقتی بی‌ضرر است که نرخ بازار در روز فروش <Bound label="Implied" op="≤" x={t.breakEvenExitAPY} /> باشد. بالا رفتن نرخ
@@ -409,7 +485,7 @@ function PtResult({ c }: { c: CalcState }) {
             نگه‌داری تا سررسید: سود <Num>{formatUSD(t.profit, 0)}</Num> قطعی است (جز ریسک دارایی پایه) و نوسان نرخ بازار روی آن اثری ندارد.
           </>
         )}
-      </Verdict>
+      </ResultVerdict>
       <Details
         rows={[
           ['قیمت PT در ورود', <Num key="p">{formatNumber(t.entryPrice, 5)}</Num>],
@@ -437,9 +513,9 @@ function PtResult({ c }: { c: CalcState }) {
 
 // ─── Loop ──────────────────────────────────────────────────────────────────────
 
-function LoopResult({ c }: { c: CalcState }) {
+function LoopResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolean }) {
   if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0 && c.leverage >= 1 && c.lltv > 0 && c.lltv < 100))
-    return <Verdict kind="info">اهرم باید ≥ ۱ و LLTV بین ۰ و ۱۰۰ باشد.</Verdict>;
+    return <ResultVerdict off={unreliable} kind="info">اهرم باید ≥ ۱ و LLTV بین ۰ و ۱۰۰ باشد.</ResultVerdict>;
   const base = { capital: c.capital, daysToMaturity: c.days, entryAPY: c.entryAPY, borrowAPY: c.borrowAPY, lltv: c.lltv, feePercent: c.fee };
   const t = simulateLoop({ ...base, leverage: c.leverage });
   const minHealth = thresholds.opportunities.loopMinHealth;
@@ -476,7 +552,7 @@ function LoopResult({ c }: { c: CalcState }) {
           { label: 'Health Factor', value: <Num>{formatNumber(t.healthFactor, 2)}</Num>, tone: t.healthFactor < minHealth ? 'text-danger' : 'text-primary' },
         ]}
       />
-      <Verdict kind={kind}>{text}</Verdict>
+      <ResultVerdict off={unreliable} kind={kind}>{text}</ResultVerdict>
       <Details
         rows={[
           ['ارزش وثیقه‌ی PT', <Num key="c">{formatUSD(t.collateralValue, 0)}</Num>],

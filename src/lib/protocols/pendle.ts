@@ -1,7 +1,7 @@
 import protocols from '../../config/protocols.json';
 import type { MarketData, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
-import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, toPercent } from './base';
+import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, plausibleAPY, toPercent } from './base';
 
 /** One row of GET /v1/{chain}/markets (paginated). */
 interface PendleListItem {
@@ -96,7 +96,7 @@ export class PendleAdapter extends BaseAdapter {
       chain: chainName(chainId),
       maturity: m.expiry,
       impliedAPY: toPercent(m.impliedApy),
-      baseAPY: m.underlyingApy === undefined ? null : toPercent(m.underlyingApy),
+      baseAPY: m.underlyingApy === undefined ? null : plausibleAPY(toPercent(m.underlyingApy)),
       liquidity: usd(m.liquidity),
       hasPoints: m.categoryIds?.includes('points') ?? false,
       ytMultiplier: null,
@@ -149,7 +149,7 @@ export class PendleAdapter extends BaseAdapter {
       ptPrice: 1 - ytPrice,
       ytPrice,
       impliedAPY: toPercent(m.impliedApy),
-      baseAPY: toPercent(m.underlyingApy),
+      baseAPY: plausibleAPY(toPercent(m.underlyingApy)) ?? NaN,
       maturity: m.expiry,
       daysToMaturity: daysUntil(m.expiry),
       liquidity: usd(m.liquidity),

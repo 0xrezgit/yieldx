@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Clock, Gift, Loader2, RefreshCw, Search, Sparkles, X } from 'lucide-react';
 import type { MarketListing } from '../../types/market';
 import { formatCompact, formatDate, formatNumber, formatPercent, formatUSDCompact } from '../../lib/utils/formatting';
@@ -125,7 +126,10 @@ export function MarketPicker({ open, onClose, markets, loading, selectedId, onSe
     );
   };
 
-  return (
+  // Rendered into <body>: the picker opens from a sticky side panel, whose own
+  // stacking context would otherwise let later page content paint over the dialog.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       <button type="button" aria-label="بستن" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -241,7 +245,8 @@ export function MarketPicker({ open, onClose, markets, loading, selectedId, onSe
           </footer>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
