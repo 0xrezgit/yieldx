@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Calculator, Coins, Gift, Loader2, RefreshCw, Repeat, SlidersHorizontal } from 'lucide-react';
+import { Calculator, Coins, Gift, Loader2, RefreshCw, Repeat, SlidersHorizontal, Trophy } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
 import { fetchMarket } from '../../lib/data/market-data';
@@ -15,19 +15,21 @@ import { Segmented } from './parts';
 import { YtBoard } from './YtBoard';
 import { PtBoard } from './PtBoard';
 import { LoopBoard } from './LoopBoard';
+import { LeaderBoard, defaultRankSettings, type RankSettings } from './LeaderBoard';
 import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from './Calculator';
 
-type Tab = 'yt' | 'pt' | 'loop' | 'calc';
-const TABS: Tab[] = ['yt', 'pt', 'loop', 'calc'];
+type Tab = 'rank' | 'yt' | 'pt' | 'loop' | 'calc';
+const TABS: Tab[] = ['rank', 'yt', 'pt', 'loop', 'calc'];
 
 interface Stored {
   tab: Tab;
   screen: ScreenSettings;
   loop: LoopSettings;
+  rank: RankSettings;
   calc: CalcState;
 }
 
-const initial: Stored = { tab: 'yt', screen: defaultScreenSettings, loop: defaultLoopSettings, calc: defaultCalc };
+const initial: Stored = { tab: 'rank', screen: defaultScreenSettings, loop: defaultLoopSettings, rank: defaultRankSettings, calc: defaultCalc };
 
 /** Best markets for YT (points), fixed-rate PT and PT loops, plus a trade calculator. */
 export default function Opportunities() {
@@ -43,6 +45,7 @@ export default function Opportunities() {
       tab: TABS.includes(linked as Tab) ? (linked as Tab) : (saved.tab ?? initial.tab),
       screen: { ...initial.screen, ...saved.screen },
       loop: { ...initial.loop, ...saved.loop },
+      rank: { ...initial.rank, ...saved.rank },
       calc: { ...initial.calc, ...saved.calc },
     });
   }, []);
@@ -55,7 +58,7 @@ export default function Opportunities() {
 
   /** Fill the calculator from a list row, then refine with the market's full data (USD price, points program). */
   const pick = useCallback(
-    async (m: OpportunityListing, mode?: CalcMode) => {
+    async (m: OpportunityListing, mode?: CalcMode, extra: Partial<CalcState> = {}) => {
       setSt((s) =>
         s
           ? {
@@ -76,6 +79,7 @@ export default function Opportunities() {
                 ...(m.points
                   ? { pointsPerDay: m.points.pointsPerDay, pointsBasis: m.points.basis, ytMultiplier: m.points.ytMultiplier }
                   : {}),
+                ...extra,
               },
             }
           : s,
@@ -150,6 +154,7 @@ export default function Opportunities() {
           onChange={(t) => patch({ tab: t })}
           label="بخش"
           options={[
+            { id: 'rank', label: <><Trophy size={15} /> رتبه‌بندی</> },
             { id: 'yt', label: <><Gift size={15} /> YT</> },
             { id: 'pt', label: <><Coins size={15} /> PT</> },
             { id: 'loop', label: <><Repeat size={15} /> لوپ</> },
@@ -176,7 +181,7 @@ export default function Opportunities() {
             {tab === 'yt' && s.ytMode === 'roundtrip' && (
               <NumberField label="روز نگه‌داری" value={s.holdDays} onChange={(v) => setS({ holdDays: Math.max(1, v) })} />
             )}
-            {tab === 'yt' && <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />}
+            {(tab === 'yt' || (tab === 'rank' && st.rank.strategy === 'yt')) && <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />}
             <NumberField label="کارمزد هر معامله" value={s.feePercent} onChange={(v) => setS({ feePercent: v })} suffix="%" />
             <NumberField label="حداقل نقدینگی" value={s.minLiquidity} onChange={(v) => setS({ minLiquidity: v })} suffix="$" />
             <NumberField label="حداقل روز تا سررسید" value={s.minDays} onChange={(v) => setS({ minDays: v })} />
@@ -192,6 +197,23 @@ export default function Opportunities() {
         </div>
       ) : (
         <>
+          {tab === 'rank' && (
+            <LeaderBoard
+              markets={markets}
+              s={s}
+              r={st.rank}
+              setR={(p) => patch({ rank: { ...st.rank, ...p } })}
+              loop={st.loop}
+              setLoop={(loop) => patch({ loop })}
+              onCalc={(row, strategy) =>
+                pick(row.m, strategy, {
+                  capital: st.rank.capital,
+                  ...(strategy === 'yt' ? { holdDays: row.days } : { holdDays: row.m.daysToMaturity }),
+                  ...(strategy === 'loop' ? { leverage: st.loop.leverage, borrowAPY: st.loop.borrowAPY, lltv: st.loop.lltv } : {}),
+                })
+              }
+            />
+          )}
           {tab === 'yt' && <YtBoard markets={markets} s={s} onCalc={(m) => pick(m, 'yt')} />}
           {tab === 'pt' && <PtBoard markets={markets} s={s} onCalc={(m) => pick(m, 'pt')} />}
           {tab === 'loop' && <LoopBoard markets={markets} s={s} l={st.loop} setL={(loop) => patch({ loop })} onCalc={(m) => {
