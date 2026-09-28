@@ -1,0 +1,42 @@
+{
+  "exponent": {
+    "name": "Exponent",
+    "nameFa": "اکسپوننت",
+    "chain": "Solana",
+    "liveData": true,
+    "apiBase": "https://api.exponent.finance",
+    "historyAvailable": false,
+    "hasClmm": true,
+    "description": "بازار PT/YT روی سولانا با نقدینگی CLMM بر پایه‌ی بازه‌ی Implied APY"
+  },
+  "pendle": {
+    "name": "Pendle",
+    "nameFa": "پندل",
+    "chain": "EVM",
+    "liveData": true,
+    "apiBase": "https://api-v2.pendle.finance/core",
+    "chains": [1, 42161, 8453, 56],
+    "defaultChainId": 1,
+    "historyAvailable": true,
+    "hasClmm": false,
+    "description": "بزرگ‌ترین بازار توکنیزه کردن بازده روی اتریوم و L2ها"
+  },
+  "spectra": {
+    "name": "Spectra",
+    "nameFa": "اسپکترا",
+    "chain": "EVM",
+    "liveData": false,
+    "historyAvailable": false,
+    "hasClmm": false,
+    "description": "ورود دستی داده — آداپتر زنده هنوز پیاده‌سازی نشده است"
+  },
+  "sense": {
+    "name": "Sense",
+    "nameFa": "سنس",
+    "chain": "EVM",
+    "liveData": false,
+    "historyAvailable": false,
+    "hasClmm": false,
+    "description": "ورود دستی داده — پروتکل در حالت توقف فعالیت است"
+  }
+}
