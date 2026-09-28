@@ -100,6 +100,7 @@ export class PendleAdapter extends BaseAdapter {
       liquidity: usd(m.liquidity),
       hasPoints: m.categoryIds?.includes('points') ?? false,
       ytMultiplier: null,
+      points: null,
       categories: (m.categoryIds ?? []).map((c) => c.toLowerCase()),
       isNew: !!m.isNew,
     }));

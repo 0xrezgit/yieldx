@@ -1,5 +1,5 @@
 import protocols from '../../config/protocols.json';
-import type { MarketData, MarketSummary } from '../../types/market';
+import type { MarketData, MarketPointsProgram, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
 import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, fetchJson, toPercent } from './base';
 import { fetchSolanaTokens, type SolanaToken } from './jupiter';
@@ -36,6 +36,15 @@ interface ExponentMarket {
 const NEW_WINDOW_MS = 14 * 86_400_000;
 
 const activeProgram = (m: ExponentMarket) => (m.pointsBoost?.is_active ? m.pointsBoost : null);
+
+const program = (pb: NonNullable<ExponentMarket['pointsBoost']>): MarketPointsProgram => ({
+  name: pb.points_name,
+  pointsPerDay: pb.points_per_day,
+  basis: pb.type === 'usd' ? 'usd' : 'unit',
+  ytMultiplier: pb.yt_multiplier,
+  lpMultiplier: pb.lp_multiplier,
+  season: pb.season ?? null,
+});
 
 const marketSizeUnits = (m: ExponentMarket) =>
   Number.isFinite(m.totalMarketSize) ? (m.totalMarketSize as number) : null;
@@ -74,6 +83,7 @@ export class ExponentAdapter extends BaseAdapter {
         liquidity: marketSizeUsd(m, token),
         hasPoints: !!pb,
         ytMultiplier: pb?.yt_multiplier ?? null,
+        points: pb ? program(pb) : null,
         categories: (m.categories ?? []).map((c) => c.toLowerCase()),
         isNew: !!m.startDateUnixTs && Date.now() - m.startDateUnixTs * 1000 < NEW_WINDOW_MS,
       };
@@ -104,16 +114,7 @@ export class ExponentAdapter extends BaseAdapter {
       volume24h: null,
       // Exponent lists every points campaign it tracks, so no entry means no program.
       pointsStatus: pb ? 'active' : 'none',
-      points: pb
-        ? {
-            name: pb.points_name,
-            pointsPerDay: pb.points_per_day,
-            basis: pb.type === 'usd' ? 'usd' : 'unit',
-            ytMultiplier: pb.yt_multiplier,
-            lpMultiplier: pb.lp_multiplier,
-            season: pb.season ?? null,
-          }
-        : null,
+      points: pb ? program(pb) : null,
       platform: m.platformName ?? null,
       icon: token?.icon ?? null,
       chain: 'Solana',

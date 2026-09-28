@@ -66,6 +66,8 @@ export interface MarketSummary {
   hasPoints: boolean;
   /** YT points multiplier, when the protocol publishes it. */
   ytMultiplier: number | null;
+  /** Full points program, when the protocol publishes it (Exponent). */
+  points: MarketPointsProgram | null;
   /** Lower-case tags such as "stables", "eth", "sol", "rwa". */
   categories: string[];
   /** Listed recently. */
