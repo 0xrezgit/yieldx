@@ -78,7 +78,9 @@ Pendle market ids are `<chainId>-<address>` (a bare address means Ethereum mainn
 - **PT:** implied vs base APY; limit = `max(implied, base + ptMarginPP)`.
 - **PT loop:** markets tagged `pt-looping` by Pendle plus liquid stablecoin candidates; borrow APY, LLTV and leverage are user inputs (not in Pendle's public API).
 
-Fees apply to every swap (entry and early exit), not to redemption at maturity. `?tab=yt|pt|loop|calc` deep-links a section.
+- **Dollar leaderboard** (`lib/risk/leaderboard.ts`): for a user-entered capital, six markets each with the biggest / smallest dollar profit and loss per strategy. PT and loops are held to maturity; YT exits on its best-cash day at today's implied APY (with the last loss-free day). Rows carry days held, annualised return and $/day, and can be ranked by total or per-day profit.
+
+Fees apply to every swap (entry and early exit), not to redemption at maturity. `?tab=rank|yt|pt|loop|calc` deep-links a section.
 
 ### Risk thresholds
 

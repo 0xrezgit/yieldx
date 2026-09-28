@@ -63,3 +63,22 @@ describe('opportunities render', () => {
     expect(html).not.toContain('NaN');
   });
 });
+
+describe('leaderboard render', () => {
+  it.each(['pt', 'yt', 'loop'] as const)('renders the four %s buckets', async (strategy) => {
+    const { LeaderBoard, defaultRankSettings } = await import('../../src/components/opportunities/LeaderBoard');
+    const html = renderToString(
+      <LeaderBoard
+        markets={markets}
+        s={defaultScreenSettings}
+        r={{ ...defaultRankSettings, strategy, capital: 10_000 }}
+        setR={noop}
+        loop={defaultLoopSettings}
+        setLoop={noop}
+        onCalc={noop}
+      />,
+    );
+    for (const t of ['بیشترین سود', 'کمترین سود', 'بیشترین ضرر', 'کمترین ضرر']) expect(html).toContain(t);
+    expect(html).not.toContain('NaN');
+  });
+});
