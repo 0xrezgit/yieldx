@@ -161,6 +161,6 @@ details > summary::-webkit-details-marker {
   filter: blur(20px);
   pointer-events: none;
 }
-.sx-hero > * {
+.sx-hero > *:not(.absolute) {
   position: relative;
 }

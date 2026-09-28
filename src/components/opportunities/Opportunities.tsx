@@ -124,9 +124,9 @@ export default function Opportunities() {
   const active = markets.filter((m) => !m.expired).length;
 
   return (
-    <main className="max-w-matrix mx-auto px-4 lg:px-6 py-5 flex flex-col gap-4">
+    <main className="max-w-matrix mx-auto px-4 lg:px-8 py-6 lg:py-10 flex flex-col gap-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-extrabold text-primary">فرصت‌ها</h1>
+        <h1 className="text-3xl lg:text-4xl font-medium tracking-tight text-primary">فرصت‌ها</h1>
         <p className="text-sm text-secondary">بهترین بازارها برای YT و پوینت، PT با نرخ ثابت و لوپ PT — از همه‌ی پروتکل‌ها، زنده.</p>
         <p className="text-xs text-muted flex items-center gap-1.5">
           {loading ? (
@@ -183,7 +183,7 @@ export default function Opportunities() {
             )}
             {(tab === 'yt' || (tab === 'rank' && st.rank.strategy === 'yt')) && <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />}
             <NumberField label="کارمزد هر معامله" value={s.feePercent} onChange={(v) => setS({ feePercent: v })} suffix="%" />
-            <NumberField label="حداقل نقدینگی" value={s.minLiquidity} onChange={(v) => setS({ minLiquidity: v })} suffix="$" />
+            <NumberField label="حداقل نقدینگی" value={s.minLiquidity} onChange={(v) => setS({ minLiquidity: v })} suffix="دلار" />
             <NumberField label="حداقل روز تا سررسید" value={s.minDays} onChange={(v) => setS({ minDays: v })} />
           </div>
         </Collapsible>

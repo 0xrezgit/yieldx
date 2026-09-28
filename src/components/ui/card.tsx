@@ -12,11 +12,11 @@ interface CardProps {
 /** Rounded surface with an optional one-line header. */
 export function Card({ title, icon, actions, children, className = '' }: CardProps) {
   return (
-    <section className={`bg-surface/80 border border-default rounded-2xl p-4 md:p-5 min-w-0 flex flex-col gap-4 ${className}`}>
+    <section className={`sx-card p-5 md:p-7 min-w-0 flex flex-col gap-5 ${className}`}>
       {(title || actions) && (
         <div className="flex items-center justify-between gap-3 min-w-0">
           {title && (
-            <h2 className="font-bold text-primary flex items-center gap-2 min-w-0">
+            <h2 className="text-[17px] font-medium text-primary flex items-center gap-2 min-w-0">
               {icon && <span className="shrink-0 text-accent">{icon}</span>}
               <span className="truncate">{title}</span>
             </h2>
@@ -44,16 +44,16 @@ export function Collapsible({
   children: ReactNode;
 }) {
   return (
-    <details open={defaultOpen} className="group bg-surface/80 border border-default rounded-2xl min-w-0">
-      <summary className="flex items-center justify-between gap-3 p-4 md:p-5">
-        <span className="font-bold text-primary flex items-center gap-2 min-w-0">
+    <details open={defaultOpen} className="group sx-card min-w-0">
+      <summary className="flex items-center justify-between gap-3 px-5 md:px-7 py-4 min-h-14">
+        <span className="text-[15px] font-medium text-primary flex items-center gap-2 min-w-0">
           {icon && <span className="shrink-0 text-accent">{icon}</span>}
           <span className="truncate">{title}</span>
           {badge}
         </span>
         <ChevronDown size={18} className="text-muted transition-transform group-open:rotate-180 shrink-0" />
       </summary>
-      <div className="px-4 pb-4 md:px-5 md:pb-5 flex flex-col gap-4">{children}</div>
+      <div className="px-5 md:px-7 pb-6 pt-1 flex flex-col gap-5">{children}</div>
     </details>
   );
 }

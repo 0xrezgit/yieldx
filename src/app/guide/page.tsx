@@ -29,14 +29,14 @@ const terms: [string, string][] = [
 
 export default function GuidePage() {
   return (
-    <main className="max-w-2xl mx-auto px-4 lg:px-6 py-5 flex flex-col gap-4">
-      <h1 className="text-2xl font-extrabold text-primary">راهنما</h1>
+    <main className="max-w-2xl mx-auto px-4 lg:px-8 py-6 lg:py-10 flex flex-col gap-6">
+      <h1 className="text-3xl lg:text-4xl font-medium tracking-tight text-primary">راهنما</h1>
 
-      <section className="bg-surface/80 border border-default rounded-2xl p-5">
+      <section className="sx-card p-6 md:p-7">
         <ol className="flex flex-col gap-3">
           {steps.map((s, i) => (
             <li key={s} className="flex items-center gap-3">
-              <span className="grid place-items-center size-8 rounded-full brand-gradient text-white font-bold shrink-0 num">
+              <span className="grid place-items-center size-8 rounded-md bg-accent/15 text-accent font-medium shrink-0 num">
                 {(i + 1).toLocaleString('fa-IR')}
               </span>
               <span className="text-primary">{s}</span>
@@ -45,12 +45,12 @@ export default function GuidePage() {
         </ol>
       </section>
 
-      <section className="bg-surface/80 border border-default rounded-2xl p-5">
+      <section className="sx-card p-6 md:p-7">
         <dl className="flex flex-col divide-y divide-default">
           {terms.map(([t, d]) => (
             <div key={t} className="py-3 first:pt-0 last:pb-0">
-              <dt className="font-bold text-primary">{t}</dt>
-              <dd className="text-secondary text-sm">{d}</dd>
+              <dt className="font-medium text-primary">{t}</dt>
+              <dd className="text-secondary text-sm leading-7">{d}</dd>
             </div>
           ))}
         </dl>

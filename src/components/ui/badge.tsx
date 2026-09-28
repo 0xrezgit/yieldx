@@ -13,12 +13,12 @@ export const toneText: Record<Tone, string> = {
 };
 
 export const toneSurface: Record<Tone, string> = {
-  success: 'text-success bg-success/12 border-success/30',
-  warning: 'text-warning bg-warning/12 border-warning/30',
-  danger: 'text-danger bg-danger/12 border-danger/30',
-  info: 'text-info bg-info/12 border-info/30',
-  accent: 'text-accent bg-accent/15 border-accent/35',
-  muted: 'text-secondary bg-elevated border-strong',
+  success: 'text-success bg-success/12 border-transparent',
+  warning: 'text-warning bg-warning/12 border-transparent',
+  danger: 'text-danger bg-danger/12 border-transparent',
+  info: 'text-info bg-info/12 border-transparent',
+  accent: 'text-accent bg-accent/15 border-transparent',
+  muted: 'text-secondary bg-elevated border-transparent',
 };
 
 export const riskTone = { low: 'success', medium: 'warning', high: 'danger' } as const;
@@ -35,7 +35,7 @@ export const strategyColor: Record<StrategyId, { text: string; bg: string; borde
 export function Badge({ tone = 'muted', children }: { tone?: Tone; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs font-medium border rounded-full px-2.5 py-0.5 whitespace-nowrap ${toneSurface[tone]}`}
+      className={`inline-flex items-center gap-1 h-[22px] text-xs font-medium border rounded px-2 whitespace-nowrap ${toneSurface[tone]}`}
     >
       {children}
     </span>

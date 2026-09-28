@@ -28,17 +28,29 @@ export function formatCompact(x: number, digits = 1): string {
   return nf({ notation: 'compact', maximumFractionDigits: digits }).format(x);
 }
 
-/** −1234.5 → «‎−$۱٬۲۳۴٫۵» */
-export function formatUSD(x: number, digits = 2): string {
-  if (!Number.isFinite(x)) return EMPTY;
-  const sign = x < 0 ? '−' : '';
-  return `${sign}$${nf({ maximumFractionDigits: digits }).format(Math.abs(x))}`;
+/** Isolates the number (LRI…PDI) so a sign stays attached inside RTL text. */
+const LRI = '\u2066';
+const PDI = '\u2069';
+export const DOLLAR = 'دلار';
+
+/** Sign for a value that is shown with `digits` decimals: none when it rounds to zero. */
+function signOf(x: number, digits: number, signed: boolean): string {
+  const zero = Math.abs(x) < 0.5 * 10 ** -digits;
+  return zero ? '' : x < 0 ? '−' : signed ? '+' : '';
 }
 
-export function formatUSDCompact(x: number): string {
+/**
+ * Money in dollars, written the Persian way: −1234.5 → «−۱٬۲۳۴٫۵ دلار» (never «$»).
+ * Inside <Num> the unit is split off automatically so it sits after the number in RTL.
+ */
+export function formatUSD(x: number, digits = 2, signed = false): string {
   if (!Number.isFinite(x)) return EMPTY;
-  const sign = x < 0 ? '−' : '';
-  return `${sign}$${formatCompact(Math.abs(x))}`;
+  return `${LRI}${signOf(x, digits, signed)}${nf({ maximumFractionDigits: digits }).format(Math.abs(x))}${PDI} ${DOLLAR}`;
+}
+
+export function formatUSDCompact(x: number, signed = false): string {
+  if (!Number.isFinite(x)) return EMPTY;
+  return `${LRI}${signOf(x, 1, signed)}${formatCompact(Math.abs(x))}${PDI} ${DOLLAR}`;
 }
 
 /** Percent value in percent units: 8.5 → «۸٫۵٪». */
@@ -76,6 +88,9 @@ const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 /** Accept Persian/Arabic digits and separators typed into inputs. */
 export function parseLocaleNumber(input: string): number {
   const normalized = input
+    // Invisible direction marks from formatted numbers, and the typographic minus.
+    .replace(/[\u200e\u200f\u061c\u2066-\u2069]/g, '')
+    .replace(/−/g, '-')
     .replace(/[۰-۹]/g, (d) => String(FA_DIGITS.indexOf(d)))
     .replace(/[٠-٩]/g, (d) => String(AR_DIGITS.indexOf(d)))
     .replace(/[٬,\s]/g, '')

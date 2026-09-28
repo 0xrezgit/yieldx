@@ -27,14 +27,14 @@ const PROTOCOLS = Object.keys(protocols) as ProtocolId[];
 /** Protocol + market picker, capital, and the market values (auto-filled or manual). */
 export function MarketForm({ p, set, replace, msg }: Props) {
   const md = useMarketData(p.protocol);
-  const [historyText, setHistoryText] = useState(p.apyHistory.join('، '));
+  const [historyText, setHistoryText] = useState(p.apyHistory.map((x) => formatNumber(x, 4)).join('، '));
   const [pickerOpen, setPickerOpen] = useState(false);
   const closePicker = useCallback(() => setPickerOpen(false), []);
   const listing = md.markets.find((m) => m.id === p.marketId) ?? null;
   const activeCount = md.markets.filter((m) => !m.expired).length;
 
   useEffect(() => {
-    setHistoryText(p.apyHistory.join('، '));
+    setHistoryText(p.apyHistory.map((x) => formatNumber(x, 4)).join('، '));
   }, [p.apyHistory]);
 
   const fetchNow = async (marketId: string) => {
@@ -113,7 +113,7 @@ export function MarketForm({ p, set, replace, msg }: Props) {
 
       <Status md={md} />
 
-      <NumberField label="سرمایه" value={p.capital} onChange={(v) => set('capital', v)} suffix="USD" error={msg.error('capital')} />
+      <NumberField label="سرمایه" value={p.capital} onChange={(v) => set('capital', v)} suffix="دلار" error={msg.error('capital')} />
 
       <div className="grid grid-cols-2 gap-3">
         <NumberField label="قیمت PT" value={p.ptPrice} onChange={(v) => set('ptPrice', v)} error={msg.error('ptPrice')} />
@@ -129,7 +129,7 @@ export function MarketForm({ p, set, replace, msg }: Props) {
           label="قیمت دارایی"
           value={p.underlyingPrice}
           onChange={(v) => set('underlyingPrice', v)}
-          suffix="USD"
+          suffix="دلار"
           error={msg.error('underlyingPrice')}
         />
         <div className="col-span-2">

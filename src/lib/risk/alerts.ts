@@ -24,7 +24,7 @@ export const ALERT_METRICS: Record<AlertMetric, { label: string; unit: string }>
   impliedAPY: { label: 'Implied APY', unit: '٪' },
   gapPercent: { label: 'شکاف نسبی Implied/پایه', unit: '٪' },
   healthFactor: { label: 'فاکتور سلامت لوپ', unit: '' },
-  costPerMillion: { label: 'هزینه‌ی هر ۱M پوینت', unit: '$' },
+  costPerMillion: { label: 'هزینه‌ی هر ۱M پوینت', unit: 'دلار' },
   ytROI: { label: 'بازده خالص YT', unit: '٪' },
   apyTrend7d: { label: 'شیب ۷ روزه‌ی APY', unit: 'واحد درصد/روز' },
   clmmEdgeDistance: { label: 'فاصله تا لبه‌ی بازه‌ی CLMM', unit: '٪' },

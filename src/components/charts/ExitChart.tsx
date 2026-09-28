@@ -1,5 +1,8 @@
 import type { ExitPlan } from '../../lib/calculators/exit-plan';
-import { formatUSDCompact } from '../../lib/utils/formatting';
+import { formatCompact } from '../../lib/utils/formatting';
+
+/** Axis label: compact signed number (the unit, dollars, is in the legend). */
+const axis = (x: number) => `${x < 0 ? '−' : ''}${formatCompact(Math.abs(x))}`;
 
 const W = 600;
 const H = 200;
@@ -38,13 +41,13 @@ export function ExitChart({ plan, days }: { plan: ExitPlan; days: number }) {
         <rect x={PAD.left} width={W - PAD.left - PAD.right} y={y(0)} height={Math.max(0, y(-plan.lossBudget) - y(0))} fill="#F2545B" opacity={0.1} />
         <line x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} stroke="#45455A" />
         <text x={W - PAD.right + 6} y={y(0) + 4} fontSize={12} fill="#85848F">
-          $0
+          ۰
         </text>
         <text x={W - PAD.right + 6} y={y(hi) + 4} fontSize={12} fill="#85848F">
-          {formatUSDCompact(hi)}
+          {axis(hi)}
         </text>
         <text x={W - PAD.right + 6} y={y(lo) + 4} fontSize={12} fill="#85848F">
-          {formatUSDCompact(lo)}
+          {axis(lo)}
         </text>
 
         {plan.horizon < days && marker(plan.horizon, '#4285F4', true)}
@@ -63,7 +66,7 @@ export function ExitChart({ plan, days }: { plan: ExitPlan; days: number }) {
         </text>
       </svg>
       <div dir="rtl" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary mt-2">
-        <Legend cls="bg-warning" label="نتیجه‌ی نقدی" />
+        <Legend cls="bg-warning" label="نتیجه‌ی نقدی (دلار)" />
         <Legend cls="bg-success" label="با ایردراپ" />
         <Legend cls="bg-accent" label="زمان پیشنهادی فروش" />
         {plan.horizon < days && <Legend cls="bg-brand2" label="اسنپ‌شات" />}

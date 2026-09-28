@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
+import { assertPersianMoney } from '../helpers/text';
 import { analyzeScenario } from '../../src/lib/analysis';
 import { buildInsights, buildVerdict } from '../../src/lib/risk/advisor';
 import { evaluateAlerts } from '../../src/lib/risk/alerts';
@@ -63,7 +64,9 @@ function assertClean(html: string) {
   // Attributes too: a NaN width/position silently breaks layout.
   const attr = /[a-z-]+="[^"]*(NaN|undefined)[^"]*"/.exec(html);
   expect(attr?.[0] ?? null).toBeNull();
+  assertPersianMoney(html);
 }
+
 
 /** Server-renders both layouts for several scenarios to catch runtime errors. */
 describe('dashboard layouts render', () => {

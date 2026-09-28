@@ -21,7 +21,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fa" dir="rtl">
-      <body>
+      <body className="sx">
         <AppShell>{children}</AppShell>
       </body>
     </html>

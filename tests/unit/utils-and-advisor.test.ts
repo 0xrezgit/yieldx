@@ -24,7 +24,13 @@ const scenario = (over: Partial<ScenarioParams> = {}): ScenarioParams => ({
 describe('Persian formatting', () => {
   it('uses Persian digits and separators', () => {
     expect(formatNumber(1234.5)).toBe('۱٬۲۳۴٫۵');
-    expect(formatUSD(-1234.5)).toBe('−$۱٬۲۳۴٫۵');
+    // Dollars are written «دلار» after a bidi-isolated number, never «$».
+    expect(formatUSD(-1234.5)).toBe('\u2066−۱٬۲۳۴٫۵\u2069 دلار');
+    expect(formatUSD(12, 0, true)).toBe('\u2066+۱۲\u2069 دلار');
+    expect(formatUSD(-0.001)).toBe('\u2066۰\u2069 دلار');
+    // What the app displays can be read back (negative APY history, pasted values).
+    expect(parseLocaleNumber(formatNumber(-1.5))).toBe(-1.5);
+    expect(parseNumberList(['−۱٫۵', '۲٬۵۰۰'].join('، '))).toEqual([-1.5, 2500]);
     expect(formatPercent(8.5)).toBe('۸٫۵٪');
     expect(formatPercent(2, 0, true)).toBe('+۲٪');
   });

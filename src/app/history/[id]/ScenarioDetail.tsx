@@ -53,7 +53,7 @@ export default function ScenarioDetail({ id }: { id: string }) {
           <Link href="/history" className="inline-flex items-center gap-1 text-sm text-secondary">
             <ArrowRight size={14} /> سناریوها
           </Link>
-          <h1 className="text-2xl font-extrabold text-primary truncate">{s.name}</h1>
+          <h1 className="text-3xl lg:text-4xl font-medium tracking-tight text-primary truncate">{s.name}</h1>
           <p className="text-xs text-muted">آخرین تغییر {formatDate(s.updatedAt)}</p>
         </div>
         <Link

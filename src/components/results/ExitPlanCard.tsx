@@ -19,7 +19,7 @@ const stepLook: Record<StepTone, { icon: typeof Info; cls: string }> = {
   info: { icon: Info, cls: 'border-strong bg-elevated/50 text-secondary' },
 };
 
-const money = (x: number) => (x >= 0 ? `+${formatUSD(x, 0)}` : formatUSD(x, 0));
+const money = (x: number) => formatUSD(x, 0, true);
 
 /** When to sell YT: the plan in words, a day-by-day chart and price checkpoints. */
 export function ExitPlanCard({ p, a, set }: { p: ScenarioParams; a: Analysis; set?: ScenarioSetter }) {
