@@ -9,7 +9,7 @@ import type { FieldMessages } from './messages';
 export function AirdropForm({ p, set, msg }: { p: ScenarioParams; set: ScenarioSetter; msg: FieldMessages }) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      <NumberField label="FDV توکن" value={p.fdv} onChange={(v) => set('fdv', v)} suffix="USD" error={msg.error('fdv')} />
+      <NumberField label="FDV توکن" value={p.fdv} onChange={(v) => set('fdv', v)} suffix="دلار" error={msg.error('fdv')} />
       <NumberField
         label="سهم ایردراپ"
         value={p.airdropAllocation}

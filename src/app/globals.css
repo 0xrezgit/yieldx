@@ -7,6 +7,14 @@
   --font-sans: 'Vazirmatn', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --container-matrix: 1280px;
+  /* Stripe-like geometry: 6–8px radii, medium-weight headings. */
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
+  --radius-3xl: 12px;
+  --font-weight-semibold: 500;
+  --font-weight-bold: 500;
+  --font-weight-extrabold: 600;
 }
 
 :root {
@@ -17,11 +25,11 @@ body {
   margin: 0;
   min-height: 100dvh;
   background:
-    radial-gradient(1200px 500px at 85% -10%, rgb(124 92 255 / 0.16), transparent 60%),
-    radial-gradient(900px 400px at -10% 0%, rgb(34 211 238 / 0.08), transparent 60%),
-    #0a0f1e;
+    radial-gradient(1100px 480px at 85% -12%, rgb(118 98 253 / 0.14), transparent 60%),
+    radial-gradient(800px 380px at -10% -5%, rgb(244 75 204 / 0.06), transparent 60%),
+    #0b0b14;
   background-attachment: fixed;
-  color: #eef2ff;
+  color: #f8f7ff;
   font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.7;
@@ -30,7 +38,7 @@ body {
 }
 
 ::selection {
-  background: #7c5cff;
+  background: #533afd;
   color: #ffffff;
 }
 
@@ -40,9 +48,9 @@ body {
   unicode-bidi: isolate;
 }
 
-/* Brand gradient text / fills. */
+/* Brand fill: Stripe's violet, with a barely-there sweep. */
 .brand-gradient {
-  background-image: linear-gradient(135deg, #7c5cff, #22d3ee);
+  background-image: linear-gradient(135deg, #533afd, #6b55fe);
 }
 
 /* Space for the mobile bottom bar + iPhone home indicator. */
@@ -62,7 +70,7 @@ textarea {
 
 input::placeholder,
 textarea::placeholder {
-  color: #6e79a0;
+  color: #85848f;
 }
 
 details > summary {
@@ -75,7 +83,7 @@ details > summary::-webkit-details-marker {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #33406e transparent;
+  scrollbar-color: #45455a transparent;
 }
 
 /*
@@ -153,6 +161,6 @@ details > summary::-webkit-details-marker {
   filter: blur(20px);
   pointer-events: none;
 }
-.sx-hero > * {
+.sx-hero > *:not(.absolute) {
   position: relative;
 }

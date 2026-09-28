@@ -41,7 +41,7 @@ export function WebDashboard({ d }: { d: ReadyDashboard }) {
           <div className="flex items-center gap-3 min-w-0">
             {p.marketName && <TokenLogo src={p.marketIcon} name={p.marketName} size={44} />}
             <div className="min-w-0">
-              <h1 className="text-2xl font-extrabold text-primary truncate">{p.marketName || 'داشبورد'}</h1>
+              <h1 className="text-3xl lg:text-4xl font-medium tracking-tight text-primary truncate">{p.marketName || 'داشبورد'}</h1>
               {p.marketName && (
                 <p className="text-sm text-muted truncate">{[p.platform, p.chain].filter(Boolean).join(' · ')}</p>
               )}

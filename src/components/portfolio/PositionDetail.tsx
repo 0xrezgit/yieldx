@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, ArrowRight, Gift, History, Loader2, Plus, RefreshCw, Scale, Settings2, ShieldAlert, Target, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, ExternalLink, Gift, History, Loader2, Plus, RefreshCw, Scale, Settings2, ShieldAlert, Target, Trash2 } from 'lucide-react';
 import type { Position, PositionEventType } from '../../types/position';
 import { usePortfolioView, type PositionView } from '../../hooks/usePortfolioView';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
@@ -542,6 +542,34 @@ function ManualMarks({ x, onSave }: { x: PositionView; onSave: (p: Position) => 
   );
 }
 
+/**
+ * A user note. Links (e.g. a block-explorer transaction) are shown short and
+ * clickable instead of as a long URL that would break the layout; other text wraps.
+ */
+function NoteText({ note }: { note: string }) {
+  const parts = note.split(/(https?:\/\/\S+)/g).filter(Boolean);
+  return (
+    <div className="text-xs text-sx-faint min-w-0 [overflow-wrap:anywhere]">
+      {parts.map((part, i) => {
+        if (!/^https?:\/\//.test(part)) return <span key={i}>{part}</span>;
+        let label = part;
+        try {
+          const u = new URL(part);
+          const last = u.pathname.split('/').filter(Boolean).pop() ?? '';
+          label = `${u.hostname.replace(/^www\./, '')}${last ? ` · ${last.length > 14 ? `${last.slice(0, 6)}…${last.slice(-4)}` : last}` : ''}`;
+        } catch {
+          /* not a valid URL: show as typed */
+        }
+        return (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer" dir="ltr" title={part} className="inline-flex items-center gap-1 text-sx-accent hover:underline underline-offset-4">
+            {label} <ExternalLink size={11} aria-hidden />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 const EVENT_DOT: Record<PositionEventType, string> = {
   buy: 'bg-sx-accent',
   sell: 'bg-sx-blue',
@@ -582,7 +610,7 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
       {!adding && <p className="text-xs text-sx-faint -mt-3">خرید مجدد، فروش، بازخرید، دریافت سود یا پاداش، وام و بازپرداخت</p>}
       <ol className="flex flex-col border-r border-sx-border mr-1.5">
         {sorted.map((e) => (
-          <li key={e.id} className="relative pr-6 pb-6 last:pb-0 flex flex-col gap-1.5 text-sm">
+          <li key={e.id} className="relative min-w-0 pr-6 pb-6 last:pb-0 flex flex-col gap-1.5 text-sm">
             <span className={`absolute -right-[5px] top-1.5 size-2.5 rounded-full ring-4 ring-sx-surface ${EVENT_DOT[e.type]}`} aria-hidden />
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-sx-text">{EVENT_FA[e.type]}</span>
@@ -613,7 +641,7 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
                 {f.usdRate !== null && <>({formatDollar(f.amount * f.usdRate)})</>} · {f.included ? 'داخل مبلغ حساب شده' : 'جداگانه پرداخت شده'}
               </div>
             ))}
-            {e.note && <div className="text-xs text-sx-faint">{e.note}</div>}
+            {e.note && <NoteText note={e.note} />}
             <button
               type="button"
               className="self-start text-xs text-sx-faint hover:text-sx-red inline-flex items-center gap-1 transition-colors"

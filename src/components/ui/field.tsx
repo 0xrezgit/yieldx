@@ -2,11 +2,11 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { parseLocaleNumber } from '../../lib/utils/formatting';
+import { formatDate, parseLocaleNumber } from '../../lib/utils/formatting';
 
 const controlBase =
   // 16px text: iOS Safari zooms into smaller inputs.
-  'w-full bg-elevated/70 border rounded-xl px-3 py-2.5 text-primary text-base transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25';
+  'w-full bg-elevated border rounded-md px-3 py-2.5 text-primary text-base transition-colors focus:border-accent focus:ring-3 focus:ring-brand2/45';
 
 const border = (error?: string, warning?: string) =>
   error ? ' border-danger' : warning ? ' border-warning' : ' border-strong';
@@ -43,7 +43,7 @@ interface NumberFieldProps {
   error?: string;
   warning?: string;
   step?: number;
-  /** Show Persian digits while typing (input still accepts Latin digits). */
+  /** Show Persian digits while typing (default; input still accepts Latin digits). */
   persian?: boolean;
 }
 
@@ -54,7 +54,7 @@ const toFa = (s: string) => s.replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]).rep
  * Numeric input that accepts Persian/Arabic digits. Keeps the raw text while the
  * user types (so "0." or "۱٫" work) and reports only valid numbers upward.
  */
-export function NumberField({ label, value, onChange, suffix, hint, error, warning, persian }: NumberFieldProps) {
+export function NumberField({ label, value, onChange, suffix, hint, error, warning, persian = true }: NumberFieldProps) {
   const id = useId();
   const show = (s: string) => (persian ? toFa(s) : s);
   const [draft, setDraft] = useState(Number.isFinite(value) ? show(String(value)) : '');
@@ -115,6 +115,7 @@ export function TextField({ label, value, onChange, type = 'text', placeholder, 
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+      {type === 'date' && value && <p className="text-[11px] text-muted mt-1">{formatDate(value)}</p>}
     </Shell>
   );
 }

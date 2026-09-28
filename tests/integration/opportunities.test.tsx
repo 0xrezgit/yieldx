@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'react-dom/server';
+import { assertPersianMoney } from '../helpers/text';
 import { YtBoard } from '../../src/components/opportunities/YtBoard';
 import { PtBoard } from '../../src/components/opportunities/PtBoard';
 import { LoopBoard } from '../../src/components/opportunities/LoopBoard';
@@ -61,6 +62,7 @@ describe('opportunities render', () => {
     const html = renderToString(<CalculatorPanel c={{ ...defaultCalc, ...over }} set={noop} markets={markets} onPick={noop} loadingMarket={false} />);
     expect(html.length).toBeGreaterThan(1000);
     expect(html).not.toContain('NaN');
+    assertPersianMoney(html);
   });
 });
 
@@ -80,5 +82,6 @@ describe('leaderboard render', () => {
     );
     for (const t of ['بیشترین سود', 'کمترین سود', 'بیشترین ضرر', 'کمترین ضرر']) expect(html).toContain(t);
     expect(html).not.toContain('NaN');
+    assertPersianMoney(html);
   });
 });

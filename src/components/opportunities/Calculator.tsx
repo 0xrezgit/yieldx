@@ -65,7 +65,7 @@ export const defaultCalc: CalcState = {
   lltv: 86,
 };
 
-const money = (x: number) => (x >= 0 ? `+${formatUSD(x, 0)}` : formatUSD(x, 0));
+const money = (x: number) => formatUSD(x, 0, true);
 const tone = (x: number) => (x >= 0 ? 'text-success' : 'text-danger');
 
 type SetCalc = (patch: Partial<CalcState>) => void;
@@ -126,7 +126,7 @@ export function CalculatorPanel({
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <NumberField label="سرمایه" value={c.capital} onChange={(v) => set({ capital: v })} suffix="$" />
+          <NumberField label="سرمایه" value={c.capital} onChange={(v) => set({ capital: v })} suffix="دلار" />
           <NumberField label="روز تا سررسید" value={c.days} onChange={(v) => set({ days: v })} />
           <NumberField label="نرخ ورود (Implied)" value={c.entryAPY} onChange={(v) => set({ entryAPY: v })} suffix="%" />
           {c.mode === 'yt' && <NumberField label="بازده پایه" value={c.baseAPY} onChange={(v) => set({ baseAPY: v })} suffix="%" />}
@@ -161,8 +161,8 @@ export function CalculatorPanel({
                 ]}
               />
               <NumberField label="ضریب YT" value={c.ytMultiplier} onChange={(v) => set({ ytMultiplier: v })} suffix="×" />
-              <NumberField label="قیمت دارایی" value={c.underlyingPrice} onChange={(v) => set({ underlyingPrice: v })} suffix="$" />
-              <NumberField label="ارزش هر ۱M پوینت" value={c.valuePerMillion} onChange={(v) => set({ valuePerMillion: v })} suffix="$" />
+              <NumberField label="قیمت دارایی" value={c.underlyingPrice} onChange={(v) => set({ underlyingPrice: v })} suffix="دلار" />
+              <NumberField label="ارزش هر ۱M پوینت" value={c.valuePerMillion} onChange={(v) => set({ valuePerMillion: v })} suffix="دلار" />
               <NumberField label="سقف ضرر" value={c.lossBudget} onChange={(v) => set({ lossBudget: v })} suffix="%" />
             </div>
           </details>

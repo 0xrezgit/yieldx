@@ -1,13 +1,10 @@
-import { EMPTY, formatCompact, formatNumber } from '../utils/formatting';
+import { EMPTY, formatNumber, formatUSD, formatUSDCompact } from '../utils/formatting';
 
 /**
  * Money in the positions section: Persian digits and the word «دلار» instead of «$».
  * String forms wrap the number in LRI…PDI so a minus sign stays attached inside
  * RTL sentences.
  */
-const LRI = '\u2066';
-const PDI = '\u2069';
-
 /** Signed amount without the unit: −۴٫۰۶ */
 export function dollarNumber(x: number, digits = 2): string {
   if (!Number.isFinite(x)) return EMPTY;
@@ -17,15 +14,9 @@ export function dollarNumber(x: number, digits = 2): string {
 }
 
 /** «۴٫۰۶ دلار», «−۴٫۰۶ دلار» — for text; components use <Usd>. */
-export function formatDollar(x: number, digits = 2): string {
-  if (!Number.isFinite(x)) return EMPTY;
-  return `${LRI}${dollarNumber(x, digits)}${PDI} دلار`;
-}
+export const formatDollar = (x: number, digits = 2): string => formatUSD(x, digits);
 
-export function formatDollarCompact(x: number): string {
-  if (!Number.isFinite(x)) return EMPTY;
-  return `${LRI}${x < 0 ? '−' : ''}${formatCompact(Math.abs(x))}${PDI} دلار`;
-}
+export const formatDollarCompact = (x: number): string => formatUSDCompact(x);
 
 /** Digits for small prices: enough significant figures for 0.0307 or 83 775. */
 export const priceDigits = (x: number) => (Math.abs(x) >= 100 ? 2 : Math.abs(x) >= 1 ? 4 : 6);

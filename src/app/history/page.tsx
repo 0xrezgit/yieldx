@@ -26,7 +26,7 @@ export default function HistoryPage() {
 
   return (
     <main className="max-w-matrix mx-auto px-4 lg:px-6 py-5 flex flex-col gap-4">
-      <h1 className="text-2xl font-extrabold text-primary">سناریوها</h1>
+      <h1 className="text-3xl lg:text-4xl font-medium tracking-tight text-primary">سناریوها</h1>
 
       {loading && <Loader2 className="animate-spin text-secondary mx-auto my-10" />}
 

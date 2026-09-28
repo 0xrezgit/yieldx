@@ -170,9 +170,10 @@ function YtRow({ r, s, onCalc }: { r: YtOpportunity; s: ScreenSettings; onCalc: 
         <span className="flex items-center gap-1">
           <Gift size={12} className="text-st-yt" />
           هزینه‌ی هر ۱۰۰۰ دلار اکسپوژر در روز:{' '}
-          <Num className={r.costPerKDay <= 0 ? 'text-success' : 'text-primary'}>
-            {r.costPerKDay <= 0 ? `سود ${formatUSD(-r.costPerKDay, 3)}` : formatUSD(r.costPerKDay, 3)}
-          </Num>
+          <span className={r.costPerKDay <= 0 ? 'text-success' : 'text-primary'}>
+            {r.costPerKDay <= 0 && 'سود '}
+            <Num>{formatUSD(Math.abs(r.costPerKDay), 3)}</Num>
+          </span>
         </span>
         {r.exitBreakEvenAPY !== null && (
           <span>

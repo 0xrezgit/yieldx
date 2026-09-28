@@ -38,7 +38,7 @@ export function Pill({ tone = 'muted', children }: { tone?: Tone; children: Reac
     accent: 'bg-accent/15 text-accent',
     muted: 'bg-elevated text-secondary',
   };
-  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${cls[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded px-1.5 h-5 text-[11px] font-medium whitespace-nowrap ${cls[tone]}`}>{children}</span>;
 }
 
 /** Logo, name and the facts that matter for every strategy. */
@@ -129,7 +129,7 @@ export function Segmented<T extends string>({
   size?: 'sm' | 'md';
 }) {
   return (
-    <div className="flex gap-1 p-1 rounded-xl bg-elevated/60 border border-default overflow-x-auto" role="radiogroup" aria-label={label}>
+    <div className="flex gap-1 p-1 rounded-lg bg-surface border border-default overflow-x-auto" role="radiogroup" aria-label={label}>
       {options.map((o) => (
         <button
           key={o.id}
@@ -137,9 +137,9 @@ export function Segmented<T extends string>({
           role="radio"
           aria-checked={value === o.id}
           onClick={() => onChange(o.id)}
-          className={`flex-1 whitespace-nowrap flex items-center justify-center gap-1.5 rounded-lg transition-colors ${
-            size === 'sm' ? 'px-2.5 py-1 text-sm' : 'px-3 py-2'
-          } ${value === o.id ? 'bg-surface text-primary shadow font-bold' : 'text-secondary hover:text-primary'}`}
+          className={`flex-1 whitespace-nowrap flex items-center justify-center gap-1.5 rounded-md transition-colors ${
+            size === 'sm' ? 'px-2.5 h-8 text-sm' : 'px-3 h-9 text-sm'
+          } ${value === o.id ? 'bg-elevated text-primary shadow-sm font-medium' : 'text-secondary hover:text-primary'}`}
         >
           {o.label}
         </button>

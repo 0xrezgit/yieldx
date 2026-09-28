@@ -15,7 +15,7 @@ export function renderAppIcon(size: number) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #7C5CFF 0%, #22D3EE 100%)',
+          background: 'linear-gradient(135deg, #533AFD 0%, #7662FD 100%)',
         }}
       >
         <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 100 100" fill="none">

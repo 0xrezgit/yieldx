@@ -47,7 +47,7 @@ const BASIS: Record<LeaderStrategy, string> = {
   loop: 'لوپ PT با اهرم، بهره‌ی وام و LLTV زیر تا سررسید.',
 };
 
-const money = (x: number) => (x >= 0 ? `+${formatUSD(x, x >= 100 ? 0 : 2)}` : formatUSD(x, x <= -100 ? 0 : 2));
+const money = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
 /** Six markets each for the biggest / smallest dollar profit and loss, for the capital the user enters. */
 export function LeaderBoard({
@@ -81,7 +81,7 @@ export function LeaderBoard({
     <div className="flex flex-col gap-4">
       <section className="rounded-2xl border border-default bg-surface/80 p-4 flex flex-col gap-3">
         <div className="grid grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] gap-3 items-end">
-          <NumberField label="سرمایه" value={r.capital} onChange={(v) => setR({ capital: v })} suffix="$" />
+          <NumberField label="سرمایه" value={r.capital} onChange={(v) => setR({ capital: v })} suffix="دلار" />
           <Segmented
             value={r.strategy}
             onChange={(strategy) => setR({ strategy })}

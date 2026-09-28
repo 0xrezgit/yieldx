@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0A0F1E',
+  themeColor: '#0B0B14',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
@@ -21,7 +21,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fa" dir="rtl">
-      <body>
+      <body className="sx">
         <AppShell>{children}</AppShell>
       </body>
     </html>
