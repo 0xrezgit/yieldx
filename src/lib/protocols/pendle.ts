@@ -145,6 +145,7 @@ export class PendleAdapter extends BaseAdapter {
       marketId: `${chainId}-${address}`,
       name: m.proName ?? m.simpleName ?? address,
       underlyingPrice: m.accountingAsset?.price?.usd ?? null,
+      assetSymbol: m.accountingAsset?.symbol ?? null,
       ptPrice: 1 - ytPrice,
       ytPrice,
       impliedAPY: toPercent(m.impliedApy),

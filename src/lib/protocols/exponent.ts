@@ -103,6 +103,7 @@ export class ExponentAdapter extends BaseAdapter {
       name: m.tokenName,
       // Exponent quotes prices in the asset; the USD price comes from Jupiter when available.
       underlyingPrice: token?.usdPrice ?? null,
+      assetSymbol: m.tokenName ?? null,
       ptPrice: m.ptPriceInAsset,
       ytPrice: m.ytPriceInAsset,
       impliedAPY: toPercent(m.impliedApy),

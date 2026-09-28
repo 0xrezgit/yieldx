@@ -51,7 +51,7 @@ interface NumberFieldProps {
  */
 export function NumberField({ label, value, onChange, suffix, hint, error, warning }: NumberFieldProps) {
   const id = useId();
-  const [draft, setDraft] = useState(String(value));
+  const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '');
 
   useEffect(() => {
     if (parseLocaleNumber(draft) !== value) setDraft(Number.isFinite(value) ? String(value) : '');

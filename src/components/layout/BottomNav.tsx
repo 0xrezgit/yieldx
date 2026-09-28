@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, ChartPie, History, Radar, SlidersHorizontal } from 'lucide-react';
+import { Bell, ChartPie, History, Radar, SlidersHorizontal, Wallet } from 'lucide-react';
 import { useShell, type MobileTab } from './AppShell';
 import { formatNumber } from '../../lib/utils/formatting';
 
@@ -19,6 +19,7 @@ export function BottomNav() {
   const onDashboard = pathname === '/dashboard';
   const onHistory = pathname.startsWith('/history');
   const onOpps = pathname.startsWith('/opportunities');
+  const onPortfolio = pathname.startsWith('/portfolio');
 
   const item = (active: boolean) =>
     `relative flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-xs transition-colors ${
@@ -58,6 +59,11 @@ export function BottomNav() {
           {onOpps && <span className="absolute top-0 h-0.5 w-8 rounded-full brand-gradient" />}
           <Radar size={22} />
           فرصت‌ها
+        </button>
+        <button type="button" onClick={() => router.push('/portfolio')} className={item(onPortfolio)} aria-current={onPortfolio ? 'page' : undefined}>
+          {onPortfolio && <span className="absolute top-0 h-0.5 w-8 rounded-full brand-gradient" />}
+          <Wallet size={22} />
+          پوزیشن‌ها
         </button>
         <button type="button" onClick={() => router.push('/history')} className={item(onHistory)} aria-current={onHistory ? 'page' : undefined}>
           {onHistory && <span className="absolute top-0 h-0.5 w-8 rounded-full brand-gradient" />}

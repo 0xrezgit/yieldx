@@ -5,8 +5,8 @@
  * - Build assets (/_next/static) and fonts: cache first — they are content-hashed.
  * - /api/*: never cached; market data must be live.
  */
-const VERSION = 'yieldx-v1';
-const PAGES = ['/dashboard', '/history', '/guide'];
+const VERSION = 'yieldx-v2';
+const PAGES = ['/dashboard', '/portfolio', '/history', '/guide'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

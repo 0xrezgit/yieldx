@@ -27,6 +27,8 @@ export interface MarketData {
   name: string;
   /** USD price of one accounting-asset unit; null when the protocol API doesn't provide it. */
   underlyingPrice: number | null;
+  /** Symbol of the accounting asset PT redeems into, when the API reports it. */
+  assetSymbol?: string | null;
   ptPrice: number;
   ytPrice: number;
   impliedAPY: number;
