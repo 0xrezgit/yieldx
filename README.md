@@ -63,7 +63,7 @@ PT/YT prices are in **accounting-asset units** (PT → 1 at maturity, PT + YT �
 | Protocol | Live data | Source |
 |---|---|---|
 | Exponent | markets, prices, APYs, points multipliers | `api.exponent.finance/markets` (no USD price, no daily history) |
-| Pendle | markets on Ethereum/Arbitrum/Base/BNB, prices, APYs, liquidity, daily APY history | `api-v2.pendle.finance/core/v1` |
+| Pendle | markets on every chain Pendle supports (discovered from `/v1/chains`, falling back to `fallbackChains`), prices, APYs, liquidity, daily APY history | `api-v2.pendle.finance/core/v1` |
 | Spectra | markets on Ethereum, Base, Arbitrum, Optimism, Sonic, Avalanche, BNB, Katana, Flare, Hemi; PT/YT prices from the deepest pool, base APR, logos, USD liquidity (no points data, no daily history) | `api.spectra.finance/v1/{network}/pools` |
 
 Market lists are always live: new listings appear on the next refresh (every 5 minutes and on tab focus), and `GET /api/:protocol` flags any market past maturity as `expired` — for every protocol, even if an upstream cache still lists it. Exponent logos and USD prices come from Jupiter's token API; Pendle logos come from Pendle.

@@ -290,6 +290,33 @@ describe('GET /api/:protocol', () => {
   });
 });
 
+describe('GET /api/pendle chain discovery', () => {
+  it('lists markets on every chain the Pendle API reports, naming unknown chains by id', async () => {
+    const row = (address: string, liquidity: number) => ({
+      address,
+      expiry: '2099-01-01T00:00:00.000Z',
+      proName: address,
+      impliedApy: 0.05,
+      liquidity: { usd: liquidity },
+    });
+    const fetchFn = mockFetch({
+      '/v1/chains': { body: { chainIds: [1, 999, 4663] } },
+      '/v1/1/markets': { body: { total: 1, results: [row('0xeth', 3)] } },
+      '/v1/999/markets': { body: { total: 1, results: [row('0xhype', 2)] } },
+      '/v1/4663/markets': { body: { total: 1, results: [row('0xnew', 1)] } },
+    });
+    const res = await listMarkets(req('/api/pendle'), ctx({ protocol: 'pendle' }));
+    const { markets } = await res.json();
+    expect(markets.map((m: { id: string; chain: string }) => [m.id, m.chain])).toEqual([
+      ['1-0xeth', 'Ethereum'],
+      ['999-0xhype', 'HyperEVM'],
+      ['4663-0xnew', 'Chain 4663'],
+    ]);
+    // Only the discovered chains are queried — no fallback list.
+    expect(fetchFn.mock.calls.some(([u]) => String(u).includes('/v1/42161/'))).toBe(false);
+  });
+});
+
 describe('GET /api/spectra', () => {
   it('lists markets across networks, skips pools without a price and tolerates failing networks', async () => {
     const noPool = { ...spectraMarkets[0], address: '0x' + '2'.repeat(40), pools: [] };
