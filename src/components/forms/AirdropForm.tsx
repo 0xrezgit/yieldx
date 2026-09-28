@@ -1,6 +1,7 @@
 'use client';
 
-import { NumberField, TextField } from '../ui/field';
+import { NumberField, SelectField, TextField } from '../ui/field';
+import type { PointsBasis } from '../../types/market';
 import type { ScenarioParams, ScenarioSetter } from '../../types/scenario';
 import type { FieldMessages } from './messages';
 
@@ -31,11 +32,21 @@ export function AirdropForm({ p, set, msg }: { p: ScenarioParams; set: ScenarioS
         error={msg.error('ytMultiplier')}
       />
       <NumberField
-        label="پوینت روزانه / واحد"
+        label="پوینت روزانه"
         value={p.pointsPerDay}
         onChange={(v) => set('pointsPerDay', v)}
         error={msg.error('pointsPerDay')}
       />
+      <SelectField<PointsBasis>
+        label="به ازای"
+        value={p.pointsBasis}
+        onChange={(v) => set('pointsBasis', v)}
+        options={[
+          { value: 'unit', label: 'هر واحد دارایی' },
+          { value: 'usd', label: 'هر ۱ دلار' },
+        ]}
+      />
+      <TextField label="تاریخ اسنپ‌شات" type="date" value={p.snapshotDate} onChange={(v) => set('snapshotDate', v)} />
       <div className="col-span-2">
         <TextField label="نام پوینت" value={p.pointsName} onChange={(v) => set('pointsName', v)} />
       </div>

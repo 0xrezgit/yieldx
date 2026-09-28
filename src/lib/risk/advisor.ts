@@ -1,7 +1,7 @@
 import thresholds from '../../config/thresholds.json';
 import type { Analysis, StrategyId, StrategySummary } from '../analysis';
 import type { ScenarioParams } from '../../types/scenario';
-import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../utils/formatting';
+import { formatCompact, formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../utils/formatting';
 
 export type Severity = 'critical' | 'warning' | 'info' | 'positive';
 
@@ -64,6 +64,8 @@ export function buildInsights(p: ScenarioParams, a: Analysis): Insight[] {
 
   // YT: points
   const v = a.yt.valuation;
+  const pointsShare = p.totalPointsSupply > 0 ? a.yt.points / p.totalPointsSupply : 0;
+  const implausibleShare = pointsShare > thresholds.points.maxPlausibleShare;
   if (v.recommendation === 'avoid') {
     push({
       id: 'points',
@@ -81,13 +83,38 @@ export function buildInsights(p: ScenarioParams, a: Analysis): Insight[] {
       title: 'حاشیه‌ی سود پوینت کم است',
       detail: `با FDV کمتر از ${formatUSDCompact(v.breakEvenFDV)} زیان می‌کنید.`,
     });
-  } else if (v.burn > 0) {
+  } else if (v.burn > 0 && !implausibleShare) {
     push({
       id: 'points',
       strategy: 'yt',
       severity: 'positive',
       title: 'قیمت پوینت منطقی است',
       detail: `هزینه‌ی هر ۱M پوینت ${formatUSD(v.costPerMillion)}، ارزش آن ${formatUSD(v.valuePerMillion)}.`,
+    });
+  }
+
+  // YT: can the market absorb this position, and are the airdrop numbers plausible?
+  const ytShare = a.liquidity.ytShareOfMarket;
+  if (ytShare !== null && ytShare > thresholds.liquidity.ytShareWarning) {
+    const critical = ytShare > thresholds.liquidity.ytShareCritical;
+    push({
+      id: 'yt-size',
+      strategy: 'yt',
+      severity: critical ? 'critical' : 'warning',
+      title: critical ? 'بازار این حجم YT را ندارد' : 'حجم YT نسبت به بازار زیاد است',
+      detail: `باید ${formatCompact(a.yt.units)} YT بخرید، ولی کل بازار حدود ${formatCompact(p.marketSizeUnits ?? 0)} واحد است؛ قیمت واقعی خیلی بدتر می‌شود.`,
+      action: 'سرمایه‌ی YT را کم کنید.',
+    });
+  }
+
+  if (implausibleShare) {
+    push({
+      id: 'points-share',
+      strategy: 'yt',
+      severity: 'warning',
+      title: 'فرض «کل پوینت‌ها» واقعی نیست',
+      detail: `پوینت‌های این موقعیت ${formatPercent(pointsShare * 100, 0)} کل عرضه می‌شود؛ ارزش ایردراپ بیش از حد برآورد شده.`,
+      action: 'کل پوینت‌ها را از داشبورد پروژه وارد کنید.',
     });
   }
 

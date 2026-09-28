@@ -48,9 +48,9 @@ export function validatePosition(p: {
 /** Full scenario validation — messages are shown next to the related inputs. */
 export function validateScenario(p: ScenarioParams, now = Date.now()): ValidationResult {
   const days = new Date(p.maturity).getTime() > now ? daysUntil(p.maturity, now) : 0;
-  const issues = [
-    ...validatePosition({ ...p, daysToMaturity: days }).issues,
-  ];
+  const issues = validatePosition({ ...p, daysToMaturity: days }).issues.map((i) =>
+    i.field === 'maturity' && p.marketId ? { ...i, message: 'این بازار منقضی شده؛ بازار دیگری انتخاب کنید.' } : i,
+  );
 
   if (p.baseAPY < 0) issues.push({ field: 'baseAPY', level: 'error', message: 'APY پایه نمی‌تواند منفی باشد.' });
   if (!(p.ltv > 0 && p.ltv < 100)) issues.push({ field: 'ltv', level: 'error', message: 'LTV باید بین ۰ و ۱۰۰ باشد.' });

@@ -1,5 +1,6 @@
 import { ptPriceFromAPY } from './implied-apy';
-import { pointsEarned } from './airdrop';
+import { pointsEarned, pointsExposure } from './airdrop';
+import type { PointsBasis } from '../../types/market';
 import { assessLiquidityRisk, calculateImpermanentLoss, type LiquidityRisk } from '../risk/impermanent-loss';
 
 /**
@@ -16,9 +17,12 @@ export interface CLMMInput {
   feeAPY: number;
   daysToMaturity: number;
   pointsPerDay: number;
+  pointsBasis: PointsBasis;
   lpMultiplier: number;
   /** Daily std-dev of the implied APY (percentage points), for range risk. */
   apyVolatility: number;
+  /** Days that still earn valuable points (to snapshot); defaults to days to maturity. */
+  pointsDays?: number;
 }
 
 export interface CLMMResult extends LiquidityRisk {
@@ -45,6 +49,8 @@ export function calculateCLMM(p: CLMMInput): CLMMResult {
     ilAtLowerEdge: calculateImpermanentLoss(priceLower, priceUpper, priceUpper, current),
     ilAtUpperEdge: calculateImpermanentLoss(priceLower, priceUpper, priceLower, current),
     // Approximation: points accrue on the SY-equivalent value of the deposit.
-    points: risk.inRange ? pointsEarned(p.capital / p.underlyingPrice, p.pointsPerDay, p.lpMultiplier, d) : 0,
+    points: risk.inRange
+      ? pointsEarned(pointsExposure(p.capital / p.underlyingPrice, p.capital, p.pointsBasis), p.pointsPerDay, p.lpMultiplier, p.pointsDays ?? d)
+      : 0,
   };
 }

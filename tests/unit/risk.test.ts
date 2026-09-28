@@ -88,6 +88,7 @@ describe('CLMM in implied-APY terms', () => {
     feeAPY: 12,
     daysToMaturity: 365,
     pointsPerDay: 1,
+    pointsBasis: 'unit' as const,
     lpMultiplier: 2,
     apyVolatility: 0,
   };

@@ -13,6 +13,8 @@ import { StrategyList } from '../results/StrategyList';
 import { PointsPanel } from '../results/PointsPanel';
 import { ApyOutlook } from '../results/ApyOutlook';
 import { SensitivityPanel } from '../results/SensitivityPanel';
+import { ExitPlanCard } from '../results/ExitPlanCard';
+import { MarketBrief } from '../results/MarketBrief';
 import { AlertRules } from '../alerts/AlertRules';
 import { SaveBar } from './SaveBar';
 import type { ReadyDashboard } from './useDashboard';
@@ -79,9 +81,11 @@ export function MobileDashboard({ d }: { d: ReadyDashboard }) {
     <main className="px-4 py-4 flex flex-col gap-3 max-w-lg mx-auto">
       <VerdictHero verdict={verdict} compact />
       <InsightList insights={insights} verdict={verdict} triggered={d.triggered} />
+      <MarketBrief p={p} a={a} />
       <KeyNumbers p={p} a={a} />
       <h2 className="font-bold text-primary mt-2">استراتژی‌ها</h2>
       <StrategyList p={p} a={a} verdict={verdict} insights={insights} set={d.set} msg={msg} />
+      <ExitPlanCard p={p} a={a} set={d.set} />
       <PointsPanel p={p} a={a} />
       <ApyOutlook p={p} a={a} />
       <SensitivityPanel p={p} days={a.days} />

@@ -2,11 +2,12 @@ import thresholds from '../config/thresholds.json';
 import type { ScenarioParams } from '../types/scenario';
 import { calculateImpliedMetrics, type ImpliedMetrics } from './calculators/implied-apy';
 import { ptFixedReturn, ytPosition, ytYield, type YTPosition } from './calculators/pt-yt';
-import { airdropValue, pointsEarned, pointsShare, valuePerPoint } from './calculators/airdrop';
+import { airdropValue, pointsEarned, pointsExposure, pointsShare, valuePerPoint } from './calculators/airdrop';
 import { calculatePointsValuation, type PointsValuation } from './calculators/points-valuation';
 import { calculateAPYScenarios, type APYScenarioResult } from './calculators/apy-scenarios';
 import { calculateLooping, type LoopingResult } from './calculators/looping';
 import { calculateCLMM, type CLMMResult } from './calculators/clmm';
+import { computeExitPlan, type ExitPlan } from './calculators/exit-plan';
 import { analyzeAPYTrend, type APYTrend } from './risk/apy-trend';
 import { assessLiquidation, type LiquidationRisk, type RiskLevel } from './risk/liquidation';
 import { daysUntil } from './utils/math';
@@ -26,6 +27,10 @@ export interface StrategySummary {
 
 export interface Analysis {
   days: number;
+  /** Days to the airdrop snapshot (0 if passed), capped at maturity; null when unknown. */
+  snapshotDays: number | null;
+  /** Days that still earn valuable points. */
+  pointsDays: number;
   validation: ValidationResult;
   implied: ImpliedMetrics;
   pt: { fixedReturn: number };
@@ -42,7 +47,14 @@ export interface Analysis {
   looping: LoopingResult & { liquidation: LiquidationRisk };
   clmm: CLMMResult & { airdropValue: number; netPnL: number };
   airdrop: { totalPoints: number; share: number; valuePerPoint: number; value: number };
-  liquidity: { thin: boolean; positionShare: number | null };
+  liquidity: {
+    thin: boolean;
+    /** Capital / USD liquidity. */
+    positionShare: number | null;
+    /** YT units needed / market size in units — how much of the market a YT buy would take. */
+    ytShareOfMarket: number | null;
+  };
+  exit: ExitPlan | null;
   strategies: StrategySummary[];
   /** Strategies ordered by risk-adjusted PnL (empty when inputs are invalid). */
   ranked: StrategySummary[];
@@ -58,12 +70,14 @@ export function analyzeScenario(p: ScenarioParams, now = Date.now()): Analysis {
   const implied = calculateImpliedMetrics(p.ptPrice, days, p.baseAPY);
   const airdropInput = { fdv: p.fdv, allocation: p.airdropAllocation, totalPointsSupply: p.totalPointsSupply };
   const trend = analyzeAPYTrend(p.apyHistory, p.baseAPY);
+  const snapshotDays = snapshotDaysFrom(p.snapshotDate, days, now);
+  const pointsDays = snapshotDays ?? days;
 
   // Direct YT
   const posInput = { capital: p.capital, underlyingPrice: p.underlyingPrice, ytPrice: p.ytPrice, daysToMaturity: days };
   const pos = ytPosition(posInput);
   const yieldBase = ytYield(pos.notional, p.baseAPY, days);
-  const ytPoints = pointsEarned(pos.units, p.pointsPerDay, p.ytMultiplier, days);
+  const ytPoints = pointsEarned(pointsExposure(pos.units, pos.notional, p.pointsBasis), p.pointsPerDay, p.ytMultiplier, pointsDays);
   const ytDrop = airdropValue(ytPoints, airdropInput);
   const valuation = calculatePointsValuation({
     capital: p.capital,
@@ -95,8 +109,10 @@ export function analyzeScenario(p: ScenarioParams, now = Date.now()): Analysis {
     feeAPY: p.feeAPY,
     daysToMaturity: days,
     pointsPerDay: p.pointsPerDay,
+    pointsBasis: p.pointsBasis,
     lpMultiplier: p.lpMultiplier,
     apyVolatility: trend?.volatility ?? 0,
+    pointsDays,
   });
   const clmmDrop = airdropValue(clmm.points, airdropInput);
 
@@ -116,8 +132,27 @@ export function analyzeScenario(p: ScenarioParams, now = Date.now()): Analysis {
   const score = (s: StrategySummary) => (s.pnl > 0 ? s.pnl * riskPenalty[s.risk] : s.pnl);
   const ranked = validation.valid ? [...strategies].sort((a, b) => score(b) - score(a)) : [];
 
+  const exit = validation.valid
+    ? computeExitPlan({
+        capital: p.capital,
+        underlyingPrice: p.underlyingPrice,
+        ytPrice: p.ytPrice,
+        baseAPY: p.baseAPY,
+        impliedAPY: implied.impliedAPY,
+        daysToMaturity: days,
+        pointsPerDay: p.pointsPerDay,
+        ytMultiplier: p.ytMultiplier,
+        pointsBasis: p.pointsBasis,
+        valuePerPoint: valuePerPoint(airdropInput),
+        snapshotDays,
+        maxLossPercent: p.maxExitLoss,
+      })
+    : null;
+
   return {
     days,
+    snapshotDays,
+    pointsDays,
     validation,
     implied,
     pt: { fixedReturn: ptFixedReturn(p.capital, p.ptPrice) },
@@ -143,9 +178,20 @@ export function analyzeScenario(p: ScenarioParams, now = Date.now()): Analysis {
     liquidity: {
       thin: p.liquidity !== null && p.liquidity < thresholds.liquidity.thinUsd,
       positionShare,
+      ytShareOfMarket: p.marketSizeUnits && p.marketSizeUnits > 0 ? pos.units / p.marketSizeUnits : null,
     },
+    exit,
     strategies,
     ranked,
     best: ranked[0] && ranked[0].pnl > 0 ? ranked[0] : null,
   };
+}
+
+/** Days from now to the snapshot, capped at maturity; 0 once it has passed; null if not set. */
+function snapshotDaysFrom(snapshotDate: string, days: number, now: number): number | null {
+  if (!snapshotDate) return null;
+  const t = new Date(snapshotDate).getTime();
+  if (!Number.isFinite(t)) return null;
+  if (t <= now) return 0;
+  return Math.min(days, daysUntil(snapshotDate, now));
 }

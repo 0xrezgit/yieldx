@@ -1,4 +1,5 @@
 import type { ProtocolId } from './protocol';
+import type { PointsBasis, PointsStatus } from './market';
 
 /**
  * Everything the user enters (or a protocol adapter fills in) for one analysis.
@@ -9,6 +10,12 @@ export interface ScenarioParams {
   protocol: ProtocolId;
   marketId: string;
   marketName: string;
+  /** Project behind the underlying, when known. */
+  platform: string;
+  /** Token logo URL ('' when unknown). */
+  marketIcon: string;
+  /** Network name ('' when unknown). */
+  chain: string;
   capital: number;
   underlyingPrice: number;
   ptPrice: number;
@@ -20,11 +27,16 @@ export interface ScenarioParams {
   apyHistory: number[];
   /** Market liquidity in USD, when known. */
   liquidity: number | null;
+  /** Market size in asset units, when known (see MarketData.marketSizeUnits). */
+  marketSizeUnits: number | null;
 
   // Points program
+  pointsStatus: PointsStatus;
   pointsName: string;
-  /** Points per day for one unit of underlying exposure. */
+  pointsSeason: number | null;
+  /** Points per day for one unit (or one USD, see pointsBasis) of exposure. */
   pointsPerDay: number;
+  pointsBasis: PointsBasis;
   ytMultiplier: number;
   lpMultiplier: number;
 
@@ -36,6 +48,10 @@ export interface ScenarioParams {
   totalPointsSupply: number;
   /** Points already earned before this position. */
   existingPoints: number;
+  /** Airdrop snapshot date (yyyy-mm-dd); '' when unknown. Points after it are worth nothing. */
+  snapshotDate: string;
+  /** Largest cash loss (% of capital) accepted when exiting YT early. */
+  maxExitLoss: number;
 
   // PT looping
   ltv: number;
@@ -70,6 +86,9 @@ export const defaultScenario = (): ScenarioParams => ({
   protocol: 'exponent',
   marketId: '',
   marketName: '',
+  platform: '',
+  marketIcon: '',
+  chain: '',
   capital: 10_000,
   underlyingPrice: 1,
   ptPrice: 0.97,
@@ -78,9 +97,13 @@ export const defaultScenario = (): ScenarioParams => ({
   maturity: inDays(120),
   apyHistory: [],
   liquidity: null,
+  marketSizeUnits: null,
 
+  pointsStatus: 'unknown',
   pointsName: 'Points',
+  pointsSeason: null,
   pointsPerDay: 1,
+  pointsBasis: 'unit',
   ytMultiplier: 5,
   lpMultiplier: 2,
 
@@ -88,6 +111,8 @@ export const defaultScenario = (): ScenarioParams => ({
   airdropAllocation: 10,
   totalPointsSupply: 5_000_000_000,
   existingPoints: 0,
+  snapshotDate: '',
+  maxExitLoss: 10,
 
   ltv: 75,
   loops: 3,

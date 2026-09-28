@@ -1,9 +1,11 @@
 import { ytPosition, ytYield, type YTPositionInput } from './pt-yt';
-import { airdropValue, pointsEarned } from './airdrop';
+import { airdropValue, pointsEarned, pointsExposure } from './airdrop';
+import type { PointsBasis } from '../../types/market';
 
 export interface SensitivityInput extends YTPositionInput {
   baseAPY: number;
   pointsPerDay: number;
+  pointsBasis?: PointsBasis;
   ytMultiplier: number;
   fdv: number;
   allocation: number;
@@ -28,13 +30,14 @@ export const FDV_FACTORS = [0.25, 0.5, 1, 2, 4];
  */
 export function sensitivityCube(input: SensitivityInput): SensitivityCell[][][] {
   const { units, notional } = ytPosition(input);
+  const exposure = pointsExposure(units, notional, input.pointsBasis ?? 'unit');
   return FDV_FACTORS.map((ff) =>
     APY_SHIFTS.map((as) =>
       MULTIPLIER_FACTORS.map((mf) => {
         const apy = input.baseAPY * (1 + as);
         const multiplier = input.ytMultiplier * mf;
         const fdv = input.fdv * ff;
-        const points = pointsEarned(units, input.pointsPerDay, multiplier, input.daysToMaturity);
+        const points = pointsEarned(exposure, input.pointsPerDay, multiplier, input.daysToMaturity);
         const drop = airdropValue(points, { fdv, allocation: input.allocation, totalPointsSupply: input.totalPointsSupply });
         const pnl = ytYield(notional, apy, input.daysToMaturity) + drop - input.capital;
         return { apy, multiplier, fdv, pnl, roi: (pnl / input.capital) * 100 };

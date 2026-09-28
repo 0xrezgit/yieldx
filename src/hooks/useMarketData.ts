@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { MarketData, MarketSummary } from '../types/market';
+import type { MarketData, MarketListing } from '../types/market';
 import type { ProtocolId } from '../types/protocol';
 import { ApiError, fetchMarket, fetchMarkets } from '../lib/data/market-data';
 import protocols from '../config/protocols.json';
@@ -9,6 +9,7 @@ import protocols from '../config/protocols.json';
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 const HISTORY_DAYS = 60;
+const REFRESH_MS = 5 * 60_000;
 
 function describe(e: unknown): string {
   if (e instanceof ApiError) {
@@ -22,33 +23,59 @@ function describe(e: unknown): string {
 /** Market list + on-demand market fetch for the selected protocol. */
 export function useMarketData(protocol: ProtocolId) {
   const live = protocols[protocol].liveData;
-  const [markets, setMarkets] = useState<MarketSummary[]>([]);
+  const [markets, setMarkets] = useState<MarketListing[]>([]);
   const [listState, setListState] = useState<LoadState>('idle');
   const [state, setState] = useState<LoadState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<MarketData | null>(null);
 
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+
+  // Live list: loads on protocol change, then refreshes every few minutes and when the
+  // tab regains focus, so new listings show up and matured ones flip to expired.
   useEffect(() => {
     setMarkets([]);
     setError(null);
     setState('idle');
+    setUpdatedAt(null);
     if (!live) {
       setListState('idle');
       return;
     }
-    const ctrl = new AbortController();
-    setListState('loading');
-    fetchMarkets(protocol, ctrl.signal)
-      .then((m) => {
-        setMarkets(m);
-        setListState('ready');
-      })
-      .catch((e) => {
-        if (ctrl.signal.aborted) return;
-        setListState('error');
-        setError(describe(e));
-      });
-    return () => ctrl.abort();
+    let ctrl = new AbortController();
+    let first = true;
+
+    const refresh = () => {
+      ctrl.abort();
+      ctrl = new AbortController();
+      const signal = ctrl.signal;
+      if (first) setListState('loading');
+      fetchMarkets(protocol, signal)
+        .then((m) => {
+          setMarkets(m);
+          setListState('ready');
+          setUpdatedAt(Date.now());
+          first = false;
+        })
+        .catch((e) => {
+          if (signal.aborted) return;
+          // Keep showing the last good list on a failed background refresh.
+          if (first) {
+            setListState('error');
+            setError(describe(e));
+          }
+        });
+    };
+
+    refresh();
+    const timer = setInterval(refresh, REFRESH_MS);
+    const onVisible = () => document.visibilityState === 'visible' && refresh();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      ctrl.abort();
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [protocol, live]);
 
   const load = useCallback(
@@ -69,5 +96,5 @@ export function useMarketData(protocol: ProtocolId) {
     [protocol],
   );
 
-  return { live, markets, listState, state, error, last, load };
+  return { live, markets, listState, updatedAt, state, error, last, load };
 }

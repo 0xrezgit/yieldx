@@ -24,7 +24,11 @@ const cases: Record<string, Partial<ScenarioParams>> = {
   invalid: { capital: 0, ptPrice: 1.5, ltv: 95 },
   outOfRange: { rangeLowerAPY: 1, rangeUpperAPY: 2, loops: 8, ltv: 84 },
   noPoints: { pointsPerDay: 0, protocol: 'spectra' },
-  pendle: { protocol: 'pendle', liquidity: 100_000 },
+  pendle: { protocol: 'pendle', liquidity: 100_000, pointsStatus: 'active', pointsPerDay: 0 },
+  snapshot: { pointsStatus: 'active', snapshotDate: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10) },
+  snapshotPassed: { pointsStatus: 'active', snapshotDate: '2020-01-01' },
+  noPointsMarket: { pointsStatus: 'none', pointsPerDay: 0, platform: 'Fragmetric' },
+  usdBasis: { pointsBasis: 'usd', underlyingPrice: 2500, maxExitLoss: 0 },
 };
 
 function dashboard(over: Partial<ScenarioParams>): ReadyDashboard {
@@ -71,6 +75,7 @@ describe('dashboard layouts render', () => {
         </ShellContext.Provider>,
       );
       expect(html).toContain('استراتژی‌ها');
+      expect(html).toContain('درباره‌ی این بازار');
       assertClean(html);
     });
 

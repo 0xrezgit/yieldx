@@ -2,15 +2,14 @@ import protocols from '../../config/protocols.json';
 import type { ProtocolAdapter, ProtocolId } from '../../types/protocol';
 import { ExponentAdapter } from './exponent';
 import { PendleAdapter } from './pendle';
-import { SenseAdapter, SpectraAdapter } from './manual';
+import { SpectraAdapter } from './spectra';
 
 export * from './base';
 
 const factories: Record<ProtocolId, () => ProtocolAdapter> = {
   exponent: () => new ExponentAdapter(),
   pendle: () => new PendleAdapter(),
-  spectra: SpectraAdapter,
-  sense: SenseAdapter,
+  spectra: () => new SpectraAdapter(),
 };
 
 export type ProtocolConfig = (typeof protocols)[keyof typeof protocols];

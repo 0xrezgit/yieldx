@@ -25,6 +25,7 @@ export function SensitivityPanel({ p, days }: { p: ScenarioParams; days: number 
         daysToMaturity: days,
         baseAPY: p.baseAPY,
         pointsPerDay: p.pointsPerDay,
+        pointsBasis: p.pointsBasis,
         ytMultiplier: p.ytMultiplier,
         fdv: p.fdv,
         allocation: p.airdropAllocation,

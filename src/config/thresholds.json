@@ -20,7 +20,8 @@
     "slope30dHigh": -0.3
   },
   "points": {
-    "buyMargin": 1.2
+    "buyMargin": 1.2,
+    "maxPlausibleShare": 0.05
   },
   "scenarios": {
     "bearProbability": 0.25,
@@ -28,8 +29,13 @@
     "bullProbability": 0.25,
     "fallbackSpread": 0.3
   },
+  "exit": {
+    "costPercent": 0.5
+  },
   "liquidity": {
     "thinUsd": 250000,
-    "positionShareWarning": 0.02
+    "positionShareWarning": 0.02,
+    "ytShareWarning": 0.02,
+    "ytShareCritical": 0.1
   }
 }

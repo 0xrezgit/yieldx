@@ -3,18 +3,35 @@ import type { MarketData, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
 import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, toPercent } from './base';
 
-interface PendleActiveList {
-  markets: {
-    name: string;
-    address: string;
-    expiry: string;
-    categoryIds?: string[];
-    details: { liquidity: number; impliedApy: number };
-  }[];
+/** One row of GET /v1/{chain}/markets (paginated). */
+interface PendleListItem {
+  address: string;
+  expiry: string;
+  isActive?: boolean;
+  isNew?: boolean;
+  proName?: string;
+  simpleName?: string;
+  name?: string;
+  proIcon?: string;
+  simpleIcon?: string;
+  protocol?: string;
+  categoryIds?: string[];
+  impliedApy: number;
+  underlyingApy?: number;
+  liquidity?: { usd: number } | number;
+}
+
+interface PendlePage {
+  total: number;
+  results: PendleListItem[];
 }
 
 interface PendleMarket {
   expiry: string;
+  proIcon?: string;
+  simpleIcon?: string;
+  protocol?: string;
+  categoryIds?: string[];
   proName?: string;
   simpleName?: string;
   ptDiscount: number;
@@ -30,6 +47,16 @@ interface PendleHistory {
 }
 
 const CHAIN_NAMES: Record<number, string> = { 1: 'Ethereum', 42161: 'Arbitrum', 8453: 'Base', 56: 'BNB Chain' };
+
+const chainName = (chainId: number) => CHAIN_NAMES[chainId] ?? `chain ${chainId}`;
+
+const PAGE = 100;
+const MAX_PAGES = 5;
+
+const icon = (x: { proIcon?: string; simpleIcon?: string }) => {
+  const url = x.proIcon || x.simpleIcon || '';
+  return url.startsWith('https://') ? url : null;
+};
 
 const usd = (x: { usd: number } | number | undefined): number | null =>
   x === undefined ? null : typeof x === 'number' ? x : Number.isFinite(x.usd) ? x.usd : null;
@@ -50,24 +77,39 @@ export class PendleAdapter extends BaseAdapter {
   liveData = true;
   private base = protocols.pendle.apiBase;
 
+  /** All active markets of one chain, following pagination so new listings are never cut off. */
+  private async chainMarkets(chainId: number): Promise<MarketSummary[]> {
+    const items: PendleListItem[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const data = await fetchJson<PendlePage>(
+        this.name,
+        `${this.base}/v1/${chainId}/markets?is_active=true&limit=${PAGE}&skip=${page * PAGE}`,
+      );
+      items.push(...data.results);
+      if (items.length >= data.total || data.results.length < PAGE) break;
+    }
+    return items.map((m) => ({
+      id: `${chainId}-${m.address}`,
+      name: m.proName ?? m.simpleName ?? m.name ?? m.address,
+      platform: m.protocol ?? null,
+      icon: icon(m),
+      chain: chainName(chainId),
+      maturity: m.expiry,
+      impliedAPY: toPercent(m.impliedApy),
+      baseAPY: m.underlyingApy === undefined ? null : toPercent(m.underlyingApy),
+      liquidity: usd(m.liquidity),
+      hasPoints: m.categoryIds?.includes('points') ?? false,
+      ytMultiplier: null,
+      categories: (m.categoryIds ?? []).map((c) => c.toLowerCase()),
+      isNew: !!m.isNew,
+    }));
+  }
+
   async listMarkets(): Promise<MarketSummary[]> {
-    const lists = await Promise.allSettled(
-      protocols.pendle.chains.map(async (chainId) => {
-        const data = await fetchJson<PendleActiveList>(this.name, `${this.base}/v1/${chainId}/markets/active`);
-        return data.markets.map<MarketSummary>((m) => ({
-          id: `${chainId}-${m.address}`,
-          name: `${m.name} · ${CHAIN_NAMES[chainId] ?? `chain ${chainId}`}`,
-          maturity: m.expiry,
-          impliedAPY: toPercent(m.details.impliedApy),
-          baseAPY: null,
-          liquidity: m.details.liquidity ?? null,
-          hasPoints: m.categoryIds?.includes('points') ?? false,
-        }));
-      }),
-    );
+    const lists = await Promise.allSettled(protocols.pendle.chains.map((c) => this.chainMarkets(c)));
     const ok = lists.filter((r): r is PromiseFulfilledResult<MarketSummary[]> => r.status === 'fulfilled');
     if (!ok.length) throw new UpstreamError(this.name, 502);
-    return ok.flatMap((r) => r.value).sort((a, b) => (b.liquidity ?? 0) - (a.liquidity ?? 0));
+    return ok.flatMap((r) => r.value);
   }
 
   async fetchMarketData(marketId: string): Promise<MarketData> {
@@ -94,9 +136,14 @@ export class PendleAdapter extends BaseAdapter {
       maturity: m.expiry,
       daysToMaturity: daysUntil(m.expiry),
       liquidity: usd(m.liquidity),
+      marketSizeUnits: null,
       volume24h: usd(m.tradingVolume),
-      // Pendle has no unified points API; points programs are per-underlying.
+      // Pendle tags points markets but doesn't publish multipliers or rates.
+      pointsStatus: m.categoryIds ? (m.categoryIds.includes('points') ? 'active' : 'none') : 'unknown',
       points: null,
+      platform: m.protocol ?? null,
+      icon: icon(m),
+      chain: chainName(chainId),
       fetchedAt: new Date().toISOString(),
     };
   }

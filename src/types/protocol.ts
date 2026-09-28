@@ -1,7 +1,7 @@
 import type { MarketData, MarketSummary } from './market';
 import type { ValidationResult } from '../lib/utils/validation';
 
-export type ProtocolId = 'exponent' | 'pendle' | 'spectra' | 'sense';
+export type ProtocolId = 'exponent' | 'pendle' | 'spectra';
 
 export interface PointsParams {
   /** Units of underlying exposure (YT units, or SY units held in an LP). */

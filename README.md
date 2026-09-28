@@ -1,6 +1,6 @@
 # YieldX
 
-A Persian (RTL) advisor for yield-trading protocols — Exponent, Pendle, Spectra, Sense — that turns PT/YT market data into risk-aware recommendations for four strategies: holding/looping PT, buying YT for points, CLMM liquidity, and airdrop farming.
+A Persian (RTL) advisor for yield-trading protocols — Exponent, Pendle and Spectra — that turns PT/YT market data into risk-aware recommendations for four strategies: holding/looping PT, buying YT for points, CLMM liquidity, and airdrop farming.
 
 User guide (Persian): [docs/GUIDE.fa.md](docs/GUIDE.fa.md), also served in-app at `/guide`.
 
@@ -63,9 +63,11 @@ PT/YT prices are in **accounting-asset units** (PT → 1 at maturity, PT + YT �
 |---|---|---|
 | Exponent | markets, prices, APYs, points multipliers | `api.exponent.finance/markets` (no USD price, no daily history) |
 | Pendle | markets on Ethereum/Arbitrum/Base/BNB, prices, APYs, liquidity, daily APY history | `api-v2.pendle.finance/core/v1` |
-| Spectra, Sense | — manual entry | — |
+| Spectra | markets on Ethereum, Base, Arbitrum, Optimism, Sonic, Avalanche, BNB, Katana, Flare, Hemi; PT/YT prices from the deepest pool, base APR, logos, USD liquidity (no points data, no daily history) | `api.spectra.finance/v1/{network}/pools` |
 
-Pendle market ids are `<chainId>-<address>`; a bare address means Ethereum mainnet. Manual adapters answer `501 manual_only`, and the UI switches to manual inputs. To add a protocol, implement `ProtocolAdapter` (extend `BaseAdapter`), register it in `src/lib/protocols/index.ts` and add it to `src/config/protocols.json`.
+Market lists are always live: new listings appear on the next refresh (every 5 minutes and on tab focus), and `GET /api/:protocol` flags any market past maturity as `expired` — for every protocol, even if an upstream cache still lists it. Exponent logos and USD prices come from Jupiter's token API; Pendle logos come from Pendle.
+
+Pendle market ids are `<chainId>-<address>` (a bare address means Ethereum mainnet); Spectra ids are `<network>-<ptAddress>`. An adapter without a live source can throw `LiveDataUnavailableError`, which the API answers with `501 manual_only` and the UI turns into manual inputs. To add a protocol, implement `ProtocolAdapter` (extend `BaseAdapter`), register it in `src/lib/protocols/index.ts` and add it to `src/config/protocols.json`.
 
 ### Risk thresholds
 
