@@ -300,17 +300,17 @@ describe('GET /api/pendle chain discovery', () => {
       liquidity: { usd: liquidity },
     });
     const fetchFn = mockFetch({
-      '/v1/chains': { body: { chainIds: [1, 999, 4663] } },
+      '/v1/chains': { body: { chainIds: [1, 999, 777777] } },
       '/v1/1/markets': { body: { total: 1, results: [row('0xeth', 3)] } },
       '/v1/999/markets': { body: { total: 1, results: [row('0xhype', 2)] } },
-      '/v1/4663/markets': { body: { total: 1, results: [row('0xnew', 1)] } },
+      '/v1/777777/markets': { body: { total: 1, results: [row('0xnew', 1)] } },
     });
     const res = await listMarkets(req('/api/pendle'), ctx({ protocol: 'pendle' }));
     const { markets } = await res.json();
     expect(markets.map((m: { id: string; chain: string }) => [m.id, m.chain])).toEqual([
       ['1-0xeth', 'Ethereum'],
       ['999-0xhype', 'HyperEVM'],
-      ['4663-0xnew', 'Chain 4663'],
+      ['777777-0xnew', 'Chain 777777'],
     ]);
     // Only the discovered chains are queried — no fallback list.
     expect(fetchFn.mock.calls.some(([u]) => String(u).includes('/v1/42161/'))).toBe(false);
