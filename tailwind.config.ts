@@ -2,7 +2,9 @@ import type { Config } from 'tailwindcss';
 
 /**
  * YieldX theme tokens (loaded by src/app/globals.css through `@config`).
- * Deep-navy surfaces, violet→cyan brand, one colour per strategy.
+ * Stripe-inspired dark system: near-black canvas, #1A1A22 surfaces, hairline
+ * #32323A borders, one violet accent (#533AFD / #7662FD), emerald for gains,
+ * orange for warnings (kept apart from red losses). One colour per strategy.
  * Extend this file instead of adding ad-hoc colours in TSX.
  */
 export default {
@@ -11,36 +13,36 @@ export default {
     extend: {
       colors: {
         // Surfaces
-        base: '#0A0F1E',
-        surface: '#111831',
-        elevated: '#1A2344',
+        base: '#0B0B14',
+        surface: '#1A1A22',
+        elevated: '#26262E',
         // Borders
-        default: '#222C50',
-        strong: '#33406E',
+        default: '#32323A',
+        strong: '#45455A',
         // Text
-        primary: '#EEF2FF',
-        secondary: '#A9B4D6',
-        muted: '#6E79A0',
+        primary: '#F8F7FF',
+        secondary: '#B4B3BD',
+        muted: '#85848F',
         // Brand
-        accent: '#7C5CFF',
-        brand2: '#22D3EE',
+        accent: '#7662FD',
+        brand2: '#533AFD',
         // Status
-        success: '#34D399',
-        warning: '#FBBF24',
-        danger: '#FB7185',
-        info: '#38BDF8',
+        success: '#15BE53',
+        warning: '#FF6201',
+        danger: '#F2545B',
+        info: '#4285F4',
         // Strategies
-        'st-pt': '#38BDF8',
+        'st-pt': '#4285F4',
         'st-loop': '#A78BFA',
         'st-yt': '#F59E0B',
-        'st-clmm': '#34D399',
+        'st-clmm': '#15BE53',
         // Positions section — Stripe-inspired dark theme (derived dark palette).
         'sx-bg': '#0B0B14',
         'sx-surface': '#1A1A22',
         'sx-raised': '#26262E',
         'sx-text': '#F8F7FF',
         'sx-muted': '#9E9DA6',
-        'sx-faint': '#6F6E7A',
+        'sx-faint': '#85848F',
         'sx-border': '#32323A',
         'sx-accent': '#7662FD',
         'sx-primary': '#533AFD',

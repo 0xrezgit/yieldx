@@ -2,7 +2,8 @@
 
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Download, Loader2, PieChart, Plus, RefreshCw, Upload, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, Download, Loader2, PieChart, Plus, RefreshCw, Upload, Wallet } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import protocols from '../../config/protocols.json';
 import { usePortfolioView, type PositionView } from '../../hooks/usePortfolioView';
 import { allocation, concentration } from '../../lib/portfolio/portfolio';
@@ -51,50 +52,116 @@ function Figure({ label, children, hint }: { label: string; children: ReactNode;
   );
 }
 
-export function PositionCard({ x }: { x: PositionView }) {
-  const { p, v } = x;
+type SortKey = 'value' | 'pnl' | 'pnlPct' | 'exit' | 'days';
+
+const SORTERS: Record<SortKey, (x: PositionView) => number> = {
+  value: (x) => x.v.netValueUsd,
+  pnl: (x) => x.v.pnlUsd,
+  pnlPct: (x) => x.v.pnlPct,
+  exit: (x) => x.v.exit.proceedsUsd,
+  days: (x) => (x.v.status === 'closed' ? Infinity : x.v.daysLeft),
+};
+
+function sortViews(views: PositionView[], key: SortKey, dir: 1 | -1): PositionView[] {
+  const f = SORTERS[key];
+  // Unknown values (no price) always sink to the bottom.
+  return [...views].sort((a, b) => {
+    const x = f(a);
+    const y = f(b);
+    if (!Number.isFinite(x) && !Number.isFinite(y)) return 0;
+    if (!Number.isFinite(x)) return 1;
+    if (!Number.isFinite(y)) return -1;
+    return (x - y) * dir;
+  });
+}
+
+/**
+ * All positions side by side: one row each, the same columns for every row so
+ * many positions stay comparable. On narrow screens the table scrolls sideways
+ * while the position column stays pinned.
+ */
+export function PositionTable({ views }: { views: PositionView[] }) {
+  const router = useRouter();
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'value', dir: -1 });
+  const rows = sortViews(views, sort.key, sort.dir);
+  const Th = ({ k, children }: { k?: SortKey; children: ReactNode }) => {
+    const active = k && sort.key === k;
+    return (
+      <th scope="col" className="px-4 py-3 font-normal text-right whitespace-nowrap" aria-sort={active ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
+        {k ? (
+          <button type="button" onClick={() => setSort({ key: k, dir: active ? (sort.dir === 1 ? -1 : 1) : -1 })} className={`inline-flex items-center gap-1 hover:text-sx-text transition-colors ${active ? 'text-sx-text' : ''}`}>
+            {children}
+            {active ? sort.dir === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} /> : <ArrowUpDown size={12} className="opacity-40" />}
+          </button>
+        ) : (
+          children
+        )}
+      </th>
+    );
+  };
   return (
-    <Link href={`/portfolio/${encodeURIComponent(p.id)}`} className="sx-card sx-lift block p-5 group">
-      <div className="flex items-start justify-between gap-3">
-        <MarketIdentity p={p} />
-        <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge s={v.status} />
-          <ChevronLeft size={18} className="text-sx-faint group-hover:text-sx-accent transition-colors" aria-hidden />
-        </div>
+    <div className="sx-card overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[56rem] text-sm">
+          <thead>
+            <tr className="text-xs text-sx-muted border-b border-sx-border bg-sx-raised/40">
+              <th scope="col" className="sticky right-0 z-10 bg-[#1f1f28] px-4 py-3 font-normal text-right min-w-[15rem]">پوزیشن</th>
+              <Th>وضعیت</Th>
+              <Th k="value">ارزش خالص</Th>
+              <Th k="pnl">سود و زیان</Th>
+              <Th k="exit">خروج اکنون</Th>
+              <Th k="days">تا سررسید</Th>
+              <Th>داده</Th>
+              <th scope="col" className="w-8" aria-label="باز کردن" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((x) => {
+              const { p, v } = x;
+              const href = `/portfolio/${encodeURIComponent(p.id)}`;
+              const warn = x.alerts.filter((a) => a.level === 'danger' || a.level === 'warning').length;
+              return (
+                <tr key={p.id} onClick={() => router.push(href)} className="group border-b border-sx-border last:border-b-0 cursor-pointer hover:bg-sx-raised/50 transition-colors">
+                  <td className="sticky right-0 z-10 bg-sx-surface group-hover:bg-[#23232c] px-4 py-3.5 transition-colors">
+                    {/* The real link keeps rows reachable by keyboard and screen readers. */}
+                    <Link href={href} onClick={(e) => e.stopPropagation()} className="block">
+                      <MarketIdentity p={p} size={36} />
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge s={v.status} />
+                      {warn > 0 && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-sx-orange">
+                          <AlertTriangle size={11} /> <Num>{formatNumber(warn, 0)}</Num> هشدار
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap text-[15px]">
+                    <Usd x={v.netValueUsd} />
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" word={false} />
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <div className="flex flex-col gap-0.5">
+                      <Usd x={v.exit.proceedsUsd} />
+                      {v.exit.quality === 'estimate' && <span className="text-[11px] text-sx-orange">تخمینی</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">{v.status === 'closed' ? <span className="text-sx-muted">بسته شده</span> : fmtDays(v.daysLeft)}</td>
+                  <td className="px-4 py-3.5 whitespace-nowrap">{v.status === 'closed' ? <span className="text-sx-faint">—</span> : <QualityBadge q={v.tokenPrice.quality} />}</td>
+                  <td className="pl-4 py-3.5">
+                    <ChevronLeft size={16} className="text-sx-faint group-hover:text-sx-accent transition-colors" aria-hidden />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-4 mt-5 pt-4 border-t border-sx-border">
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-sx-muted">ارزش خالص فعلی</dt>
-          <dd className="text-[15px]">
-            <Usd x={v.netValueUsd} />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-sx-muted">سود و زیان کل</dt>
-          <dd>
-            <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" word={false} />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-sx-muted">خروج اکنون</dt>
-          <dd className="text-[15px] flex items-center gap-1.5 flex-wrap">
-            <Usd x={v.exit.proceedsUsd} /> {v.exit.quality === 'estimate' && <span className="text-[11px] text-sx-orange">تخمینی</span>}
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-sx-muted">{v.status === 'closed' ? 'وضعیت' : 'تا سررسید'}</dt>
-          <dd className="text-[15px] flex items-center gap-1.5 flex-wrap">
-            {v.status === 'closed' ? 'بسته شده' : fmtDays(v.daysLeft)}
-            {v.status !== 'closed' && v.tokenPrice.quality !== 'market' && v.tokenPrice.quality !== 'rule' && <QualityBadge q={v.tokenPrice.quality} prefix="قیمت" />}
-          </dd>
-        </div>
-      </dl>
-      {x.alerts.length > 0 && (
-        <div className="mt-4">
-          <AlertList alerts={x.alerts.slice(0, 2)} />
-        </div>
-      )}
-    </Link>
+    </div>
   );
 }
 
@@ -254,25 +321,24 @@ export default function Portfolio() {
 
           {alerts.length > 0 && <AlertList alerts={alerts} />}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            <section className="lg:col-span-2 flex flex-col gap-4 min-w-0">
-              <div className="flex items-baseline justify-between gap-2">
-                <h2 className="text-lg font-medium">پوزیشن‌ها</h2>
-                <span className="text-xs text-sx-muted">
-                  <Num>{formatNumber(open, 0)}</Num> باز از <Num>{formatNumber(views.length, 0)}</Num>
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          <section className="flex flex-col gap-4 min-w-0">
+            <div className="flex items-baseline justify-between gap-2">
+              <h2 className="text-lg font-medium">پوزیشن‌ها</h2>
+              <span className="text-xs text-sx-muted">
+                <Num>{formatNumber(open, 0)}</Num> باز از <Num>{formatNumber(views.length, 0)}</Num> · برای مرتب‌سازی روی سرستون بزنید
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <Select label="پلتفرم" value={f.protocol} onChange={(protocol) => setF({ ...f, protocol })} options={[{ value: 'all', label: 'همه' }, ...options.protocols.map((p) => ({ value: p, label: protocols[p].name }))]} />
                 <Select label="شبکه" value={f.chain} onChange={(chain) => setF({ ...f, chain })} options={[{ value: 'all', label: 'همه' }, ...options.chains.map((c) => ({ value: c, label: chainFa(c) }))]} />
                 <Select label="دارایی" value={f.asset} onChange={(asset) => setF({ ...f, asset })} options={[{ value: 'all', label: 'همه' }, ...options.assets.map((a) => ({ value: a, label: a }))]} />
                 <Select label="استراتژی" value={f.kind} onChange={(kind) => setF({ ...f, kind })} options={[{ value: 'all', label: 'همه' }, { value: 'pt', label: 'PT' }, { value: 'yt', label: 'YT' }, { value: 'loop', label: 'PT Loop' }]} />
                 <Select label="وضعیت" value={f.status} onChange={(status) => setF({ ...f, status })} options={[{ value: 'all', label: 'همه' }, ...(['open', 'matured', 'closed'] as const).map((s) => ({ value: s, label: STATUS_FA[s] }))]} />
               </div>
-              {shown.length ? shown.map((x) => <PositionCard key={x.p.id} x={x} />) : <p className="sx-card text-sm text-sx-muted text-center py-10">پوزیشنی با این فیلترها نیست.</p>}
-            </section>
+            {shown.length ? <PositionTable views={shown} /> : <p className="sx-card text-sm text-sx-muted text-center py-10">پوزیشنی با این فیلترها نیست.</p>}
+          </section>
 
-            <aside className="flex flex-col gap-6 min-w-0">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               <Panel title="عملکرد" icon={<PieChart size={17} />} subtitle="ارزش خالص ثبت‌شده، فقط از داده‌ی واقعی">
                 <SnapshotChart label="ارزش خالص ثبت‌شده‌ی پرتفوی" points={history.map((h) => ({ t: new Date(h.at).getTime(), y: h.netValueUsd }))} />
               </Panel>
@@ -312,7 +378,6 @@ export default function Portfolio() {
                 </div>
                 {message && <p className="text-sm text-sx-blue">{message}</p>}
               </Disclosure>
-            </aside>
           </div>
         </>
       )}

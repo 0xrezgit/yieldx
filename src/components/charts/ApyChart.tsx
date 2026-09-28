@@ -36,22 +36,22 @@ export function ApyChart({ history, impliedAPY, predicted }: Props) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label={`APY پایه ${n} روز اخیر`}>
         <defs>
           <linearGradient id="apy-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#7C5CFF" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#7C5CFF" stopOpacity="0" />
+            <stop offset="0%" stopColor="#7662FD" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#7662FD" stopOpacity="0" />
           </linearGradient>
         </defs>
         {[lo, hi].map((v) => (
           <g key={v}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#222C50" />
-            <text x={W - PAD.right + 6} y={y(v) + 4} fontSize={12} fill="#6E79A0">
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#32323A" />
+            <text x={W - PAD.right + 6} y={y(v) + 4} fontSize={12} fill="#85848F">
               {formatPercent(v, 1)}
             </text>
           </g>
         ))}
         <path d={area} fill="url(#apy-fill)" />
-        <path d={line} fill="none" stroke="#7C5CFF" strokeWidth={2.5} strokeLinejoin="round" />
+        <path d={line} fill="none" stroke="#7662FD" strokeWidth={2.5} strokeLinejoin="round" />
         {predicted !== undefined && (
-          <line x1={x(n - 1)} y1={y(last)} x2={x(total)} y2={y(predicted)} stroke="#22D3EE" strokeWidth={2} strokeDasharray="6 5" />
+          <line x1={x(n - 1)} y1={y(last)} x2={x(total)} y2={y(predicted)} stroke="#F44BCC" strokeWidth={2} strokeDasharray="6 5" />
         )}
         {Number.isFinite(impliedAPY) && (
           <line
@@ -64,7 +64,7 @@ export function ApyChart({ history, impliedAPY, predicted }: Props) {
             strokeDasharray="3 4"
           />
         )}
-        <circle cx={x(n - 1)} cy={y(last)} r={4} fill="#7C5CFF" stroke="#0A0F1E" strokeWidth={2} />
+        <circle cx={x(n - 1)} cy={y(last)} r={4} fill="#7662FD" stroke="#0A0F1E" strokeWidth={2} />
       </svg>
       <div dir="rtl" className="flex flex-wrap gap-4 text-xs text-secondary mt-2">
         <Legend color="bg-accent" label="بازده فعلی" />

@@ -8,7 +8,7 @@ import { emptyManual, emptyTargets } from '../../src/types/position';
 import { valuePosition, type MarketQuote } from '../../src/lib/portfolio/valuation';
 import { analyzePosition, positionAlerts } from '../../src/lib/portfolio/analysis';
 import type { PositionView } from '../../src/hooks/usePortfolioView';
-import { PositionCard } from '../../src/components/portfolio/Portfolio';
+import { PositionTable } from '../../src/components/portfolio/Portfolio';
 import { AnalysisPanel, Answers, KindPanel, Numbers } from '../../src/components/portfolio/PositionDetail';
 import NewPosition from '../../src/components/portfolio/NewPosition';
 import { Pnl } from '../../src/components/portfolio/parts';
@@ -63,7 +63,7 @@ describe('portfolio render', () => {
   it.each(['pt', 'yt', 'loop'] as const)('%s position renders every panel', (kind) => {
     const x = view(base(kind));
     const html = [
-      renderToString(<PositionCard x={x} />),
+      renderToString(<PositionTable views={[x]} />),
       renderToString(<Answers x={x} />),
       renderToString(<Numbers x={x} />),
       renderToString(<KindPanel x={x} onSave={() => {}} />),
@@ -79,7 +79,7 @@ describe('portfolio render', () => {
 
   it.each(['pt', 'yt', 'loop'] as const)('%s: amounts read «دلار» with Persian digits — no $ and no Latin digits in visible text', (kind) => {
     const x = view(base(kind));
-    const html = [<PositionCard key="c" x={x} />, <Answers key="a" x={x} />, <Numbers key="n" x={x} />, <KindPanel key="k" x={x} onSave={() => {}} />, <AnalysisPanel key="p" x={x} />]
+    const html = [<PositionTable key="c" views={[x]} />, <Answers key="a" x={x} />, <Numbers key="n" x={x} />, <KindPanel key="k" x={x} onSave={() => {}} />, <AnalysisPanel key="p" x={x} />]
       .map((el) => renderToString(el))
       .join('');
     // Visible text only: drop tags (with their attributes) and comments.
