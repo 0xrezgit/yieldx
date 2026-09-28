@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CloudDownload, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ChevronDown, CloudDownload, Loader2, Search, Wifi, WifiOff } from 'lucide-react';
 import protocols from '../../config/protocols.json';
-import { NumberField, SelectField, TextField } from '../ui/field';
+import { NumberField, TextField } from '../ui/field';
+import { TokenLogo } from '../ui/token-logo';
+import { Num } from '../ui/num';
+import { MarketPicker } from './MarketPicker';
 import { useMarketData } from '../../hooks/useMarketData';
 import { mergeMarketData } from '../../lib/data/market-data';
 import { formatDate, formatNumber, formatPercent, parseNumberList } from '../../lib/utils/formatting';
+import type { MarketListing } from '../../types/market';
 import type { ProtocolId } from '../../types/protocol';
 import type { ScenarioParams, ScenarioSetter } from '../../types/scenario';
 import type { FieldMessages } from './messages';
@@ -24,6 +28,10 @@ const PROTOCOLS = Object.keys(protocols) as ProtocolId[];
 export function MarketForm({ p, set, replace, msg }: Props) {
   const md = useMarketData(p.protocol);
   const [historyText, setHistoryText] = useState(p.apyHistory.join('، '));
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const closePicker = useCallback(() => setPickerOpen(false), []);
+  const listing = md.markets.find((m) => m.id === p.marketId) ?? null;
+  const activeCount = md.markets.filter((m) => !m.expired).length;
 
   useEffect(() => {
     setHistoryText(p.apyHistory.join('، '));
@@ -38,40 +46,48 @@ export function MarketForm({ p, set, replace, msg }: Props) {
   return (
     <div className="flex flex-col gap-4">
       {/* Protocol */}
-      <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-elevated/60 border border-default" role="radiogroup" aria-label="پروتکل">
-        {PROTOCOLS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="radio"
-            aria-checked={p.protocol === id}
-            onClick={() => p.protocol !== id && replace({ ...p, protocol: id, marketId: '', marketName: '' })}
-            className={`rounded-lg py-2 text-sm font-medium transition-colors ${
-              p.protocol === id ? 'brand-gradient text-white shadow' : 'text-secondary hover:text-primary'
-            }`}
-          >
-            {protocols[id].name}
-          </button>
-        ))}
+      <div className="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-elevated/60 border border-default" role="radiogroup" aria-label="پروتکل">
+        {PROTOCOLS.map((id) => {
+          const on = p.protocol === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => !on && replace({ ...p, protocol: id, marketId: '', marketName: '', marketIcon: '', platform: '', chain: '' })}
+              className={`rounded-xl py-1.5 transition-colors flex flex-col items-center ${
+                on ? 'brand-gradient text-white shadow' : 'text-secondary hover:text-primary'
+              }`}
+            >
+              <span className="text-sm font-bold">{protocols[id].name}</span>
+              <span className={`text-[10px] flex items-center gap-1 ${on ? 'text-white/80' : 'text-muted'}`}>
+                {protocols[id].liveData && <span className={`size-1.5 rounded-full ${on ? 'bg-white' : 'bg-success'}`} />}
+                {protocols[id].chain}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Market */}
-      {md.live && md.markets.length > 0 ? (
-        <SelectField
-          label="بازار"
-          value={p.marketId}
-          onChange={(id) => {
-            set('marketId', id);
-            fetchNow(id);
-          }}
-          options={[
-            { value: '', label: 'یک بازار انتخاب کنید' },
-            ...md.markets.map((m) => ({
-              value: m.id,
-              label: `${m.name} · ${formatDate(m.maturity)} · ${formatPercent(m.impliedAPY, 1)}${m.hasPoints ? ' · پوینت' : ''}`,
-            })),
-          ]}
-        />
+      {md.live && (md.markets.length > 0 || md.listState === 'loading') ? (
+        <>
+          <MarketTrigger p={p} listing={listing} loading={md.listState === 'loading'} count={activeCount} onOpen={() => setPickerOpen(true)} />
+          <MarketPicker
+            open={pickerOpen}
+            onClose={closePicker}
+            markets={md.markets}
+            loading={md.listState === 'loading'}
+            selectedId={p.marketId}
+            onSelect={(id) => {
+              set('marketId', id);
+              fetchNow(id);
+            }}
+            protocolName={protocols[p.protocol].name}
+            updatedAt={md.updatedAt}
+          />
+        </>
       ) : md.live ? (
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
           <TextField
@@ -169,4 +185,74 @@ function Status({ md }: { md: ReturnType<typeof useMarketData> }) {
   }
   if (!md.live) return <p className="text-sm text-muted">این پروتکل داده‌ی زنده ندارد؛ مقادیر را دستی وارد کنید.</p>;
   return null;
+}
+
+/** The selected market as a tappable card; opens the picker. */
+function MarketTrigger({
+  p,
+  listing,
+  loading,
+  count,
+  onOpen,
+}: {
+  p: ScenarioParams;
+  listing: MarketListing | null;
+  loading: boolean;
+  count: number;
+  onOpen: () => void;
+}) {
+  const expired = listing?.expired ?? (p.marketId !== '' && new Date(p.maturity).getTime() <= Date.now());
+
+  if (!p.marketId) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full flex items-center gap-3 rounded-2xl border-2 border-dashed border-accent/50 bg-accent/5 hover:bg-accent/10 px-4 py-4 transition-colors"
+      >
+        <span className="grid place-items-center size-11 rounded-full brand-gradient text-white shrink-0">
+          {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+        </span>
+        <span className="text-right min-w-0">
+          <span className="block font-bold text-primary">انتخاب بازار</span>
+          <span className="block text-sm text-muted">
+            {loading ? 'در حال دریافت بازارها…' : <><Num>{formatNumber(count, 0)}</Num> بازار فعال</>}
+          </span>
+        </span>
+      </button>
+    );
+  }
+
+  const name = p.marketName || listing?.name || p.marketId;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`w-full flex items-center gap-3 rounded-2xl border px-3 py-3 bg-elevated/50 hover:bg-elevated transition-colors ${
+        expired ? 'border-danger/50' : 'border-strong'
+      }`}
+    >
+      <TokenLogo src={p.marketIcon || listing?.icon} name={name} size={44} />
+      <span className="min-w-0 flex-1 text-right">
+        <span className="block font-bold text-primary truncate" dir="ltr">
+          {name}
+        </span>
+        <span className="block text-xs text-muted truncate">
+          {[p.platform || listing?.platform, p.chain || listing?.chain].filter(Boolean).join(' · ')}
+        </span>
+        <span className={`block text-xs ${expired ? 'text-danger font-medium' : 'text-secondary'}`}>
+          {expired ? 'منقضی شده — بازار دیگری انتخاب کنید' : `سررسید ${formatDate(p.maturity)}`}
+        </span>
+      </span>
+      {listing && !expired && (
+        <span className="text-left shrink-0">
+          <span className="block font-extrabold text-primary">
+            <Num>{formatPercent(listing.impliedAPY, 2)}</Num>
+          </span>
+          <span className="block text-[11px] text-muted">نرخ ثابت</span>
+        </span>
+      )}
+      <ChevronDown size={18} className="text-muted shrink-0" />
+    </button>
+  );
 }

@@ -5,6 +5,7 @@
     "chain": "Solana",
     "liveData": true,
     "apiBase": "https://api.exponent.finance",
+    "tokenApi": "https://lite-api.jup.ag/tokens/v2/search",
     "historyAvailable": false,
     "hasClmm": true,
     "description": "بازار PT/YT روی سولانا با نقدینگی CLMM بر پایه‌ی بازه‌ی Implied APY"
@@ -25,18 +26,22 @@
     "name": "Spectra",
     "nameFa": "اسپکترا",
     "chain": "EVM",
-    "liveData": false,
+    "liveData": true,
+    "apiBase": "https://api.spectra.finance",
+    "networks": {
+      "mainnet": "Ethereum",
+      "base": "Base",
+      "arbitrum": "Arbitrum",
+      "optimism": "Optimism",
+      "sonic": "Sonic",
+      "avalanche": "Avalanche",
+      "bsc": "BNB Chain",
+      "katana": "Katana",
+      "flare": "Flare",
+      "hemi": "Hemi"
+    },
     "historyAvailable": false,
     "hasClmm": false,
-    "description": "ورود دستی داده — آداپتر زنده هنوز پیاده‌سازی نشده است"
-  },
-  "sense": {
-    "name": "Sense",
-    "nameFa": "سنس",
-    "chain": "EVM",
-    "liveData": false,
-    "historyAvailable": false,
-    "hasClmm": false,
-    "description": "ورود دستی داده — پروتکل در حالت توقف فعالیت است"
+    "description": "بازارهای بدون مجوز PT/YT روی چند زنجیره‌ی EVM، معامله در استخرهای Curve"
   }
 }

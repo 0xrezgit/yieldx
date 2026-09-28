@@ -12,10 +12,13 @@ import { StrategyList } from '../results/StrategyList';
 import { PointsPanel } from '../results/PointsPanel';
 import { ApyOutlook } from '../results/ApyOutlook';
 import { SensitivityPanel } from '../results/SensitivityPanel';
+import { ExitPlanCard } from '../results/ExitPlanCard';
+import { MarketBrief } from '../results/MarketBrief';
 import { AlertRules } from '../alerts/AlertRules';
 import { SaveBar } from './SaveBar';
 import type { ReadyDashboard } from './useDashboard';
 import { formatNumber } from '../../lib/utils/formatting';
+import { TokenLogo } from '../ui/token-logo';
 
 /** Desktop: inputs in a sticky side panel, results in the main column. */
 export function WebDashboard({ d }: { d: ReadyDashboard }) {
@@ -35,18 +38,31 @@ export function WebDashboard({ d }: { d: ReadyDashboard }) {
 
       <div className="flex flex-col gap-5 min-w-0">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-extrabold text-primary truncate">{p.marketName || 'داشبورد'}</h1>
+          <div className="flex items-center gap-3 min-w-0">
+            {p.marketName && <TokenLogo src={p.marketIcon} name={p.marketName} size={44} />}
+            <div className="min-w-0">
+              <h1 className="text-2xl font-extrabold text-primary truncate">{p.marketName || 'داشبورد'}</h1>
+              {p.marketName && (
+                <p className="text-sm text-muted truncate">{[p.platform, p.chain].filter(Boolean).join(' · ')}</p>
+              )}
+            </div>
+          </div>
           <SaveBar d={d} />
         </div>
 
         <VerdictHero verdict={verdict} />
-        <InsightList insights={insights} verdict={verdict} triggered={d.triggered} />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
+          <InsightList insights={insights} verdict={verdict} triggered={d.triggered} />
+          <MarketBrief p={p} a={a} />
+        </div>
         <KeyNumbers p={p} a={a} />
 
         <section className="flex flex-col gap-3">
           <h2 className="font-bold text-primary">استراتژی‌ها</h2>
           <StrategyList p={p} a={a} verdict={verdict} insights={insights} set={d.set} msg={msg} columns={2} />
         </section>
+
+        <ExitPlanCard p={p} a={a} set={d.set} />
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           <PointsPanel p={p} a={a} />

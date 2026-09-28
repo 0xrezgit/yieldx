@@ -13,6 +13,8 @@ import { InsightList } from '../../../components/results/InsightList';
 import { KeyNumbers } from '../../../components/results/KeyNumbers';
 import { StrategyList } from '../../../components/results/StrategyList';
 import { PointsPanel } from '../../../components/results/PointsPanel';
+import { ExitPlanCard } from '../../../components/results/ExitPlanCard';
+import { MarketBrief } from '../../../components/results/MarketBrief';
 
 /** A saved scenario, re-analysed with today's date (read-only). */
 export default function ScenarioDetail({ id }: { id: string }) {
@@ -64,8 +66,10 @@ export default function ScenarioDetail({ id }: { id: string }) {
 
       <VerdictHero verdict={verdict} />
       <InsightList insights={insights} verdict={verdict} triggered={[]} />
+      <MarketBrief p={p} a={a} />
       <KeyNumbers p={p} a={a} />
       <StrategyList p={p} a={a} verdict={verdict} insights={insights} columns={2} />
+      <ExitPlanCard p={p} a={a} />
       <PointsPanel p={p} a={a} />
     </main>
   );

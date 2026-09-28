@@ -9,6 +9,7 @@ import { analyzeScenario } from '../../lib/analysis';
 import { buildInsights, buildVerdict } from '../../lib/risk/advisor';
 import { formatDate, formatPercent, formatUSD } from '../../lib/utils/formatting';
 import { Num } from '../../components/ui/num';
+import { TokenLogo } from '../../components/ui/token-logo';
 
 const dot = { go: 'bg-success', caution: 'bg-warning', stop: 'bg-danger' } as const;
 
@@ -43,12 +44,19 @@ export default function HistoryPage() {
         {rows.map(({ s, a, verdict }) => (
           <div key={s.id} className="bg-surface/80 border border-default rounded-2xl p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
-              <Link href={`/history/${encodeURIComponent(s.id)}`} className="min-w-0 flex-1 group">
-                <div className="font-bold text-primary truncate group-hover:text-accent">{s.name}</div>
-                <div className="text-xs text-muted">
-                  {protocols[s.data.protocol]?.name ?? s.data.protocol} · {formatDate(s.updatedAt)}
-                </div>
+              <Link href={`/history/${encodeURIComponent(s.id)}`} className="min-w-0 flex-1 group flex items-center gap-3">
+                <TokenLogo src={s.data.marketIcon} name={s.data.marketName || s.name} size={40} />
+                <span className="min-w-0">
+                  <span className="block font-bold text-primary truncate group-hover:text-accent">{s.name}</span>
+                  <span className="block text-xs text-muted truncate">
+                    {protocols[s.data.protocol]?.name ?? s.data.protocol}
+                    {s.data.chain ? ` · ${s.data.chain}` : ''} · {formatDate(s.updatedAt)}
+                  </span>
+                </span>
               </Link>
+              {new Date(s.data.maturity).getTime() <= Date.now() && (
+                <span className="shrink-0 rounded-full bg-danger/15 text-danger text-[11px] px-2 py-0.5">منقضی</span>
+              )}
               <button
                 type="button"
                 onClick={() => confirm(`«${s.name}» حذف شود؟`) && remove(s.id)}

@@ -1,3 +1,10 @@
+import type { PointsBasis } from '../../types/market';
+
+/** The exposure points accrue on: asset units, or USD value, depending on the program. */
+export function pointsExposure(units: number, usdValue: number, basis: PointsBasis): number {
+  return basis === 'usd' ? usdValue : units;
+}
+
 /** Points earned by holding `exposureUnits` of underlying exposure for `days`. */
 export function pointsEarned(exposureUnits: number, pointsPerDay: number, multiplier: number, days: number): number {
   return Math.max(0, exposureUnits * pointsPerDay * multiplier * days);

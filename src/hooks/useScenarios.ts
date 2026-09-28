@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import protocols from '../config/protocols.json';
 import { defaultScenario, type SavedScenario, type ScenarioParams } from '../types/scenario';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../lib/data/local-store';
 
@@ -11,6 +12,8 @@ export function normalizeScenarioData(data: unknown): ScenarioParams {
   const base = defaultScenario();
   if (!data || typeof data !== 'object') return base;
   const merged = { ...base, ...(data as Partial<ScenarioParams>) };
+  // Protocols can be removed (e.g. Sense); fall back to the default one.
+  if (!(merged.protocol in protocols)) merged.protocol = base.protocol;
   if (!Array.isArray(merged.apyHistory)) merged.apyHistory = [];
   return merged;
 }
