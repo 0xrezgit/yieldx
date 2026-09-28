@@ -43,18 +43,24 @@ interface NumberFieldProps {
   error?: string;
   warning?: string;
   step?: number;
+  /** Show Persian digits while typing (input still accepts Latin digits). */
+  persian?: boolean;
 }
+
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const toFa = (s: string) => s.replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]).replace(/\./g, '٫');
 
 /**
  * Numeric input that accepts Persian/Arabic digits. Keeps the raw text while the
  * user types (so "0." or "۱٫" work) and reports only valid numbers upward.
  */
-export function NumberField({ label, value, onChange, suffix, hint, error, warning }: NumberFieldProps) {
+export function NumberField({ label, value, onChange, suffix, hint, error, warning, persian }: NumberFieldProps) {
   const id = useId();
-  const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '');
+  const show = (s: string) => (persian ? toFa(s) : s);
+  const [draft, setDraft] = useState(Number.isFinite(value) ? show(String(value)) : '');
 
   useEffect(() => {
-    if (parseLocaleNumber(draft) !== value) setDraft(Number.isFinite(value) ? String(value) : '');
+    if (parseLocaleNumber(draft) !== value) setDraft(Number.isFinite(value) ? show(String(value)) : '');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to external value changes
   }, [value]);
 
@@ -66,11 +72,11 @@ export function NumberField({ label, value, onChange, suffix, hint, error, warni
           dir="ltr"
           inputMode="decimal"
           autoComplete="off"
-          className={`${controlBase}${border(error, warning)} num text-left${suffix ? ' pr-12' : ''}`}
+          className={`${controlBase}${border(error, warning)} num text-left${suffix ? (suffix.length > 2 ? ' pr-14' : ' pr-12') : ''}`}
           value={draft}
           aria-invalid={!!error}
           onChange={(e) => {
-            setDraft(e.target.value);
+            setDraft(show(e.target.value));
             const n = parseLocaleNumber(e.target.value);
             if (Number.isFinite(n)) onChange(n);
           }}

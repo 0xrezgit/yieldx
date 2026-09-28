@@ -16,14 +16,13 @@ import { chainFa, chainLogo, KIND_FA, protocolLogo, RATE_FA } from '../../lib/po
 import { newId } from '../../lib/portfolio/portfolio';
 import { apyFromPT } from '../../lib/portfolio/valuation';
 import { usePortfolio } from '../../hooks/usePortfolio';
-import { formatDate, formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
-import { Card } from '../ui/card';
+import { formatDate, formatNumber, formatPercent } from '../../lib/utils/formatting';
+import { formatDollar, formatDollarCompact, priceDigits } from '../../lib/portfolio/format';
 import { NumberField, SelectField, TextField } from '../ui/field';
 import { Num } from '../ui/num';
 import { TokenLogo } from '../ui/token-logo';
-import { Segmented } from '../opportunities/parts';
 import { draftToEvent, emptyDraft, EventFields, validateDraft, type Draft } from './EventForm';
-import { NoWalletNote } from './parts';
+import { btn, NoWalletNote, Panel, Segmented, SxPage } from './parts';
 import { TokenSelect, useTokenPrice } from './TokenSelect';
 import { tokensForChain } from '../../lib/portfolio/tokens';
 import type { RateSource } from '../../types/position';
@@ -54,8 +53,8 @@ function Choice({ selected, onClick, children, disabled }: { selected?: boolean;
       onClick={onClick}
       disabled={disabled}
       aria-pressed={selected}
-      className={`w-full text-right rounded-2xl border p-3 flex items-center gap-3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-        selected ? 'border-accent bg-accent/10' : 'border-default bg-surface/80 hover:border-strong'
+      className={`w-full text-right rounded-lg border p-4 flex items-center gap-3.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+        selected ? 'border-sx-accent bg-sx-accent/10' : 'border-sx-border bg-sx-surface hover:border-[#4a4a55] hover:bg-sx-raised/50'
       }`}
     >
       {children}
@@ -204,114 +203,117 @@ export default function NewPosition() {
   const back = () => setStep((s) => Math.max(0, s - 1));
 
   return (
-    <main className="max-w-3xl mx-auto px-4 lg:px-6 py-5 flex flex-col gap-4">
-      <header className="flex flex-col gap-2">
-        <Link href="/portfolio" className="text-sm text-secondary flex items-center gap-1">
+    <SxPage narrow>
+      <header className="flex flex-col gap-4">
+        <Link href="/portfolio" className="text-sm text-sx-muted hover:text-sx-text flex items-center gap-1 self-start transition-colors">
           <ArrowRight size={14} /> پرتفوی من
         </Link>
-        <h1 className="text-2xl font-extrabold text-primary">ثبت پوزیشن</h1>
-        <ol className="flex gap-1 text-xs" aria-label="مراحل">
+        <h1 className="text-3xl font-medium tracking-tight">ثبت پوزیشن</h1>
+        <ol className="grid grid-cols-5 gap-2" aria-label="مراحل">
           {STEPS.map((s, i) => (
-            <li key={s} className={`flex-1 rounded-full px-2 py-1 text-center ${i === step ? 'bg-accent text-white font-bold' : i < step ? 'bg-accent/20 text-primary' : 'bg-elevated text-muted'}`} aria-current={i === step ? 'step' : undefined}>
-              {s}
+            <li key={s} aria-current={i === step ? 'step' : undefined} className="flex flex-col gap-2">
+              <span className={`h-1 rounded-full transition-colors ${i < step ? 'bg-sx-accent' : i === step ? 'bg-gradient-to-l from-sx-primary to-sx-accent' : 'bg-sx-raised'}`} />
+              <span className={`text-xs ${i === step ? 'text-sx-text font-medium' : i < step ? 'text-sx-accent' : 'text-sx-faint'}`}>
+                <Num>{formatNumber(i + 1, 0)}</Num>. {s}
+              </span>
             </li>
           ))}
         </ol>
       </header>
 
       {step === 0 && (
-        <Card title="پلتفرم را انتخاب کنید">
-          <div className="flex flex-col gap-2">
+        <Panel title="پلتفرم را انتخاب کنید" subtitle="بازارهای زنده‌ی هر پلتفرم از API خودش خوانده می‌شود.">
+          <div className="flex flex-col gap-2.5">
             {LIVE.map((id) => (
               <Choice key={id} selected={protocol === id} onClick={() => { setProtocol(id); setChain(null); setMarket(null); setStep(1); }}>
-                <TokenLogo src={protocolLogo(id)} name={protocols[id].name} size={36} />
-                <div className="min-w-0">
-                  <div className="font-bold text-primary" dir="ltr">{protocols[id].name}</div>
-                  <div className="text-xs text-secondary">{protocols[id].description}</div>
+                <TokenLogo src={protocolLogo(id)} name={protocols[id].name} size={40} />
+                <div className="min-w-0 flex flex-col gap-0.5">
+                  <div className="font-medium text-sx-text" dir="ltr">{protocols[id].name}</div>
+                  <div className="text-xs text-sx-muted leading-5">{protocols[id].description}</div>
                 </div>
-                <ChevronLeft className="mr-auto text-muted" size={18} />
+                <ChevronLeft className="mr-auto text-sx-faint shrink-0" size={18} />
               </Choice>
             ))}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {step === 1 && protocol && (
-        <Card title={`شبکه‌های ${protocols[protocol].name}`}>
-          {listState === 'loading' && <p className="text-sm text-secondary flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> در حال دریافت بازارها…</p>}
-          {listState === 'error' && <p className="text-sm text-danger">دریافت بازارها ناموفق بود. کمی بعد دوباره تلاش کنید.</p>}
-          <p className="text-xs text-muted">فقط شبکه‌هایی که این پلتفرم در آن‌ها بازار فعال دارد.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <Panel title={`شبکه‌های ${protocols[protocol].name}`} subtitle="فقط شبکه‌هایی که این پلتفرم در آن‌ها بازار فعال دارد.">
+          {listState === 'loading' && <p className="text-sm text-sx-muted flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> در حال دریافت بازارها…</p>}
+          {listState === 'error' && <p className="text-sm text-sx-red">دریافت بازارها ناموفق بود. کمی بعد دوباره تلاش کنید.</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {chains.map(([c, n]) => (
               <Choice key={c} selected={chain === c} onClick={() => { setChain(c); setMarket(null); setStep(2); }}>
-                <TokenLogo src={chainLogo(c)} name={c} size={32} />
-                <div className="min-w-0">
-                  <div className="font-bold text-primary">{chainFa(c)}</div>
-                  <div className="text-xs text-muted"><Num>{formatNumber(n, 0)}</Num> بازار فعال</div>
+                <TokenLogo src={chainLogo(c)} name={c} size={34} />
+                <div className="min-w-0 flex flex-col gap-0.5">
+                  <div className="font-medium text-sx-text">{chainFa(c)}</div>
+                  <div className="text-xs text-sx-muted"><Num>{formatNumber(n, 0)}</Num> بازار فعال</div>
                 </div>
               </Choice>
             ))}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {step === 2 && protocol && chain && (
-        <Card title={`بازارهای ${chainFa(chain)}`}>
+        <Panel title={`بازارهای ${chainFa(chain)}`} subtitle="بازارهای هم‌نام با سررسید و شناسه از هم جدا می‌شوند.">
           <div className="relative">
-            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-sx-muted" aria-hidden />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="جست‌وجوی نماد، پروژه یا شناسه‌ی بازار"
               aria-label="جست‌وجوی بازار"
-              className="w-full bg-elevated/70 border border-strong rounded-xl pr-9 pl-3 py-2.5 text-primary text-base"
+              className="w-full pr-10 pl-3 h-11 text-base"
             />
           </div>
-          <label className="flex items-center gap-2 text-xs text-secondary">
+          <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={showExpired} onChange={(e) => setShowExpired(e.target.checked)} /> نمایش بازارهای سررسیدشده
           </label>
-          <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
+          <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto -mx-1 px-1">
             {list.map((m) => (
               <Choice key={m.id} selected={market?.id === m.id} onClick={() => { setMarket(m); setKind(null); setStep(3); }}>
-                <TokenLogo src={m.icon} name={m.name} size={36} />
-                <div className="min-w-0 flex-1">
+                <TokenLogo src={m.icon} name={m.name} size={38} />
+                <div className="min-w-0 flex-1 flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-primary truncate" dir="ltr">{m.name}</span>
-                    {m.expired && <span className="text-[11px] text-warning">سررسیدشده</span>}
+                    <span className="font-medium text-sx-text truncate" dir="ltr">{m.name}</span>
+                    {m.expired && <span className="text-[11px] text-sx-orange">سررسیدشده</span>}
                   </div>
-                  <div className="text-xs text-secondary">
+                  <div className="text-xs text-sx-muted">
                     {m.platform ? <span dir="ltr">{m.platform} · </span> : null}
-                    سررسید <span className={dupNames.has(m.name) ? 'font-bold text-primary' : ''}>{formatDate(m.maturity)}</span> · <Num>{formatNumber(m.daysToMaturity, 0)}</Num> روز
+                    سررسید <span className={dupNames.has(m.name) ? 'font-medium text-sx-text' : ''}>{formatDate(m.maturity)}</span> · <Num>{formatNumber(m.daysToMaturity, 0)}</Num> روز
                   </div>
-                  <div className="text-[11px] text-muted flex flex-wrap gap-x-2">
+                  <div className="text-[11px] text-sx-faint flex flex-wrap gap-x-3">
                     <span>Implied <Num>{formatPercent(m.impliedAPY, 2)}</Num></span>
-                    {m.liquidity !== null && <span>نقدینگی <Num>{formatUSDCompact(m.liquidity)}</Num></span>}
+                    {m.liquidity !== null && <span>نقدینگی {formatDollarCompact(m.liquidity)}</span>}
                     <span className="font-mono" dir="ltr" title={m.id}>{shortId(m.id)}</span>
                   </div>
                 </div>
               </Choice>
             ))}
-            {!list.length && listState !== 'loading' && <p className="text-sm text-secondary text-center py-4">بازاری پیدا نشد.</p>}
+            {!list.length && listState !== 'loading' && <p className="text-sm text-sx-muted text-center py-6">بازاری پیدا نشد.</p>}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {step === 3 && market && (
-        <Card title="نوع پوزیشن">
-          <div className="flex flex-col gap-2">
+        <Panel title="نوع پوزیشن">
+          <div className="flex flex-col gap-2.5">
             {(['pt', 'yt', 'loop'] as const).map((k) => {
               const loopOk = k !== 'loop' || isLoopable(market);
               return (
                 <Choice key={k} selected={kind === k} disabled={!loopOk} onClick={() => { setKind(k); setStep(4); }}>
-                  <div className="min-w-0">
-                    <div className="font-bold text-primary">{KIND_FA[k]}</div>
-                    {!loopOk && <div className="text-xs text-muted">این بازار در فهرست بازارهای قابل لوپ پلتفرم نیست.</div>}
+                  <span className="grid place-items-center size-10 rounded-md bg-sx-accent/15 text-sx-accent text-xs font-medium shrink-0" dir="ltr">{k === 'loop' ? 'Loop' : k.toUpperCase()}</span>
+                  <div className="min-w-0 flex flex-col gap-0.5">
+                    <div className="font-medium text-sx-text">{KIND_FA[k]}</div>
+                    {!loopOk && <div className="text-xs text-sx-muted">این بازار در فهرست بازارهای قابل لوپ پلتفرم نیست.</div>}
                   </div>
                 </Choice>
               );
             })}
           </div>
-        </Card>
+        </Panel>
       )}
 
       {step === 4 && market && kind && protocol && (
@@ -326,52 +328,70 @@ export default function NewPosition() {
             ]}
           />
 
-          <Card>
-            <div className="flex items-center gap-3">
-              <TokenLogo src={market.icon} name={market.name} size={36} />
-              <div className="min-w-0 text-sm">
-                <div className="font-bold text-primary" dir="ltr">{market.name}</div>
-                <div className="text-xs text-secondary">
+          <section className="sx-hero p-5 md:p-6 flex flex-col gap-5">
+            <div className="flex items-center gap-3.5">
+              <TokenLogo src={market.icon} name={market.name} size={44} />
+              <div className="min-w-0 flex flex-col gap-0.5">
+                <div className="font-medium text-lg" dir="ltr">{kind === 'loop' ? 'PT' : kind.toUpperCase()} {market.name}</div>
+                <div className="text-xs text-sx-muted">
                   <span dir="ltr">{protocols[protocol].name}</span> · {chainFa(market.chain)} · سررسید {formatDate(market.maturity)} · <span className="font-mono" dir="ltr">{shortId(market.id)}</span>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
               <TextField label="نماد دارایی پایه (واحد بازخرید)" value={assetSymbol} onChange={setAssetSymbol} placeholder="USDe" ltr />
-              <div className="text-xs text-secondary flex flex-col justify-end gap-0.5">
-                <span>قیمت فعلی {kind === 'yt' ? 'YT' : 'PT'}: {live ? <Num>{formatNumber(tokenPrice, 5)} {assetSymbol}</Num> : <Loader2 size={12} className="inline animate-spin" />}</span>
-                <span>قیمت دلاری دارایی: {assetUsd !== null ? <Num>{formatUSD(assetUsd, 4)}</Num> : 'نامعلوم'}</span>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-sx-muted">قیمت فعلی {kind === 'yt' ? 'YT' : 'PT'}</span>
+                <span className="text-lg font-light">{live ? <><Num>{formatNumber(tokenPrice, 6)}</Num> <span className="text-sm text-sx-muted" dir="ltr">{assetSymbol}</span></> : <Loader2 size={14} className="inline animate-spin" />}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-sx-muted">قیمت دلاری دارایی</span>
+                <span className="text-lg font-light">{assetUsd !== null ? formatDollar(assetUsd, priceDigits(assetUsd)) : 'نامعلوم'}</span>
               </div>
             </div>
-            {kind !== 'yt' && <p className="text-xs text-muted">هر PT در سررسید به ۱ واحد دارایی پایه بازخرید می‌شود؛ ارزش دلاری آن با قیمت همان دارایی تغییر می‌کند.</p>}
-          </Card>
+            {kind !== 'yt' && <p className="text-xs text-sx-muted">هر PT در سررسید به ۱ واحد دارایی پایه بازخرید می‌شود؛ ارزش دلاری آن با قیمت همان دارایی تغییر می‌کند.</p>}
+          </section>
 
           {mode === 'plan' ? (
-            <Card title="محاسبه قبل از خرید">
-              <p className="text-xs text-secondary">فقط یک تخمین با قیمت فعلی بازار است و ذخیره نمی‌شود. پس از خرید، تعداد واقعی دریافتی را ثبت کنید.</p>
-              <div className="grid grid-cols-2 gap-3">
-                <NumberField label="مقدار پرداختی" value={planAmount} onChange={setPlanAmount} />
+            <Panel title="محاسبه قبل از خرید" subtitle="فقط یک تخمین با قیمت فعلی بازار است و ذخیره نمی‌شود. پس از خرید، تعداد واقعی دریافتی را ثبت کنید.">
+              <div className="grid grid-cols-2 gap-4">
+                <NumberField persian label="مقدار پرداختی" value={planAmount} onChange={setPlanAmount} />
                 <TokenSelect label="رمزارز پرداختی" value={planToken} onChange={setPlanToken} tokens={tokens} />
-                <NumberField label="کارمزد و لغزش تخمینی" value={planFee} onChange={setPlanFee} suffix="%" />
-                <div className="text-xs text-secondary flex flex-col justify-end">
-                  ارزش دلاری: {Number.isFinite(planUsd) ? <Num>{formatUSD(planUsd)}</Num> : planToken ? 'قیمت این ارز در دسترس نیست' : '—'}
+                <NumberField persian label="کارمزد و لغزش تخمینی" value={planFee} onChange={setPlanFee} suffix="%" />
+                <div className="flex flex-col justify-end gap-1 pb-2">
+                  <span className="text-xs text-sx-muted">ارزش دلاری</span>
+                  <span>{Number.isFinite(planUsd) ? formatDollar(planUsd) : planToken ? 'قیمت این ارز در دسترس نیست' : '—'}</span>
                 </div>
               </div>
               {live && assetUsd && Number.isFinite(planUsd) ? (() => {
                 const units = (planUsd * (1 - planFee / 100)) / (tokenPrice * assetUsd);
                 const days = Math.max(1, live.daysToMaturity);
                 return (
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>تعداد تقریبی قابل خرید: <Num className="font-bold">{formatNumber(units, 4)}</Num> {kind === 'yt' ? 'YT' : 'PT'}</div>
-                    {kind !== 'yt' ? (
-                      <>
-                        <div>ارزش در سررسید (قیمت ثابت دارایی): <Num className="font-bold">{formatUSD(units * assetUsd)}</Num></div>
-                        <div>بازده ثابت سالانه پس از کارمزد: <Num className="font-bold">{formatPercent(apyFromPT((tokenPrice / (1 - planFee / 100)), days), 2)}</Num></div>
-                      </>
-                    ) : (
-                      <div>مواجهه با بازده: <Num className="font-bold">{formatUSD(units * assetUsd, 0)}</Num> دارایی پایه</div>
-                    )}
-                    <button type="button" className="col-span-2 rounded-xl border border-accent/60 px-3 py-2 text-sm text-primary" onClick={() => {
+                  <div className="flex flex-col gap-5 border-t border-sx-border pt-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs text-sx-muted">تعداد تقریبی قابل خرید</span>
+                        <span className="text-2xl font-light"><Num>{formatNumber(units, 4)}</Num> <span className="text-sm text-sx-muted">{kind === 'yt' ? 'YT' : 'PT'}</span></span>
+                      </div>
+                      {kind !== 'yt' ? (
+                        <>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs text-sx-muted">ارزش در سررسید (قیمت ثابت دارایی)</span>
+                            <span className="text-2xl font-light">{formatDollar(units * assetUsd)}</span>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs text-sx-muted">بازده ثابت سالانه پس از کارمزد</span>
+                            <span className="text-2xl font-light text-sx-green"><Num>{formatPercent(apyFromPT(tokenPrice / (1 - planFee / 100), days), 2)}</Num></span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs text-sx-muted">مواجهه با بازده دارایی پایه</span>
+                          <span className="text-2xl font-light">{formatDollar(units * assetUsd, 0)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" className={`${btn.secondary} self-start`} onClick={() => {
                       setDraft((d) => ({ ...d, at: new Date().toISOString(), cash: { ...d.cash, amount: planAmount, token: planToken } }));
                       setMode('record');
                     }}>
@@ -379,34 +399,32 @@ export default function NewPosition() {
                     </button>
                   </div>
                 );
-              })() : <p className="text-sm text-warning">قیمت بازار، قیمت دلاری دارایی یا قیمت ارز پرداختی در دسترس نیست؛ تخمین ممکن نیست.</p>}
-            </Card>
+              })() : <p className="text-sm text-sx-orange">قیمت بازار، قیمت دلاری دارایی یا قیمت ارز پرداختی در دسترس نیست؛ تخمین ممکن نیست.</p>}
+            </Panel>
           ) : (
             <>
-              <Card title="جزئیات خرید">
-                <p className="text-xs text-secondary">مبنای محاسبات، مبلغ واقعی پرداختی و تعداد واقعی دریافتی از تراکنش شماست؛ قیمت امروز جایگزین قیمت ورود نمی‌شود.</p>
+              <Panel title="جزئیات خرید" subtitle="مبنای محاسبات، مبلغ واقعی پرداختی و تعداد واقعی دریافتی از تراکنش شماست؛ قیمت امروز جایگزین قیمت ورود نمی‌شود.">
                 <EventFields draft={draft} onChange={setDraft} assetSymbol={assetSymbol} liveAssetUsd={assetUsd} types={['buy']} chain={market.chain} marketIcon={market.icon} />
-              </Card>
+              </Panel>
 
               {kind === 'loop' && (
-                <Card title="وام و بازار وام‌دهی">
-                  <p className="text-xs text-secondary">مبلغ خرید بالا باید کل PT خریداری‌شده (سرمایه‌ی خودتان + وام) باشد. سرمایه‌ی شخصی = خرید − وام.</p>
-                  <div className="grid grid-cols-2 gap-3">
+                <Panel title="وام و بازار وام‌دهی" subtitle="مبلغ خرید بالا باید کل PT خریداری‌شده (سرمایه‌ی خودتان + وام) باشد. سرمایه‌ی شخصی = خرید − وام.">
+                  <div className="grid grid-cols-2 gap-4">
                     <TextField label="پلتفرم وام‌دهی" value={loop.lendingPlatform} onChange={(lendingPlatform) => setLoop({ ...loop, lendingPlatform })} placeholder="Morpho" ltr />
                     <TextField label="بازار وام‌دهی" value={loop.lendingMarket} onChange={(lendingMarket) => setLoop({ ...loop, lendingMarket })} placeholder="PT-sUSDe / USDC" ltr />
                     <TokenSelect label="دارایی بدهی" value={loop.debtAsset} onChange={(debtAsset) => { setLoop({ ...loop, debtAsset }); setBorrowSource('unknown'); setBorrowUsd(NaN); }} tokens={tokens} />
-                    <NumberField label="مقدار وام (بدهی)" value={borrowed} onChange={setBorrowed} />
-                    <NumberField label="نرخ بهره‌ی وام" value={loop.borrowAPY} onChange={(borrowAPY) => setLoop({ ...loop, borrowAPY })} suffix="%" />
-                    <NumberField label="آستانه‌ی لیکویید شدن (LLTV)" value={loop.lltv} onChange={(lltv) => setLoop({ ...loop, lltv })} suffix="%" />
+                    <NumberField persian label="مقدار وام (بدهی)" value={borrowed} onChange={setBorrowed} />
+                    <NumberField persian label="نرخ بهره‌ی وام" value={loop.borrowAPY} onChange={(borrowAPY) => setLoop({ ...loop, borrowAPY })} suffix="%" />
+                    <NumberField persian label="آستانه‌ی لیکویید شدن (LLTV)" value={loop.lltv} onChange={(lltv) => setLoop({ ...loop, lltv })} suffix="%" />
                   </div>
-                  <label className="flex items-center gap-2 text-sm text-secondary">
+                  <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={loop.debtIsAccountingAsset} onChange={(e) => setLoop({ ...loop, debtIsAccountingAsset: e.target.checked })} />
                     دارایی بدهی همان دارایی پایه‌ی بازار ({assetSymbol || '—'}) است
                   </label>
                   {!loop.debtIsAccountingAsset && (
                     <div className="flex flex-col gap-1">
-                      <NumberField label={`نرخ دلاری ${loop.debtAsset || 'دارایی بدهی'} هنگام وام`} value={borrowUsd} onChange={(v) => { setBorrowUsd(v); setBorrowSource('manual'); }} suffix="$" />
-                      <span className={`text-[11px] ${Number.isFinite(borrowUsd) ? 'text-success' : 'text-warning'}`}>{Number.isFinite(borrowUsd) ? RATE_FA[borrowSource] : 'نرخ نامعلوم — دستی وارد کنید'}</span>
+                      <NumberField persian label={`نرخ دلاری ${loop.debtAsset || 'دارایی بدهی'} هنگام وام`} value={borrowUsd} onChange={(v) => { setBorrowUsd(v); setBorrowSource('manual'); }} suffix="دلار" />
+                      <span className={`text-[11px] ${Number.isFinite(borrowUsd) ? 'text-sx-green' : 'text-sx-orange'}`}>{Number.isFinite(borrowUsd) ? RATE_FA[borrowSource] : 'نرخ نامعلوم — دستی وارد کنید'}</span>
                     </div>
                   )}
                   <SelectField<OracleMode>
@@ -420,37 +438,38 @@ export default function NewPosition() {
                     ]}
                   />
                   {loop.oracle === 'manual' && (
-                    <NumberField label={`قیمت PT در اوراکل (${assetSymbol || 'واحد دارایی'})`} value={loop.oraclePtPrice ?? NaN} onChange={(oraclePtPrice) => setLoop({ ...loop, oraclePtPrice })} />
+                    <NumberField persian label={`قیمت PT در اوراکل (${assetSymbol || 'واحد دارایی'})`} value={loop.oraclePtPrice ?? NaN} onChange={(oraclePtPrice) => setLoop({ ...loop, oraclePtPrice })} />
                   )}
-                </Card>
+                </Panel>
               )}
 
               {kind === 'yt' && (
-                <Card title="پوینت (فقط برای سناریوی جدا)">
-                  <p className="text-xs text-secondary">ارزش پوینت و ایردراپ هرگز وارد سود قطعی نمی‌شود.</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <NumberField label="پوینت روزانه به ازای هر واحد" value={points.perDay} onChange={(perDay) => setPoints({ ...points, perDay })} />
-                    <NumberField label="ضریب YT" value={points.multiplier} onChange={(multiplier) => setPoints({ ...points, multiplier })} suffix="×" />
+                <Panel title="پوینت" subtitle="فقط برای سناریوی جدا؛ ارزش پوینت و ایردراپ هرگز وارد سود قطعی نمی‌شود.">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <NumberField persian label="پوینت روزانه به ازای هر واحد" value={points.perDay} onChange={(perDay) => setPoints({ ...points, perDay })} />
+                    <NumberField persian label="ضریب YT" value={points.multiplier} onChange={(multiplier) => setPoints({ ...points, multiplier })} suffix="×" />
                     <SelectField label="مبنا" value={points.basis} onChange={(basis) => setPoints({ ...points, basis })} options={[{ value: 'unit', label: 'هر واحد دارایی' }, { value: 'usd', label: 'هر دلار' }]} />
                   </div>
-                </Card>
+                </Panel>
               )}
 
-              <NoWalletNote />
-              {(draftError || loopError) && <p className="text-sm text-warning">{draftError ?? loopError}</p>}
-              <button type="button" disabled={!!draftError || !!loopError} onClick={create} className="flex items-center justify-center gap-2 rounded-xl brand-gradient px-4 py-3 font-bold text-white disabled:opacity-40">
-                <Check size={18} /> ذخیره‌ی پوزیشن
-              </button>
+              <div className="sx-card p-5 flex flex-col gap-4">
+                <NoWalletNote />
+                {(draftError || loopError) && <p className="text-sm text-sx-orange">{draftError ?? loopError}</p>}
+                <button type="button" disabled={!!draftError || !!loopError} onClick={create} className={`${btn.primary} h-12 text-base`}>
+                  <Check size={18} /> ذخیره‌ی پوزیشن
+                </button>
+              </div>
             </>
           )}
         </>
       )}
 
       {step > 0 && (
-        <button type="button" onClick={back} className="self-start flex items-center gap-1 text-sm text-secondary">
+        <button type="button" onClick={back} className={`${btn.ghost} self-start`}>
           <ArrowRight size={14} /> مرحله‌ی قبل
         </button>
       )}
-    </main>
+    </SxPage>
   );
 }

@@ -2,7 +2,8 @@ import thresholds from '../../config/thresholds.json';
 import type { Position } from '../../types/position';
 import { ptPriceFromAPY } from '../calculators/implied-apy';
 import { isStable, type OpportunityListing } from '../risk/opportunities';
-import { formatNumber, formatPercent, formatUSD } from '../utils/formatting';
+import { formatNumber, formatPercent } from '../utils/formatting';
+import { formatDollar } from './format';
 import { mean } from '../utils/math';
 import { EPS } from './ledger';
 import { apyFromPT, type MarketQuote, type Quality, type Valuation } from './valuation';
@@ -76,7 +77,7 @@ export function analyzePosition(p: Position, v: Valuation, q: MarketQuote | null
       scenarios,
       triggers,
       lean: 'neutral',
-      summary: [`این پوزیشن بسته شده است. سود و زیان نهایی ثبت‌شده: ${formatUSD(v.pnlUsd)}.`],
+      summary: [`این پوزیشن بسته شده است. سود و زیان نهایی ثبت‌شده: ${formatDollar(v.pnlUsd)}.`],
       assumptions,
     };
   }
@@ -92,7 +93,7 @@ export function analyzePosition(p: Position, v: Valuation, q: MarketQuote | null
     };
   }
 
-  const exitLine = `خروج اکنون (تخمینی، پس از کارمزد و لغزش ${formatPercent(v.exit.costPct, 2)}${v.debtUsd.value > 0 ? ' و بازپرداخت بدهی' : ''}) حدود ${formatUSD(exitNow.valueUsd)} برمی‌گرداند؛ یعنی سود و زیان کل ${formatUSD(exitNow.pnlUsd)}.`;
+  const exitLine = `خروج اکنون (تخمینی، پس از کارمزد و لغزش ${formatPercent(v.exit.costPct, 2)}${v.debtUsd.value > 0 ? ' و بازپرداخت بدهی' : ''}) حدود ${formatDollar(exitNow.valueUsd)} برمی‌گرداند؛ یعنی سود و زیان کل ${formatDollar(exitNow.pnlUsd)}.`;
 
   if (p.kind === 'pt' || p.kind === 'loop') {
     const units = L.units;

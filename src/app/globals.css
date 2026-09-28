@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 @config '../../tailwind.config.ts';
 
@@ -76,4 +76,83 @@ details > summary::-webkit-details-marker {
 * {
   scrollbar-width: thin;
   scrollbar-color: #33406e transparent;
+}
+
+/*
+ * Positions section (.sx) — Stripe-inspired: hairline borders, 6px radii, light
+ * weights, layered soft shadows, one violet accent. Unlayered, so it wins over
+ * the shared form controls' utility classes inside this section only.
+ */
+.sx {
+  --sx-focus: 0 0 0 3px rgb(83 58 253 / 0.45);
+  font-weight: 300;
+}
+.sx input:not([type='checkbox']):not([type='file']),
+.sx select {
+  background: #26262e;
+  border: 1px solid #32323a;
+  border-radius: 6px;
+  color: #f8f7ff;
+  font-weight: 400;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.sx input:not([type='checkbox']):hover,
+.sx select:hover {
+  border-color: #4a4a55;
+}
+.sx input:not([type='checkbox']):focus,
+.sx select:focus {
+  border-color: #7662fd;
+  box-shadow: var(--sx-focus);
+}
+.sx input[type='checkbox'] {
+  accent-color: #533afd;
+  width: 16px;
+  height: 16px;
+}
+.sx label {
+  font-weight: 400;
+  color: #9e9da6;
+}
+.sx :focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus);
+  border-radius: 4px;
+}
+.sx-card {
+  background: #1a1a22;
+  border: 1px solid #32323a;
+  border-radius: 8px;
+}
+.sx-lift {
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+.sx-lift:hover {
+  transform: translateY(-2px);
+  border-color: #45455a;
+  box-shadow: rgb(0 0 0 / 0.45) 0 13px 27px -5px, rgb(83 58 253 / 0.18) 0 8px 16px -8px;
+}
+.sx-pop {
+  box-shadow: rgb(0 0 0 / 0.5) 0 18px 36px -18px, rgb(50 50 93 / 0.35) 0 30px 45px -30px;
+}
+/* Hero band: Stripe's soft diagonal gradient sweep, dimmed for the dark canvas. */
+.sx-hero {
+  position: relative;
+  overflow: hidden;
+  background: #1a1a22;
+  border: 1px solid #32323a;
+  border-radius: 8px;
+}
+.sx-hero::before {
+  content: '';
+  position: absolute;
+  inset: -40% -10% auto auto;
+  width: 70%;
+  height: 180%;
+  background: radial-gradient(circle, rgb(127 125 252 / 0.35), rgb(244 75 204 / 0.18) 33%, transparent 66%);
+  filter: blur(20px);
+  pointer-events: none;
+}
+.sx-hero > * {
+  position: relative;
 }
