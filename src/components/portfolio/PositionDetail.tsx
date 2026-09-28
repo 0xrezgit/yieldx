@@ -1,24 +1,24 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, ArrowLeftRight, Gift, History, Loader2, Plus, RefreshCw, Scale, Settings2, ShieldAlert, Target, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Gift, History, Loader2, Plus, RefreshCw, Scale, Settings2, ShieldAlert, Target, Trash2 } from 'lucide-react';
 import type { Position, PositionEventType } from '../../types/position';
 import { usePortfolioView, type PositionView } from '../../hooks/usePortfolioView';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
 import { compareMarkets, defaultSwitchSettings, fmtDays, type SwitchSettings } from '../../lib/portfolio/analysis';
 import { chainFa, EVENT_FA, FEE_FA, KIND_LABEL, QUALITY_FA, RATE_FA } from '../../lib/portfolio/labels';
 import { EPS } from '../../lib/portfolio/ledger';
-import { formatDateTime, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
+import { formatDollar, priceDigits } from '../../lib/portfolio/format';
+import { formatDateTime, formatNumber, formatPercent } from '../../lib/utils/formatting';
 import protocols from '../../config/protocols.json';
-import { Card, Collapsible } from '../ui/card';
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
 import { TokenLogo } from '../ui/token-logo';
 import { EventForm } from './EventForm';
 import { TokenBadge } from './TokenSelect';
-import { AlertList, MarketIdentity, NoWalletNote, Pnl, QualityBadge, SnapshotChart, Stat, StatusBadge, usd } from './parts';
+import { AlertList, btn, Chip, Disclosure, MarketIdentity, NoWalletNote, Panel, Pnl, QualityBadge, SnapshotChart, Stat, StatGrid, StatusBadge, SxPage, Usd, usd } from './parts';
 
 const EVENT_TYPES: Record<Position['kind'], PositionEventType[]> = {
   pt: ['buy', 'sell', 'redeem', 'claim_reward'],
@@ -33,50 +33,68 @@ const ageText = (ms: number | null) => {
 };
 
 const LEAN = {
-  hold: { text: 'با فرض‌های فعلی، نگهداری نسبت به خروج اکنون برتری دارد.', cls: 'border-success/40 bg-success/10' },
-  exit: { text: 'با فرض‌های فعلی، خروج یا بازخرید نسبت به ادامه منطقی‌تر به نظر می‌رسد.', cls: 'border-warning/40 bg-warning/10' },
-  neutral: { text: 'تفاوت معناداری بین نگهداری و خروج دیده نمی‌شود.', cls: 'border-default bg-elevated/40' },
-  unknown: { text: 'داده‌ی کافی برای مقایسه‌ی نگهداری و خروج نیست.', cls: 'border-default bg-elevated/40' },
+  hold: { text: 'با فرض‌های فعلی، نگهداری نسبت به خروج اکنون برتری دارد.', cls: 'border-sx-green bg-sx-green/8' },
+  exit: { text: 'با فرض‌های فعلی، خروج یا بازخرید نسبت به ادامه منطقی‌تر به نظر می‌رسد.', cls: 'border-sx-orange bg-sx-orange/8' },
+  neutral: { text: 'تفاوت معناداری بین نگهداری و خروج دیده نمی‌شود.', cls: 'border-sx-border bg-sx-raised/50' },
+  unknown: { text: 'داده‌ی کافی برای مقایسه‌ی نگهداری و خروج نیست.', cls: 'border-sx-border bg-sx-raised/50' },
 };
 
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="text-xs font-medium text-sx-faint">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+/** The five questions every position page must answer. */
 export function Answers({ x }: { x: PositionView }) {
   const { p, v, a } = x;
   const L = v.ledger;
+  const Row = ({ q, children }: { q: string; children: ReactNode }) => (
+    <div className="grid grid-cols-1 sm:grid-cols-[11rem_minmax(0,1fr)] gap-1 sm:gap-6 py-4 border-t border-sx-border first:border-t-0 first:pt-0">
+      <dt className="text-sm text-sx-muted">{q}</dt>
+      <dd className="text-[15px] text-sx-text leading-7 flex flex-wrap items-center gap-2">{children}</dd>
+    </div>
+  );
   return (
-    <Card title="جمع‌بندی">
-      <dl className="flex flex-col gap-3 text-sm">
-        <div>
-          <dt className="text-muted text-xs">چه خریده‌ام؟</dt>
-          <dd className="text-primary">
-            <Num>{formatNumber(L.units, 4)}</Num> <span dir="ltr">{KIND_LABEL[p.kind === 'loop' ? 'pt' : p.kind]} {p.marketName}</span> روی {chainFa(p.chain)} در <span dir="ltr">{protocols[p.protocol].name}</span>
-            {p.loop && <> با بدهی {usd(v.debtUsd.value)} <TokenBadge symbol={p.loop.debtAsset} size={16} /> در <span dir="ltr">{p.loop.lendingPlatform || '—'}</span></>}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted text-xs">چقدر هزینه کرده‌ام؟</dt>
-          <dd className="text-primary">
-            سرمایه‌ی شخصی {usd(v.investedUsd)} · کارمزدها {usd(L.fees.total)}
-            {L.interestPaidUsd > 0 && <> · بهره‌ی پرداختی {usd(L.interestPaidUsd)}</>}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted text-xs">اکنون چقدر ارزش دارد؟</dt>
-          <dd className="text-primary flex flex-wrap items-center gap-2">
-            {usd(v.netValueUsd)} <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" /> <QualityBadge q={v.tokenPrice.quality} prefix="قیمت" />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted text-xs">اگر اکنون خارج شوم؟</dt>
-          <dd className="text-primary flex flex-wrap items-center gap-2">
-            حدود {usd(v.exit.proceedsUsd)} <QualityBadge q={v.exit.quality} />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted text-xs">ادامه یا جابه‌جایی؟</dt>
-          <dd className={`rounded-xl border px-3 py-2 text-primary ${LEAN[a.lean].cls}`}>{LEAN[a.lean].text} این یک پیشنهاد قطعی نیست؛ فرض‌ها را در بخش تحلیل ببینید.</dd>
-        </div>
+    <Panel title="جمع‌بندی">
+      <dl className="flex flex-col">
+        <Row q="چه خریده‌ام؟">
+          <Num>{formatNumber(L.units, 4)}</Num>
+          <span dir="ltr">
+            {KIND_LABEL[p.kind === 'loop' ? 'pt' : p.kind]} {p.marketName}
+          </span>
+          روی {chainFa(p.chain)} در <span dir="ltr">{protocols[p.protocol].name}</span>
+          {p.loop && (
+            <>
+              با بدهی {usd(v.debtUsd.value)} <TokenBadge symbol={p.loop.debtAsset} size={16} /> در <span dir="ltr">{p.loop.lendingPlatform || '—'}</span>
+            </>
+          )}
+        </Row>
+        <Row q="چقدر هزینه کرده‌ام؟">
+          سرمایه‌ی شخصی {usd(v.investedUsd)}
+          <span className="text-sx-faint">·</span> کارمزدها {usd(L.fees.total)}
+          {L.interestPaidUsd > 0 && (
+            <>
+              <span className="text-sx-faint">·</span> بهره‌ی پرداختی {usd(L.interestPaidUsd)}
+            </>
+          )}
+        </Row>
+        <Row q="اکنون چقدر ارزش دارد؟">
+          {usd(v.netValueUsd)} <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" /> <QualityBadge q={v.tokenPrice.quality} prefix="قیمت" />
+        </Row>
+        <Row q="اگر اکنون خارج شوم؟">
+          حدود {usd(v.exit.proceedsUsd)} <QualityBadge q={v.exit.quality} />
+        </Row>
+        <Row q="ادامه یا جابه‌جایی؟">
+          <span className={`w-full rounded-md border-r-2 px-4 py-3 text-sm leading-7 ${LEAN[a.lean].cls}`}>
+            {LEAN[a.lean].text} این یک پیشنهاد قطعی نیست؛ فرض‌ها را در بخش تحلیل ببینید.
+          </span>
+        </Row>
       </dl>
-    </Card>
+    </Panel>
   );
 }
 
@@ -85,53 +103,119 @@ export function Numbers({ x }: { x: PositionView }) {
   const L = v.ledger;
   const unit = p.assetSymbol || 'دارایی';
   return (
-    <Card title="ارزش و سود و زیان">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <Stat label="سرمایه‌ی شخصی واردشده">{usd(v.investedUsd)}</Stat>
-        <Stat label="بهای تمام‌شده‌ی باقی‌مانده" hint="روش میانگین">{usd(L.costUsd)}</Stat>
-        <Stat label="مقدار باقی‌مانده"><Num>{formatNumber(L.units, 4)}</Num></Stat>
-        <Stat label="میانگین بهای خرید" hint={Number.isFinite(v.avgCostAsset) ? <><Num>{formatNumber(v.avgCostAsset, 5)}</Num> {unit}</> : undefined}>
-          <Num>{formatUSD(v.avgCostUsd, 4)}</Num>
-        </Stat>
-        <Stat label="ارزش با قیمت بازار" q={v.tokenPrice.quality} hint={Number.isFinite(v.tokenPrice.value) ? <>قیمت <Num>{formatNumber(v.tokenPrice.value, 5)}</Num> {unit}</> : undefined}>
-          {usd(v.markValueUsd)}
-        </Stat>
-        <Stat label="ارزش خالص (پس از بدهی)">{usd(v.netValueUsd)}</Stat>
-        <Stat label="مبلغ تخمینی خروج اکنون" q={v.exit.quality} hint={<>هزینه <Num>{formatPercent(v.exit.costPct, 2)}</Num>{v.exit.impactPct === null ? ' (نقدینگی نامعلوم)' : ''} + شبکه <Num>{formatUSD(v.exit.networkUsd)}</Num></>}>
-          {usd(v.exit.proceedsUsd)}
-        </Stat>
-        <Stat label="سود و زیان کل">
-          <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" word={false} />
-        </Stat>
-        <Stat label="تحقق‌یافته"><Pnl usd={v.realizedUsd} size="sm" /></Stat>
-        <Stat label="تحقق‌نیافته"><Pnl usd={v.unrealizedUsd} size="sm" /></Stat>
-        <Stat label={`بازده برحسب ${unit}`} hint={v.pnlAsset === null ? 'نرخ دارایی برخی رویدادها ثبت نشده' : undefined}>
-          {v.pnlAsset === null ? '—' : <><Num>{formatNumber(v.pnlAsset, 4)}</Num> {unit} {v.pnlAssetPct !== null && <Num className="text-xs">({formatPercent(v.pnlAssetPct, 2, true)})</Num>}</>}
-        </Stat>
-        <Stat label="اثر تغییر قیمت دلاری دارایی">{v.assetPriceEffectUsd === null ? '—' : <Pnl usd={v.assetPriceEffectUsd} size="sm" word={false} />}</Stat>
-        <Stat label="سود دریافت‌شده (واقعی)">{usd(L.incomeYieldUsd)}</Stat>
-        <Stat label="سود دریافت‌نشده" q={v.unclaimedYield.quality}>{p.kind === 'yt' ? usd(v.unclaimedYield.value) : '—'}</Stat>
-        <Stat label="پاداش دریافت‌شده">{usd(L.incomeRewardUsd)}</Stat>
-        <Stat label="کارمزدها" hint={<>شبکه <Num>{formatUSD(L.fees.network)}</Num> · معامله <Num>{formatUSD(L.fees.trade)}</Num> · جانبی <Num>{formatUSD(L.fees.other)}</Num></>}>
-          {usd(L.fees.total)}
-        </Stat>
-        <Stat label="زمان سپری‌شده">{fmtDays(v.daysHeld)}</Stat>
-        <Stat label="تا سررسید">{fmtDays(v.daysLeft)}</Stat>
-        <Stat label="آخرین دریافت داده" q={v.tokenPrice.quality === 'manual' ? 'manual' : quote ? (quote.failed ? 'stale' : v.tokenPrice.quality) : 'missing'}>
-          <span className="text-sm">{ageText(v.dataAgeMs)}</span>
-        </Stat>
-        <Stat label="منبع قیمت">
-          <span className="text-sm">
-            {v.tokenPrice.quality === 'manual' ? 'ورود دستی' : v.tokenPrice.quality === 'rule' ? 'قاعده‌ی سررسید' : <span dir="ltr">{protocols[p.protocol].name} API</span>} · {QUALITY_FA[v.tokenPrice.quality]}
-          </span>
-        </Stat>
-      </div>
-      {L.fees.total - L.fees.separate > 0 && (
-        <p className="text-xs text-secondary">
-          <Num>{formatUSD(L.fees.total - L.fees.separate)}</Num> از کارمزدها داخل مبلغ‌ها حساب شده بود و دوباره کم نشده است.
-        </p>
-      )}
-    </Card>
+    <Panel title="ارزش و سود و زیان">
+      <Group title="سرمایه و بهای خرید">
+        <StatGrid>
+          <Stat label="سرمایه‌ی شخصی واردشده">{usd(v.investedUsd)}</Stat>
+          <Stat label="بهای تمام‌شده‌ی باقی‌مانده" hint="روش میانگین">
+            {usd(L.costUsd)}
+          </Stat>
+          <Stat label="مقدار باقی‌مانده">
+            <Num>{formatNumber(L.units, 4)}</Num>
+          </Stat>
+          <Stat
+            label="میانگین بهای خرید"
+            hint={
+              Number.isFinite(v.avgCostAsset) ? (
+                <>
+                  <Num>{formatNumber(v.avgCostAsset, 6)}</Num> {unit}
+                </>
+              ) : undefined
+            }
+          >
+            <Usd x={v.avgCostUsd} digits={priceDigits(v.avgCostUsd)} />
+          </Stat>
+        </StatGrid>
+      </Group>
+      <Group title="ارزش و خروج">
+        <StatGrid>
+          <Stat
+            label="ارزش با قیمت بازار"
+            q={v.tokenPrice.quality}
+            hint={
+              Number.isFinite(v.tokenPrice.value) ? (
+                <>
+                  قیمت <Num>{formatNumber(v.tokenPrice.value, 6)}</Num> {unit}
+                </>
+              ) : undefined
+            }
+          >
+            {usd(v.markValueUsd)}
+          </Stat>
+          <Stat label="ارزش خالص (پس از بدهی)">{usd(v.netValueUsd)}</Stat>
+          <Stat
+            label="مبلغ تخمینی خروج اکنون"
+            q={v.exit.quality}
+            hint={
+              <>
+                هزینه <Num>{formatPercent(v.exit.costPct, 2)}</Num>
+                {v.exit.impactPct === null ? ' (نقدینگی نامعلوم)' : ''} + شبکه {formatDollar(v.exit.networkUsd)}
+              </>
+            }
+          >
+            {usd(v.exit.proceedsUsd)}
+          </Stat>
+          <Stat label="سود و زیان کل">
+            <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" word={false} />
+          </Stat>
+        </StatGrid>
+      </Group>
+      <Group title="سود و زیان">
+        <StatGrid>
+          <Stat label="تحقق‌یافته">
+            <Pnl usd={v.realizedUsd} size="sm" />
+          </Stat>
+          <Stat label="تحقق‌نیافته">
+            <Pnl usd={v.unrealizedUsd} size="sm" />
+          </Stat>
+          <Stat label={`بازده برحسب ${unit}`} hint={v.pnlAsset === null ? 'نرخ دارایی برخی رویدادها ثبت نشده' : undefined}>
+            {v.pnlAsset === null ? (
+              '—'
+            ) : (
+              <>
+                <Num>{formatNumber(v.pnlAsset, 4)}</Num> <span className="text-sm text-sx-muted">{unit}</span>{' '}
+                {v.pnlAssetPct !== null && <Num className="text-xs text-sx-muted">({formatPercent(v.pnlAssetPct, 2, true)})</Num>}
+              </>
+            )}
+          </Stat>
+          <Stat label="اثر تغییر قیمت دلاری دارایی">{v.assetPriceEffectUsd === null ? '—' : <Pnl usd={v.assetPriceEffectUsd} size="sm" word={false} />}</Stat>
+        </StatGrid>
+      </Group>
+      <Group title="درآمد و هزینه">
+        <StatGrid>
+          <Stat label="سود دریافت‌شده (واقعی)">{usd(L.incomeYieldUsd)}</Stat>
+          <Stat label="سود دریافت‌نشده" q={v.unclaimedYield.quality}>
+            {p.kind === 'yt' ? usd(v.unclaimedYield.value) : '—'}
+          </Stat>
+          <Stat label="پاداش دریافت‌شده">{usd(L.incomeRewardUsd)}</Stat>
+          <Stat
+            label="کارمزدها"
+            hint={
+              <>
+                شبکه {formatDollar(L.fees.network)} · معامله {formatDollar(L.fees.trade)} · جانبی {formatDollar(L.fees.other)}
+              </>
+            }
+          >
+            {usd(L.fees.total)}
+          </Stat>
+        </StatGrid>
+        {L.fees.total - L.fees.separate > 0 && <p className="text-xs text-sx-muted">{formatDollar(L.fees.total - L.fees.separate)} از کارمزدها داخل مبلغ‌ها حساب شده بود و دوباره کم نشده است.</p>}
+      </Group>
+      <Group title="زمان و داده">
+        <StatGrid>
+          <Stat label="زمان سپری‌شده">{fmtDays(v.daysHeld)}</Stat>
+          <Stat label="تا سررسید">{fmtDays(v.daysLeft)}</Stat>
+          <Stat label="آخرین دریافت داده" q={v.tokenPrice.quality === 'manual' ? 'manual' : quote ? (quote.failed ? 'stale' : v.tokenPrice.quality) : 'missing'}>
+            <span className="text-[15px]">{ageText(v.dataAgeMs)}</span>
+          </Stat>
+          <Stat label="منبع قیمت">
+            <span className="text-[15px]">
+              {v.tokenPrice.quality === 'manual' ? 'ورود دستی' : v.tokenPrice.quality === 'rule' ? 'قاعده‌ی سررسید' : <span dir="ltr">{protocols[p.protocol].name} API</span>} · {QUALITY_FA[v.tokenPrice.quality]}
+            </span>
+          </Stat>
+        </StatGrid>
+      </Group>
+    </Panel>
   );
 }
 
@@ -140,73 +224,121 @@ export function KindPanel({ x, onSave }: { x: PositionView; onSave: (p: Position
   const [debtNow, setDebtNow] = useState(NaN);
   if (p.kind === 'pt') {
     return (
-      <Card title="محاسبات PT" icon={<Scale size={18} />}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          <Stat label="بازده ثابت قفل‌شده در ورود" hint="از قیمت واقعی پرداختی">{v.entryAPY === null ? '—' : <Num>{formatPercent(v.entryAPY, 2)}</Num>}</Stat>
-          <Stat label="Implied APY فعلی بازار" q={quote ? v.tokenPrice.quality : 'missing'}>{quote ? <Num>{formatPercent(quote.impliedAPY, 2)}</Num> : '—'}</Stat>
-          <Stat label="ارزش بازخرید در سررسید" hint={`${formatNumber(v.ledger.units, 2)} ${p.assetSymbol || 'واحد'} × قیمت دلاری فعلی`}>{usd(v.redeemValueUsd)}</Stat>
-          <Stat label="خروج زودهنگام اکنون" q={v.exit.quality}>{usd(v.exit.proceedsUsd)}</Stat>
-        </div>
-        <p className="text-xs text-muted">واحد بازخرید: ۱ PT = ۱ {p.assetSymbol || 'واحد دارایی پایه'} در سررسید. ارزش دلاری آن با قیمت همان دارایی تغییر می‌کند؛ PT معادل یک دلار فرض نشده است.</p>
-      </Card>
+      <Panel title="محاسبات PT" icon={<Scale size={17} />}>
+        <StatGrid>
+          <Stat label="بازده ثابت قفل‌شده در ورود" hint="از قیمت واقعی پرداختی">
+            {v.entryAPY === null ? '—' : <Num>{formatPercent(v.entryAPY, 2)}</Num>}
+          </Stat>
+          <Stat label="Implied APY فعلی بازار" q={quote ? v.tokenPrice.quality : 'missing'}>
+            {quote ? <Num>{formatPercent(quote.impliedAPY, 2)}</Num> : '—'}
+          </Stat>
+          <Stat label="ارزش بازخرید در سررسید" hint={`${formatNumber(v.ledger.units, 2)} ${p.assetSymbol || 'واحد'} × قیمت دلاری فعلی`}>
+            {usd(v.redeemValueUsd)}
+          </Stat>
+          <Stat label="خروج زودهنگام اکنون" q={v.exit.quality}>
+            {usd(v.exit.proceedsUsd)}
+          </Stat>
+        </StatGrid>
+        <p className="text-xs text-sx-muted leading-6">
+          واحد بازخرید: ۱ PT = ۱ {p.assetSymbol || 'واحد دارایی پایه'} در سررسید. ارزش دلاری آن با قیمت همان دارایی تغییر می‌کند؛ PT معادل یک دلار فرض نشده است.
+        </p>
+      </Panel>
     );
   }
   if (p.kind === 'yt') {
     const scenario = v.points * p.points.valuePerPoint;
     return (
-      <Card title="محاسبات YT" icon={<Gift size={18} />}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          <Stat label="ارزش فروش توکن" q={v.tokenPrice.quality}>{usd(v.markValueUsd)}</Stat>
-          <Stat label="سود دریافت‌شده" hint="ثبت‌شده توسط شما">{usd(v.ledger.incomeYieldUsd)}</Stat>
-          <Stat label="سود انباشته‌ی دریافت‌نشده" q={v.unclaimedYield.quality}>{usd(v.unclaimedYield.value)}</Stat>
-          <Stat label="بازده پایه‌ی فعلی" q={quote ? v.tokenPrice.quality : 'missing'}>{quote ? <Num>{formatPercent(quote.baseAPY, 2)}</Num> : '—'}</Stat>
-        </div>
-        <p className="text-xs text-muted">
+      <Panel title="محاسبات YT" icon={<Gift size={17} />}>
+        <StatGrid>
+          <Stat label="ارزش فروش توکن" q={v.tokenPrice.quality}>
+            {usd(v.markValueUsd)}
+          </Stat>
+          <Stat label="سود دریافت‌شده" hint="ثبت‌شده توسط شما">
+            {usd(v.ledger.incomeYieldUsd)}
+          </Stat>
+          <Stat label="سود انباشته‌ی دریافت‌نشده" q={v.unclaimedYield.quality}>
+            {usd(v.unclaimedYield.value)}
+          </Stat>
+          <Stat label="بازده پایه‌ی فعلی" q={quote ? v.tokenPrice.quality : 'missing'}>
+            {quote ? <Num>{formatPercent(quote.baseAPY, 2)}</Num> : '—'}
+          </Stat>
+        </StatGrid>
+        <p className="text-xs text-sx-muted leading-6">
           {v.unclaimedYield.quality === 'historical'
             ? 'سود انباشته از سابقه‌ی روزانه‌ی بازده بازار محاسبه شده است.'
             : v.unclaimedYield.quality === 'manual'
               ? 'سود انباشته از عددی است که دستی وارد کرده‌اید.'
               : 'سابقه‌ی روزانه‌ی بازده در دسترس نیست؛ سود انباشته با نرخ فعلی تخمین زده شده. عدد دقیق را از پلتفرم بخوانید و دستی وارد کنید.'}
         </p>
-        <div className="rounded-xl border border-dashed border-strong p-3 flex flex-col gap-2">
-          <div className="text-sm font-bold text-secondary">سناریوی پوینت و ایردراپ (جدا از سود قطعی)</div>
-          <div className="grid grid-cols-2 gap-3">
-            <Stat label="پوینت تخمینی تا امروز" q="estimate"><Num>{formatNumber(v.points, 0)}</Num></Stat>
-            <NumberField label="ارزش فرضی هر پوینت" value={p.points.valuePerPoint} onChange={(valuePerPoint) => onSave({ ...p, points: { ...p.points, valuePerPoint } })} suffix="$" />
+        <div className="rounded-lg border border-dashed border-sx-border bg-sx-raised/30 p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Chip tone="warning">سناریو</Chip>
+            <span className="text-sm font-medium">پوینت و ایردراپ — جدا از سود قطعی</span>
           </div>
-          <p className="text-sm text-secondary">
-            اگر هر پوینت <Num>{formatUSD(p.points.valuePerPoint, 6)}</Num> بیارزد: <Num className="font-bold">{formatUSD(scenario)}</Num> — فرضی و خارج از سود و زیان.
+          <div className="grid grid-cols-2 gap-4 items-end">
+            <Stat label="پوینت تخمینی تا امروز" q="estimate">
+              <Num>{formatNumber(v.points, 0)}</Num>
+            </Stat>
+            <NumberField persian label="ارزش فرضی هر پوینت" value={p.points.valuePerPoint} onChange={(valuePerPoint) => onSave({ ...p, points: { ...p.points, valuePerPoint } })} suffix="دلار" />
+          </div>
+          <p className="text-sm text-sx-muted leading-7">
+            اگر هر پوینت {formatDollar(p.points.valuePerPoint, 6)} بیارزد: <span className="text-sx-text">{formatDollar(scenario)}</span> — فرضی و خارج از سود و زیان.
           </p>
         </div>
-      </Card>
+      </Panel>
     );
   }
   const h = v.loop;
   const lp = p.loop!;
+  const hfTone = h ? (h.healthFactor < 1.1 ? 'text-sx-red' : h.healthFactor < 1.3 ? 'text-sx-orange' : 'text-sx-green') : '';
   return (
-    <Card title="محاسبات PT Loop" icon={<ShieldAlert size={18} />}>
+    <Panel title="محاسبات PT Loop" icon={<ShieldAlert size={17} />}>
       {h ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-          <Stat label="شاخص سلامت" q={h.quality}>
-            <span className={h.healthFactor < 1.1 ? 'text-danger' : h.healthFactor < 1.3 ? 'text-warning' : 'text-success'}>
-              {h.healthFactor < 1.1 ? '⚠ ' : ''}
-              <Num>{Number.isFinite(h.healthFactor) ? formatNumber(h.healthFactor, 3) : '∞'}</Num>
-            </span>
-          </Stat>
-          <Stat label="فاصله تا لیکویید شدن" q={h.quality} hint={<>قیمت لیکویید PT: <Num>{formatNumber(h.liquidationPtPrice, 4)}</Num></>}>
-            <Num>{formatPercent(h.dropToLiquidation, 2)}</Num> افت قیمت PT
-          </Stat>
-          <Stat label="Implied APY لیکویید شدن" q={h.quality}>{Number.isFinite(h.liquidationAPY) ? <Num>{formatPercent(h.liquidationAPY, 2)}</Num> : '—'}</Stat>
-          <Stat label="اهرم فعلی"><Num>{formatNumber(h.leverage, 2)}×</Num></Stat>
-          <Stat label="وثیقه (ارزش بازار)">{usd(h.collateralUsd)}</Stat>
-          <Stat label="بدهی با بهره" q={h.debtQuality}>{usd(h.debtUsd)}</Stat>
-          <Stat label="نرخ بهره / LLTV"><Num>{formatPercent(lp.borrowAPY, 2)}</Num> / <Num>{formatPercent(lp.lltv, 1)}</Num></Stat>
-          <Stat label="بازار وام‌دهی"><span dir="ltr" className="text-sm">{lp.lendingPlatform || '—'} {lp.lendingMarket}</span></Stat>
-        </div>
+        <>
+          <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-sx-muted">شاخص سلامت</span>
+              <span className={`text-4xl font-light ${hfTone}`}>
+                {h.healthFactor < 1.1 ? '⚠ ' : ''}
+                <Num>{Number.isFinite(h.healthFactor) ? formatNumber(h.healthFactor, 3) : '∞'}</Num>
+              </span>
+              <QualityBadge q={h.quality} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-sx-muted">فاصله تا لیکویید شدن</span>
+              <span className="text-2xl font-light">
+                <Num>{formatPercent(h.dropToLiquidation, 2)}</Num> <span className="text-sm text-sx-muted">افت قیمت PT</span>
+              </span>
+            </div>
+          </div>
+          <StatGrid>
+            <Stat label="قیمت لیکویید PT" q={h.quality}>
+              <Num>{formatNumber(h.liquidationPtPrice, 5)}</Num>
+            </Stat>
+            <Stat label="Implied APY لیکویید شدن" q={h.quality}>
+              {Number.isFinite(h.liquidationAPY) ? <Num>{formatPercent(h.liquidationAPY, 2)}</Num> : '—'}
+            </Stat>
+            <Stat label="اهرم فعلی">
+              <Num>{formatNumber(h.leverage, 2)}×</Num>
+            </Stat>
+            <Stat label="وثیقه (ارزش بازار)">{usd(h.collateralUsd)}</Stat>
+            <Stat label="بدهی با بهره" q={h.debtQuality}>
+              {usd(h.debtUsd)}
+            </Stat>
+            <Stat label="نرخ بهره / LLTV">
+              <Num>{formatPercent(lp.borrowAPY, 2)}</Num> / <Num>{formatPercent(lp.lltv, 1)}</Num>
+            </Stat>
+            <Stat label="بازار وام‌دهی" className="col-span-2">
+              <span dir="ltr" className="text-[15px]">
+                {lp.lendingPlatform || '—'} {lp.lendingMarket}
+              </span>
+            </Stat>
+          </StatGrid>
+        </>
       ) : (
-        <p className="text-sm text-secondary">وثیقه‌ای باقی نمانده است.</p>
+        <p className="text-sm text-sx-muted">وثیقه‌ای باقی نمانده است.</p>
       )}
-      <p className="text-xs text-muted">
+      <p className="text-xs text-sx-muted leading-6">
         {lp.oracle === 'unknown'
           ? 'اوراکل بازار وام‌دهی مشخص نشده؛ سلامت با قیمت بازار PT تخمین زده شده. بسیاری از بازارها از اوراکل خطی یا TWAP استفاده می‌کنند؛ عدد پلتفرم را مبنا قرار دهید.'
           : lp.oracle === 'manual'
@@ -214,55 +346,58 @@ export function KindPanel({ x, onSave }: { x: PositionView; onSave: (p: Position
             : 'سلامت با قیمت بازار PT محاسبه شده.'}{' '}
         {h?.debtQuality === 'estimate' ? `بدهی با نرخ ثبت‌شده‌ی ${formatPercent(lp.borrowAPY, 2)} تخمین زده شده؛ برای دقت، بدهی فعلی را از پلتفرم وارد کنید.` : ''}
       </p>
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="w-48">
-          <NumberField label={`بدهی فعلی طبق پلتفرم (${lp.debtAsset})`} value={debtNow} onChange={setDebtNow} />
-        </div>
-        <button type="button" disabled={!(debtNow >= 0)} onClick={() => onSave({ ...p, loop: { ...lp, debtOverride: { amount: debtNow, at: new Date().toISOString() } } })} className="rounded-xl border border-strong px-3 py-2.5 text-sm text-secondary disabled:opacity-40">
-          ثبت
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end border-t border-sx-border pt-5">
+        <NumberField persian label={`بدهی فعلی طبق پلتفرم (${lp.debtAsset})`} value={debtNow} onChange={setDebtNow} />
+        <NumberField persian label="نرخ بهره‌ی فعلی وام" value={lp.borrowAPY} onChange={(borrowAPY) => onSave({ ...p, loop: { ...lp, borrowAPY } })} suffix="%" />
+        <NumberField persian label="LLTV" value={lp.lltv} onChange={(lltv) => onSave({ ...p, loop: { ...lp, lltv } })} suffix="%" />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={!(debtNow >= 0)} onClick={() => onSave({ ...p, loop: { ...lp, debtOverride: { amount: debtNow, at: new Date().toISOString() } } })} className={btn.secondary}>
+          ثبت بدهی فعلی
         </button>
         {lp.debtOverride && (
-          <button type="button" onClick={() => onSave({ ...p, loop: { ...lp, debtOverride: null } })} className="rounded-xl px-3 py-2.5 text-sm text-danger">
-            حذف عدد دستی ({formatNumber(lp.debtOverride.amount, 2)})
+          <button type="button" onClick={() => onSave({ ...p, loop: { ...lp, debtOverride: null } })} className={btn.danger}>
+            حذف عدد دستی (<Num>{formatNumber(lp.debtOverride.amount, 2)}</Num>)
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-3 max-w-md">
-        <NumberField label="نرخ بهره‌ی فعلی وام" value={lp.borrowAPY} onChange={(borrowAPY) => onSave({ ...p, loop: { ...lp, borrowAPY } })} suffix="%" />
-        <NumberField label="LLTV" value={lp.lltv} onChange={(lltv) => onSave({ ...p, loop: { ...lp, lltv } })} suffix="%" />
-      </div>
-    </Card>
+    </Panel>
   );
 }
 
 export function AnalysisPanel({ x }: { x: PositionView }) {
   const { a } = x;
   return (
-    <Card title="تحلیل نگهداری و خروج" icon={<Scale size={18} />}>
-      <ul className="flex flex-col gap-1.5 text-sm text-primary list-disc pr-5">
+    <Panel title="تحلیل نگهداری و خروج" icon={<Scale size={17} />}>
+      <ul className="flex flex-col gap-2 text-[15px] leading-7">
         {a.summary.map((s, i) => (
-          <li key={i}>{s}</li>
+          <li key={i} className="flex gap-3">
+            <span className="mt-3 size-1.5 rounded-full bg-sx-accent shrink-0" aria-hidden />
+            <span>{s}</span>
+          </li>
         ))}
       </ul>
       {a.scenarios.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto -mx-5 md:-mx-7">
+          <table className="w-full text-sm min-w-[32rem]">
             <thead>
-              <tr className="text-muted text-xs text-right">
-                <th className="py-1 font-normal">سناریو</th>
-                <th className="py-1 font-normal">نتیجه</th>
-                <th className="py-1 font-normal">در مقایسه با خروج اکنون</th>
+              <tr className="text-sx-muted text-xs text-right border-y border-sx-border bg-sx-raised/40">
+                <th className="py-2.5 px-5 md:px-7 font-normal">سناریو</th>
+                <th className="py-2.5 px-3 font-normal">نتیجه</th>
+                <th className="py-2.5 px-5 md:px-7 font-normal">در مقایسه با خروج اکنون</th>
               </tr>
             </thead>
             <tbody>
               {a.scenarios.map((s) => (
-                <tr key={s.label} className="border-t border-default align-top">
-                  <td className="py-2">
-                    <div className="text-primary">{s.label}</div>
-                    <div className="text-[11px] text-muted">{s.assumption}</div>
+                <tr key={s.label} className="border-b border-sx-border align-top">
+                  <td className="py-3 px-5 md:px-7">
+                    <div className="text-sx-text">{s.label}</div>
+                    <div className="text-xs text-sx-faint mt-0.5">{s.assumption}</div>
                   </td>
-                  <td className="py-2">{usd(s.valueUsd)}</td>
-                  <td className="py-2"><Pnl usd={s.vsExitUsd} size="sm" word={false} /></td>
+                  <td className="py-3 px-3">{usd(s.valueUsd)}</td>
+                  <td className="py-3 px-5 md:px-7">
+                    <Pnl usd={s.vsExitUsd} size="sm" word={false} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -270,27 +405,30 @@ export function AnalysisPanel({ x }: { x: PositionView }) {
         </div>
       )}
       {a.triggers.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-bold text-secondary">چه چیزی خروج را منطقی‌تر می‌کند؟</h3>
-          <ul className="flex flex-col gap-1 text-sm text-primary list-disc pr-5">
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-medium">چه چیزی خروج را منطقی‌تر می‌کند؟</h3>
+          <ul className="flex flex-col gap-2 text-sm text-sx-muted leading-7">
             {a.triggers.map((t, i) => (
-              <li key={i}>{t.text}</li>
+              <li key={i} className="flex gap-3">
+                <span className="mt-2.5 size-1.5 rounded-full bg-sx-orange shrink-0" aria-hidden />
+                <span>{t.text}</span>
+              </li>
             ))}
           </ul>
         </div>
       )}
       {a.assumptions.length > 0 && (
-        <details className="text-xs text-secondary">
-          <summary className="text-muted">فرض‌ها و کیفیت داده</summary>
-          <ul className="list-disc pr-5 mt-1 flex flex-col gap-0.5">
+        <details className="text-xs text-sx-muted">
+          <summary className="text-sx-accent">فرض‌ها و کیفیت داده</summary>
+          <ul className="list-disc pr-5 mt-2 flex flex-col gap-1 leading-6">
             {a.assumptions.map((s, i) => (
               <li key={i}>{s}</li>
             ))}
           </ul>
         </details>
       )}
-      <p className="text-[11px] text-muted">هیچ تاریخ خروج یا سود آینده‌ای قطعی نیست و هیچ معامله‌ای خودکار انجام نمی‌شود.</p>
-    </Card>
+      <p className="text-[11px] text-sx-faint">هیچ تاریخ خروج یا سود آینده‌ای قطعی نیست و هیچ معامله‌ای خودکار انجام نمی‌شود.</p>
+    </Panel>
   );
 }
 
@@ -301,42 +439,46 @@ function SwitchPanel({ x }: { x: PositionView }) {
   const current = markets.find((m) => m.id === x.p.marketId && m.protocol === x.p.protocol) ?? null;
   const res = useMemo(() => compareMarkets(x.p, x.v, markets, current, s), [x.p, x.v, markets, current, s]);
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs text-secondary">
+    <div className="flex flex-col gap-5">
+      <p className="text-sm text-sx-muted leading-7">
         افق مقایسه از امروز تا سررسید همین پوزیشن ({fmtDays(x.v.daysLeft)}) است: خروج اکنون (پس از هزینه)، انتقال، ورود به بازار دیگر (پس از کارمزد و لغزش) و ارزش آن در همان افق. فقط دارایی‌های هم‌دسته با نقدینگی کافی مقایسه می‌شوند و APY بالاتر به‌تنهایی دلیل پیشنهاد نیست.
       </p>
-      <div className="grid grid-cols-3 gap-2">
-        <NumberField label="کارمزد ورود" value={s.entryFeePct} onChange={(entryFeePct) => setS({ ...s, entryFeePct })} suffix="%" />
-        <NumberField label="هزینه‌ی انتقال بین شبکه" value={s.bridgeUsd} onChange={(bridgeUsd) => setS({ ...s, bridgeUsd })} suffix="$" />
-        <NumberField label="حداقل مزیت معنادار" value={s.minAdvantagePct} onChange={(minAdvantagePct) => setS({ ...s, minAdvantagePct })} suffix="%" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <NumberField persian label="کارمزد ورود" value={s.entryFeePct} onChange={(entryFeePct) => setS({ ...s, entryFeePct })} suffix="%" />
+        <NumberField persian label="هزینه‌ی انتقال بین شبکه" value={s.bridgeUsd} onChange={(bridgeUsd) => setS({ ...s, bridgeUsd })} suffix="دلار" />
+        <NumberField persian label="حداقل مزیت معنادار" value={s.minAdvantagePct} onChange={(minAdvantagePct) => setS({ ...s, minAdvantagePct })} suffix="%" />
       </div>
       {loading && !markets.length ? (
-        <p className="text-sm text-secondary flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> در حال دریافت بازارها…</p>
+        <p className="text-sm text-sx-muted flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" /> در حال دریافت بازارها…
+        </p>
       ) : !res.length ? (
-        <p className="text-sm text-secondary">بازار قابل مقایسه‌ای با نقدینگی کافی پیدا نشد، یا داده‌ی این پوزیشن برای مقایسه کافی نیست.</p>
+        <p className="text-sm text-sx-muted">بازار قابل مقایسه‌ای با نقدینگی کافی پیدا نشد، یا داده‌ی این پوزیشن برای مقایسه کافی نیست.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col divide-y divide-sx-border border-y border-sx-border">
           {res.map((c) => (
-            <li key={`${c.m.protocol}:${c.m.id}`} className={`rounded-xl border p-3 flex flex-col gap-1.5 ${c.meaningful ? 'border-success/40' : 'border-default'}`}>
-              <div className="flex items-center gap-2">
-                <TokenLogo src={c.m.icon} name={c.m.name} size={28} />
+            <li key={`${c.m.protocol}:${c.m.id}`} className="py-4 flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <TokenLogo src={c.m.icon} name={c.m.name} size={32} />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-primary truncate" dir="ltr">PT {c.m.name}</div>
-                  <div className="text-[11px] text-muted">
+                  <div className="text-[15px] font-medium truncate" dir="ltr">
+                    PT {c.m.name}
+                  </div>
+                  <div className="text-xs text-sx-muted">
                     <span dir="ltr">{protocols[c.m.protocol].name}</span> · {chainFa(c.m.chain)} · Implied <Num>{formatPercent(c.m.impliedAPY, 2)}</Num> · <Num>{formatNumber(c.m.daysToMaturity, 0)}</Num> روز
                   </div>
                 </div>
-                <div className="text-left">
+                <div className="flex flex-col items-end gap-1">
                   <Pnl usd={c.advantageUsd} pct={c.advantagePct} size="sm" word={false} />
-                  <div className="text-[11px] text-muted">{c.meaningful ? 'مزیت معنادار' : 'مزیت ناچیز یا پرریسک'}</div>
+                  <Chip tone={c.meaningful ? 'success' : 'muted'}>{c.meaningful ? 'مزیت معنادار' : 'مزیت ناچیز یا پرریسک'}</Chip>
                 </div>
               </div>
-              {c.risks.length > 0 && <p className="text-[11px] text-warning">⚠ {c.risks.join('؛ ')}</p>}
+              {c.risks.length > 0 && <p className="text-xs text-sx-orange leading-6">⚠ {c.risks.join('؛ ')}</p>}
             </li>
           ))}
         </ul>
       )}
-      <p className="text-[11px] text-muted">فرض: قیمت دلاری دارایی ثابت و نرخ بازار جدید تا افق مقایسه بدون تغییر. کیفیت داده: خروج و ورود تخمینی.</p>
+      <p className="text-[11px] text-sx-faint">فرض: قیمت دلاری دارایی ثابت و نرخ بازار جدید تا افق مقایسه بدون تغییر. کیفیت داده: خروج و ورود تخمینی.</p>
     </div>
   );
 }
@@ -348,21 +490,24 @@ function Targets({ x, onSave }: { x: PositionView; onSave: (p: Position) => void
   const field = (k: keyof typeof t, label: string, suffix?: string) => (
     <div className="flex items-end gap-1">
       <div className="flex-1">
-        <NumberField label={label} value={t[k] ?? NaN} onChange={(v) => set(k, v)} suffix={suffix} />
+        <NumberField persian label={label} value={t[k] ?? NaN} onChange={(v) => set(k, v)} suffix={suffix} />
       </div>
       {t[k] !== null && (
-        <button type="button" onClick={() => set(k, null)} className="p-2.5 text-muted" aria-label={`خاموش کردن ${label}`}>
+        <button type="button" onClick={() => set(k, null)} className={btn.ghost} aria-label={`خاموش کردن ${label}`}>
           <Trash2 size={15} />
         </button>
       )}
     </div>
   );
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      {field('takeProfitPct', 'هدف سود', '%')}
-      {field('stopLossPct', 'سقف زیان', '%')}
-      {p.kind === 'loop' && field('minHealth', 'حداقل شاخص سلامت')}
-    </div>
+    <>
+      <p className="text-sm text-sx-muted">وقتی سود و زیان کل یا شاخص سلامت از این مرزها بگذرد، هشدار در بالای صفحه و در پرتفوی نمایش داده می‌شود.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {field('takeProfitPct', 'هدف سود', '%')}
+        {field('stopLossPct', 'سقف زیان', '%')}
+        {p.kind === 'loop' && field('minHealth', 'حداقل شاخص سلامت')}
+      </div>
+    </>
   );
 }
 
@@ -374,89 +519,114 @@ function ManualMarks({ x, onSave }: { x: PositionView; onSave: (p: Position) => 
   const now = () => new Date().toISOString();
   const row = (label: string, value: number, setV: (v: number) => void, key: keyof Position['manual'], current: { value: number; at: string } | null) => (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="w-48">
-        <NumberField label={label} value={value} onChange={setV} />
+      <div className="w-56">
+        <NumberField persian label={label} value={value} onChange={setV} />
       </div>
-      <button type="button" disabled={!(value >= 0)} onClick={() => onSave({ ...p, manual: { ...p.manual, [key]: { value, at: now() } } })} className="rounded-xl border border-strong px-3 py-2.5 text-sm text-secondary disabled:opacity-40">
+      <button type="button" disabled={!(value >= 0)} onClick={() => onSave({ ...p, manual: { ...p.manual, [key]: { value, at: now() } } })} className={btn.secondary}>
         ثبت
       </button>
       {current && (
-        <button type="button" onClick={() => onSave({ ...p, manual: { ...p.manual, [key]: null } })} className="rounded-xl px-3 py-2.5 text-sm text-danger">
-          حذف ({formatNumber(current.value, 6)}، {formatDateTime(current.at)})
+        <button type="button" onClick={() => onSave({ ...p, manual: { ...p.manual, [key]: null } })} className={btn.danger}>
+          حذف (<Num>{formatNumber(current.value, 6)}</Num>، {formatDateTime(current.at)})
         </button>
       )}
     </div>
   );
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-xs text-secondary">عدد دستی تا وقتی حذف نشود جایگزین داده‌ی بازار می‌شود و با برچسب «دستی» نمایش داده می‌شود.</p>
+    <>
+      <p className="text-sm text-sx-muted">عدد دستی تا وقتی حذف نشود جایگزین داده‌ی بازار می‌شود و با برچسب «دستی» نمایش داده می‌شود.</p>
       {row(`قیمت ${p.kind === 'yt' ? 'YT' : 'PT'} (${p.assetSymbol || 'واحد دارایی'})`, price, setPrice, 'tokenPrice', p.manual.tokenPrice)}
       {row(`قیمت دلاری ${p.assetSymbol || 'دارایی پایه'}`, asset, setAsset, 'assetUsd', p.manual.assetUsd)}
       {p.kind === 'yt' && row(`سود دریافت‌نشده طبق پلتفرم (${p.assetSymbol || 'واحد دارایی'})`, yieldV, setYieldV, 'unclaimedYield', p.manual.unclaimedYield)}
-    </div>
+    </>
   );
 }
+
+const EVENT_DOT: Record<PositionEventType, string> = {
+  buy: 'bg-sx-accent',
+  sell: 'bg-sx-blue',
+  redeem: 'bg-sx-green',
+  claim_yield: 'bg-sx-green',
+  claim_reward: 'bg-sx-green',
+  borrow: 'bg-sx-orange',
+  repay: 'bg-sx-orange',
+};
 
 function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void }) {
   const { p, quote } = x;
   const [adding, setAdding] = useState(false);
   const sorted = [...p.events].sort((a, b) => b.at.localeCompare(a.at));
   return (
-    <div className="flex flex-col gap-3">
+    <>
       {adding ? (
-        <EventForm
-          types={EVENT_TYPES[p.kind]}
-          assetSymbol={p.assetSymbol}
-          liveAssetUsd={quote?.assetUsd ?? null}
-          defaultToken={p.assetSymbol}
-          chain={p.chain}
-          marketIcon={p.icon}
-          onSubmit={(e) => {
-            onSave({ ...p, events: [...p.events, e] });
-            setAdding(false);
-          }}
-          onCancel={() => setAdding(false)}
-        />
+        <div className="rounded-lg border border-sx-border bg-sx-raised/30 p-5">
+          <EventForm
+            types={EVENT_TYPES[p.kind]}
+            assetSymbol={p.assetSymbol}
+            liveAssetUsd={quote?.assetUsd ?? null}
+            defaultToken={p.assetSymbol}
+            chain={p.chain}
+            marketIcon={p.icon}
+            onSubmit={(e) => {
+              onSave({ ...p, events: [...p.events, e] });
+              setAdding(false);
+            }}
+            onCancel={() => setAdding(false)}
+          />
+        </div>
       ) : (
-        <button type="button" onClick={() => setAdding(true)} className="self-start flex items-center gap-1.5 rounded-xl border border-accent/60 px-3 py-2 text-sm text-primary">
-          <Plus size={15} /> ثبت رویداد (خرید مجدد، فروش، بازخرید، دریافت سود یا پاداش، وام و بازپرداخت)
+        <button type="button" onClick={() => setAdding(true)} className={`${btn.secondary} self-start`}>
+          <Plus size={15} /> ثبت رویداد
         </button>
       )}
-      <ul className="flex flex-col gap-2">
+      {!adding && <p className="text-xs text-sx-faint -mt-3">خرید مجدد، فروش، بازخرید، دریافت سود یا پاداش، وام و بازپرداخت</p>}
+      <ol className="flex flex-col border-r border-sx-border mr-1.5">
         {sorted.map((e) => (
-          <li key={e.id} className="rounded-xl border border-default p-3 text-sm flex flex-col gap-1">
+          <li key={e.id} className="relative pr-6 pb-6 last:pb-0 flex flex-col gap-1.5 text-sm">
+            <span className={`absolute -right-[5px] top-1.5 size-2.5 rounded-full ring-4 ring-sx-surface ${EVENT_DOT[e.type]}`} aria-hidden />
             <div className="flex items-center justify-between gap-2">
-              <span className="font-bold text-primary">{EVENT_FA[e.type]}</span>
-              <span className="text-xs text-muted">{formatDateTime(e.at)}</span>
+              <span className="font-medium text-sx-text">{EVENT_FA[e.type]}</span>
+              <span className="text-xs text-sx-faint">{formatDateTime(e.at)}</span>
             </div>
-            <div className="text-secondary flex flex-wrap gap-x-3">
-              {e.units > 0 && <span><Num>{formatNumber(e.units, 4)}</Num> توکن</span>}
-              <span>
-                <Num>{formatNumber(e.cash.amount, 6)}</Num> <TokenBadge symbol={e.cash.token} size={16} fallbackLogo={e.cash.token.toLowerCase() === p.assetSymbol.toLowerCase() ? p.icon : null} />
-                {e.cash.usdRate !== null ? <> (<Num>{formatUSD(e.cash.amount * e.cash.usdRate)}</Num>، {RATE_FA[e.cash.rateSource]})</> : <span className="text-warning"> (نرخ دلاری نامعلوم)</span>}
+            <div className="text-sx-muted flex flex-wrap items-center gap-x-3 gap-y-1">
+              {e.units > 0 && (
+                <span>
+                  <Num>{formatNumber(e.units, 4)}</Num> توکن
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5 flex-wrap">
+                <Num>{formatNumber(e.cash.amount, 6)}</Num>
+                <TokenBadge symbol={e.cash.token} size={16} fallbackLogo={e.cash.token.toLowerCase() === p.assetSymbol.toLowerCase() ? p.icon : null} />
+                {e.cash.usdRate !== null ? (
+                  <span className="text-xs text-sx-faint">
+                    ({formatDollar(e.cash.amount * e.cash.usdRate)}، {RATE_FA[e.cash.rateSource]})
+                  </span>
+                ) : (
+                  <span className="text-xs text-sx-orange">(نرخ دلاری نامعلوم)</span>
+                )}
               </span>
-              {e.assetUsd === null && <span className="text-warning">نرخ دارایی نامعلوم</span>}
+              {e.assetUsd === null && <span className="text-xs text-sx-orange">نرخ دارایی نامعلوم</span>}
             </div>
             {e.fees.map((f, i) => (
-              <div key={i} className="text-xs text-muted">
+              <div key={i} className="text-xs text-sx-faint inline-flex items-center gap-1.5 flex-wrap">
                 {FEE_FA[f.kind]}: <Num>{formatNumber(f.amount, 6)}</Num> <TokenBadge symbol={f.token} size={14} />
-                {f.usdRate !== null && <> (<Num>{formatUSD(f.amount * f.usdRate)}</Num>)</>} · {f.included ? 'داخل مبلغ حساب شده' : 'جداگانه پرداخت شده'}
+                {f.usdRate !== null && <>({formatDollar(f.amount * f.usdRate)})</>} · {f.included ? 'داخل مبلغ حساب شده' : 'جداگانه پرداخت شده'}
               </div>
             ))}
-            {e.note && <div className="text-xs text-muted">{e.note}</div>}
+            {e.note && <div className="text-xs text-sx-faint">{e.note}</div>}
             <button
               type="button"
-              className="self-end text-xs text-danger flex items-center gap-1"
+              className="self-start text-xs text-sx-faint hover:text-sx-red inline-flex items-center gap-1 transition-colors"
               onClick={() => {
                 if (window.confirm('این رویداد حذف شود؟ محاسبات از نو انجام می‌شود.')) onSave({ ...p, events: p.events.filter((y) => y.id !== e.id) });
               }}
             >
-              <Trash2 size={13} /> حذف
+              <Trash2 size={12} /> حذف
             </button>
           </li>
         ))}
-      </ul>
-    </div>
+      </ol>
+    </>
   );
 }
 
@@ -467,17 +637,21 @@ export default function PositionDetail({ id }: { id: string }) {
 
   if (positions === null) {
     return (
-      <main className="grid place-items-center py-24 text-secondary">
+      <main className="sx grid place-items-center py-24 text-sx-muted">
         <Loader2 className="animate-spin" />
       </main>
     );
   }
   if (!x) {
     return (
-      <main className="max-w-3xl mx-auto px-4 py-10 flex flex-col items-center gap-3 text-secondary">
-        پوزیشن پیدا نشد. ممکن است در مرورگر دیگری ثبت شده باشد.
-        <Link href="/portfolio" className="text-accent underline">بازگشت به پرتفوی</Link>
-      </main>
+      <SxPage narrow>
+        <div className="sx-card p-10 flex flex-col items-center gap-3 text-sx-muted text-center">
+          پوزیشن پیدا نشد. ممکن است در مرورگر دیگری ثبت شده باشد.
+          <Link href="/portfolio" className={btn.secondary}>
+            بازگشت به پرتفوی
+          </Link>
+        </div>
+      </SxPage>
     );
   }
 
@@ -485,68 +659,107 @@ export default function PositionDetail({ id }: { id: string }) {
   const onSave = (np: Position) => save(np);
 
   return (
-    <main className="max-w-matrix mx-auto px-4 lg:px-6 py-5 flex flex-col gap-4">
-      <header className="flex flex-col gap-3">
-        <Link href="/portfolio" className="text-sm text-secondary flex items-center gap-1">
-          <ArrowRight size={14} /> پرتفوی من
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <MarketIdentity p={p} size={48} />
+    <SxPage>
+      <Link href="/portfolio" className="text-sm text-sx-muted hover:text-sx-text flex items-center gap-1 self-start transition-colors">
+        <ArrowRight size={14} /> پرتفوی من
+      </Link>
+
+      <section className="sx-hero p-6 md:p-8 flex flex-col gap-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <MarketIdentity p={p} size={52} />
           <div className="flex items-center gap-2">
             <StatusBadge s={v.status} />
-            <button type="button" onClick={refresh} disabled={refreshing} className="flex items-center gap-1.5 rounded-xl border border-strong px-3 py-1.5 text-sm text-secondary hover:text-primary disabled:opacity-50">
+            <button type="button" onClick={refresh} disabled={refreshing} className={btn.ghost}>
               <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> تازه‌سازی
             </button>
           </div>
         </div>
-        <p className="text-xs text-muted">
-          {updatedAt ? <>آخرین دریافت داده: <Num>{formatDateTime(new Date(updatedAt).toISOString())}</Num></> : 'در حال دریافت داده…'}
-          {x.q?.error && <span className="text-warning"> · {x.q.error}؛ آخرین داده‌ی موجود «قدیمی» نمایش داده می‌شود.</span>}
+        <div className="flex flex-wrap items-end gap-x-12 gap-y-5">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm text-sx-muted">ارزش خالص</span>
+            <span className="text-4xl lg:text-5xl font-light tracking-tight">
+              <Usd x={v.netValueUsd} />
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-sx-muted">سود و زیان کل</span>
+            <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="lg" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-sx-muted">اگر اکنون خارج شوم</span>
+            <span className="text-xl font-light flex items-center gap-2">
+              <Usd x={v.exit.proceedsUsd} /> <QualityBadge q={v.exit.quality} />
+            </span>
+          </div>
+        </div>
+        <p className="text-xs text-sx-faint flex flex-wrap items-center gap-1.5 border-t border-sx-border pt-4">
+          <span className={`size-1.5 rounded-full ${x.q?.error ? 'bg-sx-orange' : updatedAt ? 'bg-sx-green' : 'bg-sx-faint'}`} aria-hidden />
+          {updatedAt ? (
+            <>
+              آخرین دریافت داده: <Num>{formatDateTime(new Date(updatedAt).toISOString())}</Num>
+            </>
+          ) : (
+            'در حال دریافت داده…'
+          )}
+          {x.q?.error && <span className="text-sx-orange"> · {x.q.error}؛ آخرین داده‌ی موجود «قدیمی» نمایش داده می‌شود.</span>}
           {v.ledger.units <= EPS && v.status !== 'closed' && ' · توکنی باقی نمانده'}
         </p>
-      </header>
+      </section>
 
       <AlertList alerts={x.alerts} />
-      <Answers x={x} />
-      <Numbers x={x} />
-      <KindPanel x={x} onSave={onSave} />
-      {v.status !== 'closed' && <AnalysisPanel x={x} />}
-      {p.kind === 'pt' && v.status === 'open' && (
-        <Collapsible title="مقایسه با بازارهای دیگر" icon={<ArrowLeftRight size={18} />}>
-          <SwitchPanel x={x} />
-        </Collapsible>
-      )}
-      {p.kind !== 'pt' && v.status === 'open' && (
-        <p className="text-xs text-muted">
-          مقایسه‌ی خودکار با بازارهای دیگر فعلاً فقط برای PT انجام می‌شود؛ نتیجه‌ی {p.kind === 'yt' ? 'YT به ارزش پوینت' : 'لوپ به نرخ وام و اوراکل هر بازار'} بستگی دارد. برای بررسی دستی به <Link href="/opportunities" className="text-accent underline">فرصت‌ها</Link> بروید.
-        </p>
-      )}
-      <Collapsible title="اهداف و هشدارها" icon={<Target size={18} />}>
-        <Targets x={x} onSave={onSave} />
-      </Collapsible>
-      <Collapsible title="ثبت دستی قیمت و موجودی" icon={<Settings2 size={18} />}>
-        <ManualMarks x={x} onSave={onSave} />
-      </Collapsible>
-      <Collapsible title="سوابق معامله" icon={<History size={18} />} defaultOpen>
-        <Events x={x} onSave={onSave} />
-      </Collapsible>
-      <Collapsible title="عملکرد ثبت‌شده" icon={<History size={18} />}>
-        <SnapshotChart label="سود و زیان ثبت‌شده‌ی پوزیشن" points={p.snapshots.map((s) => ({ t: new Date(s.at).getTime(), y: s.pnlUsd }))} />
-      </Collapsible>
 
-      <NoWalletNote />
-      <button
-        type="button"
-        className="self-start flex items-center gap-1.5 text-sm text-danger"
-        onClick={() => {
-          if (window.confirm('این پوزیشن و همه‌ی سوابق آن حذف شود؟')) {
-            remove(p.id);
-            router.push('/portfolio');
-          }
-        }}
-      >
-        <Trash2 size={15} /> حذف پوزیشن
-      </button>
-    </main>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-start">
+        <div className="lg:col-span-3 flex flex-col gap-6 min-w-0">
+          <Answers x={x} />
+          <Numbers x={x} />
+          <KindPanel x={x} onSave={onSave} />
+          {v.status !== 'closed' && <AnalysisPanel x={x} />}
+        </div>
+        <div className="lg:col-span-2 flex flex-col gap-6 min-w-0">
+          <Panel title="سوابق معامله" icon={<History size={17} />}>
+            <Events x={x} onSave={onSave} />
+          </Panel>
+          <Disclosure title="عملکرد ثبت‌شده" icon={<History size={17} />}>
+            <SnapshotChart label="سود و زیان ثبت‌شده‌ی پوزیشن" points={p.snapshots.map((s) => ({ t: new Date(s.at).getTime(), y: s.pnlUsd }))} />
+          </Disclosure>
+          {p.kind === 'pt' && v.status === 'open' && (
+            <Disclosure title="مقایسه با بازارهای دیگر" icon={<ArrowLeftRight size={17} />}>
+              <SwitchPanel x={x} />
+            </Disclosure>
+          )}
+          {p.kind !== 'pt' && v.status === 'open' && (
+            <p className="text-xs text-sx-muted leading-6">
+              مقایسه‌ی خودکار با بازارهای دیگر فعلاً فقط برای PT انجام می‌شود؛ نتیجه‌ی {p.kind === 'yt' ? 'YT به ارزش پوینت' : 'لوپ به نرخ وام و اوراکل هر بازار'} بستگی دارد. برای بررسی دستی به{' '}
+              <Link href="/opportunities" className="text-sx-accent underline underline-offset-4">
+                فرصت‌ها
+              </Link>{' '}
+              بروید.
+            </p>
+          )}
+          <Disclosure title="اهداف و هشدارها" icon={<Target size={17} />}>
+            <Targets x={x} onSave={onSave} />
+          </Disclosure>
+          <Disclosure title="ثبت دستی قیمت و موجودی" icon={<Settings2 size={17} />}>
+            <ManualMarks x={x} onSave={onSave} />
+          </Disclosure>
+        </div>
+      </div>
+
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-sx-border pt-5">
+        <NoWalletNote />
+        <button
+          type="button"
+          className={btn.danger}
+          onClick={() => {
+            if (window.confirm('این پوزیشن و همه‌ی سوابق آن حذف شود؟')) {
+              remove(p.id);
+              router.push('/portfolio');
+            }
+          }}
+        >
+          <Trash2 size={15} /> حذف پوزیشن
+        </button>
+      </footer>
+    </SxPage>
   );
 }

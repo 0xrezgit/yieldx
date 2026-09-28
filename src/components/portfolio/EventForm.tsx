@@ -5,11 +5,13 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { Fee, FeeKind, PositionEvent, PositionEventType, RateSource, TokenAmount } from '../../types/position';
 import { EVENT_FA, FEE_FA, RATE_FA } from '../../lib/portfolio/labels';
 import { newId } from '../../lib/portfolio/portfolio';
-import { formatDateTime, formatNumber, formatUSD } from '../../lib/utils/formatting';
+import { formatDateTime, formatNumber } from '../../lib/utils/formatting';
+import { formatDollar, priceDigits } from '../../lib/portfolio/format';
 import { nativeToken, tokensForChain } from '../../lib/portfolio/tokens';
 import { TokenSelect, useTokenPrice } from './TokenSelect';
 import { NumberField, SelectField, TextField } from '../ui/field';
 import { Num } from '../ui/num';
+import { btn } from './parts';
 
 /** Rates read "now" are only offered for events in the last two hours; older events need the historical rate. */
 export const LIVE_RATE_WINDOW_MS = 2 * 60 * 60_000;
@@ -107,20 +109,20 @@ function RateInput({ label, symbol, at, value, source, onChange, fallback }: { l
 
   return (
     <div className="flex flex-col gap-1">
-      <NumberField label={label} value={value} onChange={(v) => onChange(v, 'manual')} suffix="$" hint="نرخ دلاری در زمان همان رویداد" />
+      <NumberField persian label={label} value={value} onChange={(v) => onChange(v, 'manual')} suffix="دلار" hint="نرخ دلاری در زمان همان رویداد" />
       <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span className={source === 'market' || source === 'historical' ? 'text-success' : Number.isFinite(value) ? 'text-info' : 'text-warning'}>
+        <span className={source === 'market' || source === 'historical' ? 'text-sx-green' : Number.isFinite(value) ? 'text-sx-blue' : 'text-sx-orange'}>
           {Number.isFinite(value) ? RATE_FA[source] : 'نرخ نامعلوم — دستی وارد کنید'}
           {price && source === 'historical' && <> ({formatDateTime(price.at)})</>}
         </span>
         {source === 'manual' && price && (
-          <button type="button" className="text-accent underline" onClick={() => onChange(price.usd, price.source)}>
-            {RATE_FA[price.source]} <Num>{formatUSD(price.usd, 4)}</Num>
+          <button type="button" className="text-sx-accent hover:underline underline-offset-4" onClick={() => onChange(price.usd, price.source)}>
+            {RATE_FA[price.source]} {formatDollar(price.usd, priceDigits(price.usd))}
           </button>
         )}
         {!price && fallback && value !== fallback.usd && (
-          <button type="button" className="text-accent underline" onClick={() => onChange(fallback.usd, 'market')}>
-            {fallback.label} <Num>{formatUSD(fallback.usd, 4)}</Num>
+          <button type="button" className="text-sx-accent hover:underline underline-offset-4" onClick={() => onChange(fallback.usd, 'market')}>
+            {fallback.label} {formatDollar(fallback.usd, priceDigits(fallback.usd))}
           </button>
         )}
       </div>
@@ -153,27 +155,28 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
   const setFee = (i: number, p: Partial<Fee>) => onChange((x) => ({ ...x, fees: x.fees.map((f, j) => (j === i ? { ...f, ...p } : f)) }));
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {types.length > 1 && (
         <SelectField label="نوع رویداد" value={d.type} onChange={(type) => set({ type })} options={types.map((t) => ({ value: t, label: EVENT_FA[t] }))} />
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="min-w-0">
-          <label className="text-sm text-secondary block mb-1.5">تاریخ و ساعت</label>
+          <label className="text-sm block mb-1.5">تاریخ و ساعت</label>
           <input
             type="datetime-local"
             dir="ltr"
             value={toLocalInput(d.at)}
             max={toLocalInput(new Date().toISOString())}
             onChange={(e) => set({ at: fromLocalInput(e.target.value) })}
-            className="w-full bg-elevated/70 border border-strong rounded-xl px-3 py-2.5 text-primary text-base"
+            className="w-full px-3 py-2.5 text-base"
           />
+          {d.at && <p className="text-[11px] text-sx-muted mt-1">{formatDateTime(d.at)}</p>}
         </div>
-        {labels.units && <NumberField label={labels.units} value={d.units} onChange={(units) => set({ units })} />}
+        {labels.units && <NumberField persian label={labels.units} value={d.units} onChange={(units) => set({ units })} />}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <NumberField label={labels.cash} value={d.cash.amount} onChange={(amount) => onChange((x) => ({ ...x, cash: { ...x.cash, amount } }))} />
+        <NumberField persian label={labels.cash} value={d.cash.amount} onChange={(amount) => onChange((x) => ({ ...x, cash: { ...x.cash, amount } }))} />
         <TokenSelect label={d.type === 'buy' ? 'رمزارز پرداختی' : 'رمزارز'} value={d.cash.token} onChange={(token) => onChange((x) => ({ ...x, cash: { ...x.cash, token } }))} tokens={tokens} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -197,8 +200,8 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
         />
       </div>
       {Number.isFinite(d.cash.amount) && Number.isFinite(d.cash.usdRate ?? NaN) && (
-        <p className="text-xs text-secondary">
-          ارزش دلاری: <Num>{formatUSD(d.cash.amount * (d.cash.usdRate ?? NaN))}</Num>
+        <p className="text-sm text-sx-muted rounded-md bg-sx-raised/50 px-3 py-2">
+          ارزش دلاری: <span className="text-sx-text">{formatDollar(d.cash.amount * (d.cash.usdRate ?? NaN))}</span>
           {usesUnits(d.type) && d.units > 0 && Number.isFinite(d.assetUsd) && (
             <>
               {' '}
@@ -210,29 +213,29 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-secondary">کارمزدها</span>
+          <span className="text-sm font-medium text-sx-text">کارمزدها</span>
           <button
             type="button"
-            className="flex items-center gap-1 text-sm text-accent"
+            className="flex items-center gap-1 text-sm text-sx-accent hover:opacity-80"
             onClick={() => onChange((x) => ({ ...x, fees: [...x.fees, { kind: 'network', amount: NaN, token: nativeToken(chain), usdRate: NaN, rateSource: 'unknown', included: false }] }))}
           >
             <Plus size={14} /> افزودن کارمزد
           </button>
         </div>
         {d.fees.map((f, i) => (
-          <div key={i} className="rounded-xl border border-default p-3 flex flex-col gap-2">
+          <div key={i} className="rounded-lg border border-sx-border bg-sx-raised/30 p-4 flex flex-col gap-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <SelectField<FeeKind> label="نوع" value={f.kind} onChange={(kind) => setFee(i, { kind })} options={(['network', 'trade', 'other'] as const).map((k) => ({ value: k, label: FEE_FA[k] }))} />
-              <NumberField label="مقدار" value={f.amount} onChange={(amount) => setFee(i, { amount })} />
+              <NumberField persian label="مقدار" value={f.amount} onChange={(amount) => setFee(i, { amount })} />
               <TokenSelect label="رمزارز کارمزد" value={f.token} onChange={(token) => setFee(i, { token })} tokens={tokens} />
             </div>
             <RateInput label={`نرخ دلاری ${f.token || 'رمزارز'}`} symbol={f.token} at={d.at} value={f.usdRate ?? NaN} source={f.rateSource} onChange={(usdRate, rateSource) => setFee(i, { usdRate, rateSource })} />
             <div className="flex items-center justify-between gap-2">
-              <label className="flex items-start gap-2 text-xs text-secondary">
+              <label className="flex items-start gap-2 text-xs text-sx-muted leading-5">
                 <input type="checkbox" checked={f.included} onChange={(e) => setFee(i, { included: e.target.checked })} className="mt-0.5" />
                 <span>داخل مبلغ بالا حساب شده (مثلاً کارمزد سواپی که از توکن دریافتی کم شده)؛ دوباره از سود کم نشود</span>
               </label>
-              <button type="button" aria-label="حذف کارمزد" className="p-1 text-danger" onClick={() => onChange((x) => ({ ...x, fees: x.fees.filter((_, j) => j !== i) }))}>
+              <button type="button" aria-label="حذف کارمزد" className="p-2 rounded-md text-sx-faint hover:text-sx-red hover:bg-sx-red/10" onClick={() => onChange((x) => ({ ...x, fees: x.fees.filter((_, j) => j !== i) }))}>
                 <Trash2 size={15} />
               </button>
             </div>
@@ -251,12 +254,12 @@ export function EventForm({ types, assetSymbol, liveAssetUsd, defaultToken, chai
   return (
     <div className="flex flex-col gap-3">
       <EventFields draft={d} onChange={setD} assetSymbol={assetSymbol} liveAssetUsd={liveAssetUsd} types={types} chain={chain} marketIcon={marketIcon} />
-      {error && <p className="text-xs text-warning">{error}</p>}
+      {error && <p className="text-xs text-sx-orange">{error}</p>}
       <div className="flex gap-2">
-        <button type="button" disabled={!!error} onClick={() => onSubmit(draftToEvent(d))} className="rounded-xl brand-gradient px-4 py-2 text-sm font-bold text-white disabled:opacity-40">
+        <button type="button" disabled={!!error} onClick={() => onSubmit(draftToEvent(d))} className={btn.primary}>
           ثبت رویداد
         </button>
-        <button type="button" onClick={onCancel} className="rounded-xl border border-strong px-4 py-2 text-sm text-secondary">
+        <button type="button" onClick={onCancel} className={btn.ghost}>
           انصراف
         </button>
       </div>

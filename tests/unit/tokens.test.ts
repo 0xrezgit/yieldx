@@ -5,6 +5,7 @@ import pendle from '../../src/config/protocols.json';
 import { nativeToken, tokenInfo, tokensForChain } from '../../src/lib/portfolio/tokens';
 import { GET as getPrices } from '../../src/app/api/prices/route';
 import { valuePosition } from '../../src/lib/portfolio/valuation';
+import { dollarNumber, formatDollar } from '../../src/lib/portfolio/format';
 import { emptyManual, emptyTargets, type Position } from '../../src/types/position';
 
 describe('payment tokens', () => {
@@ -80,5 +81,15 @@ describe('loop debt in another token', () => {
     const q = { ptPrice: 1, ytPrice: 0, assetUsd: 3000, impliedAPY: 5, baseAPY: 3, liquidity: 1e8, fetchedAt: new Date().toISOString(), history: null };
     expect(valuePosition(p, q, Date.now()).debtUsd.value).toBeCloseTo(3000, 6);
     expect(valuePosition(p, q, Date.now(), undefined, 0.98).debtUsd.value).toBeCloseTo(2940, 6);
+  });
+});
+
+describe('dollar formatting', () => {
+  it('writes «دلار» with Persian digits and never a signed zero', () => {
+    // The number is bidi-isolated (LRI…PDI) so a minus sign stays attached in RTL text.
+    expect(formatDollar(1234.5)).toBe('\u2066۱٬۲۳۴٫۵\u2069 دلار');
+    expect(dollarNumber(-4.06)).toBe('−۴٫۰۶');
+    expect(dollarNumber(-0.001)).toBe('۰');
+    expect(formatDollar(12)).not.toContain('$');
   });
 });

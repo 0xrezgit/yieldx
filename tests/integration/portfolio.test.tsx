@@ -77,6 +77,19 @@ describe('portfolio render', () => {
     if (kind === 'pt') expect(html).toContain('PT معادل یک دلار فرض نشده');
   });
 
+  it.each(['pt', 'yt', 'loop'] as const)('%s: amounts read «دلار» with Persian digits — no $ and no Latin digits in visible text', (kind) => {
+    const x = view(base(kind));
+    const html = [<PositionCard key="c" x={x} />, <Answers key="a" x={x} />, <Numbers key="n" x={x} />, <KindPanel key="k" x={x} onSave={() => {}} />, <AnalysisPanel key="p" x={x} />]
+      .map((el) => renderToString(el))
+      .join('');
+    // Visible text only: drop tags (with their attributes) and comments.
+    const text = html.replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, ' ');
+    expect(text).not.toContain('$');
+    expect(text).toContain('دلار');
+    // Official symbols keep Latin letters; digits must all be Persian.
+    expect(text.match(/[0-9]/g)).toBeNull();
+  });
+
   it('shows missing prices as unavailable, not live', () => {
     const x = view(base('pt'), null);
     const html = renderToString(<Numbers x={x} />);

@@ -41,7 +41,7 @@ export function TokenSelect({ label, value, onChange, tokens }: { label: string;
 
   return (
     <div className="min-w-0 relative">
-      <label htmlFor={id} className="text-sm text-secondary block mb-1.5 truncate">
+      <label htmlFor={id} className="text-sm block mb-1.5 truncate">
         {label}
       </label>
       <button
@@ -50,15 +50,15 @@ export function TokenSelect({ label, value, onChange, tokens }: { label: string;
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2 bg-elevated/70 border border-strong rounded-xl px-3 py-2.5 text-primary text-base"
+        className="w-full h-[46px] flex items-center justify-between gap-2 bg-sx-raised border border-sx-border hover:border-[#4a4a55] rounded-md px-3 text-sx-text text-base transition-colors"
       >
-        {value ? <TokenBadge symbol={value} fallbackLogo={selected?.logo} /> : <span className="text-muted">انتخاب ارز</span>}
-        <ChevronDown size={14} className="text-muted shrink-0" aria-hidden />
+        {value ? <TokenBadge symbol={value} fallbackLogo={selected?.logo} /> : <span className="text-sx-faint">انتخاب ارز</span>}
+        <ChevronDown size={14} className="text-sx-muted shrink-0" aria-hidden />
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 w-full min-w-56 rounded-xl border border-strong bg-surface shadow-xl p-2 flex flex-col gap-1">
+        <div className="absolute z-30 mt-1.5 w-full min-w-60 rounded-lg border border-sx-border bg-sx-surface sx-pop p-2 flex flex-col gap-1">
           <div className="relative">
-            <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+            <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sx-muted" aria-hidden />
             <input
               autoFocus
               value={q}
@@ -73,7 +73,7 @@ export function TokenSelect({ label, value, onChange, tokens }: { label: string;
               placeholder="جست‌وجو یا نماد دیگر"
               aria-label="جست‌وجوی ارز"
               dir="ltr"
-              className="w-full bg-elevated/70 border border-strong rounded-lg pr-7 pl-2 py-1.5 text-sm text-primary"
+              className="w-full pr-8 pl-2 h-9 text-sm"
             />
           </div>
           <ul role="listbox" className="max-h-60 overflow-y-auto flex flex-col">
@@ -84,17 +84,17 @@ export function TokenSelect({ label, value, onChange, tokens }: { label: string;
                   role="option"
                   aria-selected={t.symbol === selected?.symbol}
                   onClick={() => pick(t.symbol)}
-                  className={`w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-right hover:bg-elevated ${t.symbol === selected?.symbol ? 'bg-accent/15' : ''}`}
+                  className={`w-full flex items-center gap-2.5 rounded-md px-2 py-2 text-right hover:bg-sx-raised transition-colors ${t.symbol === selected?.symbol ? 'bg-sx-accent/15' : ''}`}
                 >
                   <TokenLogo src={t.logo} name={t.symbol} size={22} />
-                  <span className="font-bold text-primary text-sm" dir="ltr">{t.symbol}</span>
-                  <span className="text-[11px] text-muted truncate">{t.native ? 'ارز اصلی شبکه' : t.name}</span>
+                  <span className="font-medium text-sx-text text-sm" dir="ltr">{t.symbol}</span>
+                  <span className="text-[11px] text-sx-muted truncate">{t.native ? 'ارز اصلی شبکه' : t.name}</span>
                 </button>
               </li>
             ))}
             {custom && (
               <li>
-                <button type="button" onClick={() => pick(custom)} className="w-full rounded-lg px-2 py-1.5 text-right text-sm text-accent hover:bg-elevated">
+                <button type="button" onClick={() => pick(custom)} className="w-full rounded-md px-2 py-2 text-right text-sm text-sx-accent hover:bg-sx-raised">
                   استفاده از نماد «<span dir="ltr">{custom}</span>» (بدون قیمت خودکار)
                 </button>
               </li>
