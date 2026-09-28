@@ -114,6 +114,7 @@ export class SpectraAdapter extends BaseAdapter {
       marketId: `${network}-${address}`,
       name: name(m),
       underlyingPrice: finite(m.underlying.price?.usd),
+      assetSymbol: m.underlying.symbol ?? null,
       ptPrice: pt,
       ytPrice: finite(pool.ytPrice?.underlying) ?? 1 - pt,
       impliedAPY: finite(pool.impliedApy) ?? NaN,

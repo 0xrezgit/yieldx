@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Download, History, LayoutDashboard, Radar, Sparkles } from 'lucide-react';
+import { BookOpen, Download, History, LayoutDashboard, Radar, Sparkles, Wallet } from 'lucide-react';
 import { useShell } from './AppShell';
 
 const links = [
   { href: '/dashboard', label: 'داشبورد', icon: LayoutDashboard },
   { href: '/opportunities', label: 'فرصت‌ها', icon: Radar },
+  { href: '/portfolio', label: 'پوزیشن‌ها', icon: Wallet },
   { href: '/history', label: 'سناریوها', icon: History },
   { href: '/guide', label: 'راهنما', icon: BookOpen },
 ];
