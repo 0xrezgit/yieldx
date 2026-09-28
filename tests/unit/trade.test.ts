@@ -220,3 +220,14 @@ describe('screens', () => {
     ]);
   });
 });
+
+describe('API APY plausibility', () => {
+  it('treats absurd base APYs as unknown instead of yield', async () => {
+    const { plausibleAPY } = await import('../../src/lib/protocols/base');
+    expect(plausibleAPY(13.68)).toBe(13.68);
+    expect(plausibleAPY(1552741.82)).toBeNull();
+    expect(plausibleAPY(NaN)).toBeNull();
+    expect(plausibleAPY(null)).toBeNull();
+    expect(plausibleAPY(-150)).toBeNull();
+  });
+});

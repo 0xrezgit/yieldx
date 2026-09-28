@@ -1,7 +1,7 @@
 import protocols from '../../config/protocols.json';
 import type { MarketData, MarketPointsProgram, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
-import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, fetchJson, toPercent } from './base';
+import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, fetchJson, plausibleAPY, toPercent } from './base';
 import { fetchSolanaTokens, type SolanaToken } from './jupiter';
 
 /** Subset of https://api.exponent.finance/markets that YieldX uses. */
@@ -79,7 +79,7 @@ export class ExponentAdapter extends BaseAdapter {
         chain: 'Solana',
         maturity: new Date(m.maturityDateUnixTs * 1000).toISOString(),
         impliedAPY: toPercent(m.impliedApy),
-        baseAPY: toPercent(m.underlyingApy),
+        baseAPY: plausibleAPY(toPercent(m.underlyingApy)),
         liquidity: marketSizeUsd(m, token),
         hasPoints: !!pb,
         ytMultiplier: pb?.yt_multiplier ?? null,
@@ -107,7 +107,7 @@ export class ExponentAdapter extends BaseAdapter {
       ptPrice: m.ptPriceInAsset,
       ytPrice: m.ytPriceInAsset,
       impliedAPY: toPercent(m.impliedApy),
-      baseAPY: toPercent(m.underlyingApy),
+      baseAPY: plausibleAPY(toPercent(m.underlyingApy)) ?? NaN,
       maturity,
       daysToMaturity: daysUntil(maturity),
       liquidity: marketSizeUsd(m, token),

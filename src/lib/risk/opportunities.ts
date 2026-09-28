@@ -3,6 +3,7 @@ import type { MarketListing } from '../../types/market';
 import type { ProtocolId } from '../../types/protocol';
 import { ptPriceFromAPY } from '../calculators/implied-apy';
 import { simulateLoop, simulateYt, ytEntryLimits, ytPriceFromAPY } from '../calculators/trade';
+import { formatNumber, formatUSDCompact } from '../utils/formatting';
 
 /**
  * Ranks live markets from every protocol for three strategies: YT for points,
@@ -43,6 +44,21 @@ export const isStable = (m: Pick<MarketListing, 'categories' | 'name'>) =>
 
 /** Pendle lists these markets on its PT-looping page (money market accepts the PT). */
 export const isLoopable = (m: Pick<MarketListing, 'categories'>) => m.categories.includes('pt-looping');
+
+/**
+ * Why a market is left out of the boards and the ranking, in plain Persian —
+ * shown in the calculator so a market picked by hand is never mistaken for a
+ * ranked opportunity. Empty when it qualifies.
+ */
+export function rankingExclusions(m: OpportunityListing, s: ScreenSettings): string[] {
+  const out: string[] = [];
+  if (m.expired) out.push('سررسید شده است');
+  else if (m.daysToMaturity < s.minDays) out.push(`کمتر از ${formatNumber(s.minDays, 0)} روز تا سررسید مانده`);
+  if (!(m.impliedAPY > 0)) out.push('نرخ بازار (Implied) صفر یا نامعتبر است');
+  if (m.liquidity !== null && m.liquidity < s.minLiquidity) out.push(`نقدینگی ${formatUSDCompact(m.liquidity)} کمتر از حداقل ${formatUSDCompact(s.minLiquidity)} است`);
+  if (m.baseAPY === null || !Number.isFinite(m.baseAPY)) out.push('بازده پایه از API نیامده یا نامعتبر است (برای YT لازم است)');
+  return out;
+}
 
 const tradable = (m: OpportunityListing, s: ScreenSettings) =>
   !m.expired && m.daysToMaturity >= s.minDays && (m.liquidity === null || m.liquidity >= s.minLiquidity);

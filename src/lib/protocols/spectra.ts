@@ -1,7 +1,7 @@
 import protocols from '../../config/protocols.json';
 import type { MarketData, MarketSummary } from '../../types/market';
 import { DAY_MS, daysUntil } from '../utils/math';
-import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, UpstreamError, fetchJson } from './base';
+import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, UpstreamError, fetchJson, plausibleAPY } from './base';
 
 /** Subset of https://api.spectra.finance/v1/{network}/pools that YieldX uses. */
 interface SpectraToken {
@@ -84,7 +84,7 @@ export class SpectraAdapter extends BaseAdapter {
               chain: NETWORKS[network],
               maturity: new Date(m.maturity * 1000).toISOString(),
               impliedAPY: implied,
-              baseAPY: finite(m.ibt.apr?.total),
+              baseAPY: plausibleAPY(finite(m.ibt.apr?.total)),
               liquidity: finite(pool.liquidity?.usd) ?? finite(m.tvl?.usd),
               hasPoints: false,
               ytMultiplier: null,
@@ -119,7 +119,7 @@ export class SpectraAdapter extends BaseAdapter {
       ytPrice: finite(pool.ytPrice?.underlying) ?? 1 - pt,
       impliedAPY: finite(pool.impliedApy) ?? NaN,
       // Not every IBT reports an APR; NaN tells the merge step to keep the user's value.
-      baseAPY: finite(m.ibt.apr?.total) ?? NaN,
+      baseAPY: plausibleAPY(finite(m.ibt.apr?.total)) ?? NaN,
       maturity,
       daysToMaturity: daysUntil(maturity),
       liquidity: finite(pool.liquidity?.usd) ?? finite(m.tvl?.usd),

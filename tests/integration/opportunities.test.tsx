@@ -85,3 +85,35 @@ describe('leaderboard render', () => {
     assertPersianMoney(html);
   });
 });
+
+describe('calculator data checks (NVDAc case)', () => {
+  // Real Spectra row: no base APY, $27 of liquidity, 63 days left.
+  const nvda = row({ id: 'nv', protocol: 'spectra', name: 'NVDAc', chain: 'Base', impliedAPY: 0.45, baseAPY: null, liquidity: 27.28, daysToMaturity: 63, hasPoints: false, categories: ['stock'] });
+
+  it('explains why the market is not ranked', async () => {
+    const { rankingExclusions } = await import('../../src/lib/risk/opportunities');
+    const reasons = rankingExclusions(nvda, defaultScreenSettings).join(' ');
+    expect(reasons).toContain('نقدینگی');
+    expect(reasons).toContain('بازده پایه');
+    expect(rankingExclusions(markets[0], defaultScreenSettings)).toEqual([]);
+  });
+
+  it('warns about an absurd base APY and a market too thin for the capital', () => {
+    const html = renderToString(
+      <CalculatorPanel
+        c={{ ...defaultCalc, mode: 'yt', protocol: 'spectra', marketId: 'nv', marketName: 'NVDAc', capital: 21, days: 63, entryAPY: 0.45, exitAPY: 0.45, baseAPY: 1552741.82 }}
+        set={noop}
+        markets={[nvda]}
+        onPick={noop}
+        loadingMarket={false}
+      />,
+    );
+    expect(html).toContain('غیرعادی');
+    expect(html).toContain('نقدینگی کل این بازار');
+    expect(html).toContain('در رتبه‌بندی و فهرست فرصت‌ها نیست');
+    expect(html).toContain('از API نیامده');
+    // No green «points are free» conclusion from garbage inputs.
+    expect(html).toContain('قابل اتکا نیستند');
+    expect(html).not.toContain('رایگان‌اند');
+  });
+});
