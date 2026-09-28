@@ -12,6 +12,7 @@ import { PositionCard } from '../../src/components/portfolio/Portfolio';
 import { AnalysisPanel, Answers, KindPanel, Numbers } from '../../src/components/portfolio/PositionDetail';
 import NewPosition from '../../src/components/portfolio/NewPosition';
 import { Pnl } from '../../src/components/portfolio/parts';
+import { EventFields, emptyDraft } from '../../src/components/portfolio/EventForm';
 
 const now = Date.now();
 const ev = (type: PositionEvent['type'], units: number, amount: number): PositionEvent => ({
@@ -85,6 +86,15 @@ describe('portfolio render', () => {
   it('P&L carries a word and icon besides colour', () => {
     expect(renderToString(<Pnl usd={-5} />)).toContain('زیان');
     expect(renderToString(<Pnl usd={5} />)).toContain('سود');
+  });
+
+  it('event form offers a token picker with the chosen token logo', () => {
+    const d = { ...emptyDraft('buy', 'USDG'), fees: [{ kind: 'network' as const, amount: 0.001, token: 'ETH', usdRate: NaN, rateSource: 'unknown' as const, included: false }] };
+    const html = renderToString(<EventFields draft={d} onChange={() => {}} assetSymbol="USDe" liveAssetUsd={1} types={['buy']} chain="Ethereum" />);
+    expect(html).toContain('رمزارز پرداختی');
+    expect(html).toContain('USDG');
+    expect(html).toContain('coin-images.coingecko.com');
+    expect(html).toContain('رمزارز کارمزد');
   });
 
   it('wizard starts at platform choice', () => {

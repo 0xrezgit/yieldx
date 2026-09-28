@@ -31,6 +31,19 @@ export function fetchMarket(protocol: ProtocolId, marketId: string, historyDays 
   );
 }
 
+export interface TokenPrice {
+  usd: number;
+  /** When the price was observed (can differ from the requested time by a few hours). */
+  at: string;
+}
+
+/** USD prices of listed tokens now, or at `atMs` when given. */
+export function fetchPrices(symbols: string[], atMs?: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ symbols: symbols.join(',') });
+  if (atMs !== undefined) q.set('at', String(Math.floor(atMs / 1000)));
+  return getJson<{ prices: Record<string, TokenPrice> }>(`/api/prices?${q}`, signal).then((r) => r.prices);
+}
+
 /**
  * Applies fetched market data on top of the current scenario. Values the API does
  * not provide (e.g. Exponent's USD price) keep the user's input; manually entered

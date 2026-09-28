@@ -181,7 +181,11 @@ function accruedYield(L: Ledger, maturityMs: number, q: MarketQuote | null, now:
   return { value: total, quality: usedEstimate ? 'estimate' : 'historical' };
 }
 
-export function valuePosition(p: Position, q: MarketQuote | null, now = Date.now(), exit: ExitSettings = defaultExitSettings): Valuation {
+/**
+ * @param debtAssetUsdNow  live USD price of a loop's debt token when it is not the
+ *   accounting asset; without it the price recorded at borrowing is used (estimate).
+ */
+export function valuePosition(p: Position, q: MarketQuote | null, now = Date.now(), exit: ExitSettings = defaultExitSettings, debtAssetUsdNow: number | null = null): Valuation {
   const maturityMs = new Date(p.maturity).getTime();
   const matured = Number.isFinite(maturityMs) && now >= maturityMs;
   const L = buildLedger(p, now);
@@ -219,7 +223,7 @@ export function valuePosition(p: Position, q: MarketQuote | null, now = Date.now
   let debtUsd: Valued<number> = { value: 0, quality: 'rule' };
   if (p.loop && (L.debtUnits > EPS || p.loop.debtOverride)) {
     const lp = p.loop;
-    const debtPrice = lp.debtIsAccountingAsset ? A : lp.debtAssetUsd ?? NaN;
+    const debtPrice = lp.debtIsAccountingAsset ? A : debtAssetUsdNow ?? lp.debtAssetUsd ?? NaN;
     let units = L.debtUnits;
     let quality: Quality = 'estimate';
     if (lp.debtOverride) {

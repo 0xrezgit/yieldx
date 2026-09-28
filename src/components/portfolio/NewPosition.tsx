@@ -12,7 +12,7 @@ import { emptyManual, emptyTargets } from '../../types/position';
 import type { ProtocolId } from '../../types/protocol';
 import { fetchMarket, fetchMarkets } from '../../lib/data/market-data';
 import { isLoopable } from '../../lib/risk/opportunities';
-import { chainFa, chainLogo, KIND_FA, protocolLogo } from '../../lib/portfolio/labels';
+import { chainFa, chainLogo, KIND_FA, protocolLogo, RATE_FA } from '../../lib/portfolio/labels';
 import { newId } from '../../lib/portfolio/portfolio';
 import { apyFromPT } from '../../lib/portfolio/valuation';
 import { usePortfolio } from '../../hooks/usePortfolio';
@@ -24,6 +24,9 @@ import { TokenLogo } from '../ui/token-logo';
 import { Segmented } from '../opportunities/parts';
 import { draftToEvent, emptyDraft, EventFields, validateDraft, type Draft } from './EventForm';
 import { NoWalletNote } from './parts';
+import { TokenSelect, useTokenPrice } from './TokenSelect';
+import { tokensForChain } from '../../lib/portfolio/tokens';
+import type { RateSource } from '../../types/position';
 
 const LIVE: ProtocolId[] = (Object.keys(protocols) as ProtocolId[]).filter((id) => protocols[id].liveData);
 const STEPS = ['پلتفرم', 'شبکه', 'بازار', 'نوع', 'جزئیات'];
@@ -79,9 +82,11 @@ export default function NewPosition() {
   const [loop, setLoop] = useState<LoopInfo>(defaultLoop(''));
   const [borrowed, setBorrowed] = useState(NaN);
   const [borrowUsd, setBorrowUsd] = useState(NaN);
+  const [borrowSource, setBorrowSource] = useState<RateSource>('unknown');
   const [points, setPoints] = useState<Position['points']>({ perDay: 0, multiplier: 1, basis: 'unit', valuePerPoint: 0 });
   // Pre-trade planner.
   const [planAmount, setPlanAmount] = useState(1000);
+  const [planToken, setPlanToken] = useState('');
   const [planFee, setPlanFee] = useState(thresholds.exit.costPercent);
 
   useEffect(() => {
@@ -108,6 +113,7 @@ export default function NewPosition() {
         const sym = m.assetSymbol ?? '';
         setAssetSymbol(sym);
         setDraft((d) => ({ ...d, cash: { ...d.cash, token: d.cash.token || sym } }));
+        setPlanToken((t) => t || sym);
         setLoop((l) => ({ ...l, debtAsset: l.debtAsset || sym }));
         if (m.points) setPoints((p) => ({ ...p, perDay: m.points!.pointsPerDay, multiplier: m.points!.ytMultiplier, basis: m.points!.basis }));
       })
@@ -138,6 +144,20 @@ export default function NewPosition() {
 
   const tokenPrice = live ? (kind === 'yt' ? live.ytPrice : live.ptPrice) : NaN;
   const assetUsd = live?.underlyingPrice ?? null;
+  const tokens = useMemo(() => (market ? tokensForChain(market.chain, { symbol: assetSymbol, icon: market.icon }) : []), [market, assetSymbol]);
+  const [nowIso] = useState(() => new Date().toISOString());
+  const planPrice = useTokenPrice(planToken, nowIso);
+  // The market's own asset may be unlisted; its live USD price comes from the market.
+  const planUsdRate = planPrice?.usd ?? (planToken && planToken.toLowerCase() === assetSymbol.toLowerCase() ? assetUsd : null);
+  const planUsd = planUsdRate !== null && planUsdRate !== undefined ? planAmount * planUsdRate : NaN;
+  const debtPrice = useTokenPrice(loop.debtIsAccountingAsset ? '' : loop.debtAsset, draft.at);
+  useEffect(() => {
+    if (debtPrice && borrowSource !== 'manual') {
+      setBorrowUsd(debtPrice.usd);
+      setBorrowSource(debtPrice.source);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follow the fetched price only
+  }, [debtPrice?.usd, debtPrice?.source]);
 
   const draftError = validateDraft(draft);
   const loopError =
@@ -152,7 +172,7 @@ export default function NewPosition() {
     if (kind === 'loop') {
       const rate = loop.debtIsAccountingAsset ? buy.assetUsd : Number.isFinite(borrowUsd) && borrowUsd > 0 ? borrowUsd : null;
       events.unshift({
-        ...draftToEvent({ ...emptyDraft('borrow', loop.debtAsset, draft.at), cash: { amount: borrowed, token: loop.debtAsset, usdRate: rate ?? NaN, rateSource: loop.debtIsAccountingAsset ? buy.assetUsdSource : 'manual' }, assetUsd: draft.assetUsd, assetUsdSource: draft.assetUsdSource }),
+        ...draftToEvent({ ...emptyDraft('borrow', loop.debtAsset, draft.at), cash: { amount: borrowed, token: loop.debtAsset, usdRate: rate ?? NaN, rateSource: loop.debtIsAccountingAsset ? buy.assetUsdSource : borrowSource }, assetUsd: draft.assetUsd, assetUsdSource: draft.assetUsdSource }),
       });
     }
     const now = new Date().toISOString();
@@ -330,11 +350,15 @@ export default function NewPosition() {
             <Card title="محاسبه قبل از خرید">
               <p className="text-xs text-secondary">فقط یک تخمین با قیمت فعلی بازار است و ذخیره نمی‌شود. پس از خرید، تعداد واقعی دریافتی را ثبت کنید.</p>
               <div className="grid grid-cols-2 gap-3">
-                <NumberField label="مبلغ خرید" value={planAmount} onChange={setPlanAmount} suffix="$" />
+                <NumberField label="مقدار پرداختی" value={planAmount} onChange={setPlanAmount} />
+                <TokenSelect label="رمزارز پرداختی" value={planToken} onChange={setPlanToken} tokens={tokens} />
                 <NumberField label="کارمزد و لغزش تخمینی" value={planFee} onChange={setPlanFee} suffix="%" />
+                <div className="text-xs text-secondary flex flex-col justify-end">
+                  ارزش دلاری: {Number.isFinite(planUsd) ? <Num>{formatUSD(planUsd)}</Num> : planToken ? 'قیمت این ارز در دسترس نیست' : '—'}
+                </div>
               </div>
-              {live && assetUsd ? (() => {
-                const units = (planAmount * (1 - planFee / 100)) / (tokenPrice * assetUsd);
+              {live && assetUsd && Number.isFinite(planUsd) ? (() => {
+                const units = (planUsd * (1 - planFee / 100)) / (tokenPrice * assetUsd);
                 const days = Math.max(1, live.daysToMaturity);
                 return (
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -348,20 +372,20 @@ export default function NewPosition() {
                       <div>مواجهه با بازده: <Num className="font-bold">{formatUSD(units * assetUsd, 0)}</Num> دارایی پایه</div>
                     )}
                     <button type="button" className="col-span-2 rounded-xl border border-accent/60 px-3 py-2 text-sm text-primary" onClick={() => {
-                      setDraft((d) => ({ ...d, cash: { ...d.cash, amount: planAmount, token: d.cash.token } }));
+                      setDraft((d) => ({ ...d, at: new Date().toISOString(), cash: { ...d.cash, amount: planAmount, token: planToken } }));
                       setMode('record');
                     }}>
                       خرید را انجام دادم — ثبت خرید واقعی
                     </button>
                   </div>
                 );
-              })() : <p className="text-sm text-warning">قیمت بازار یا قیمت دلاری دارایی در دسترس نیست؛ تخمین ممکن نیست.</p>}
+              })() : <p className="text-sm text-warning">قیمت بازار، قیمت دلاری دارایی یا قیمت ارز پرداختی در دسترس نیست؛ تخمین ممکن نیست.</p>}
             </Card>
           ) : (
             <>
               <Card title="جزئیات خرید">
                 <p className="text-xs text-secondary">مبنای محاسبات، مبلغ واقعی پرداختی و تعداد واقعی دریافتی از تراکنش شماست؛ قیمت امروز جایگزین قیمت ورود نمی‌شود.</p>
-                <EventFields draft={draft} onChange={setDraft} assetSymbol={assetSymbol} liveAssetUsd={assetUsd} types={['buy']} />
+                <EventFields draft={draft} onChange={setDraft} assetSymbol={assetSymbol} liveAssetUsd={assetUsd} types={['buy']} chain={market.chain} marketIcon={market.icon} />
               </Card>
 
               {kind === 'loop' && (
@@ -370,7 +394,7 @@ export default function NewPosition() {
                   <div className="grid grid-cols-2 gap-3">
                     <TextField label="پلتفرم وام‌دهی" value={loop.lendingPlatform} onChange={(lendingPlatform) => setLoop({ ...loop, lendingPlatform })} placeholder="Morpho" ltr />
                     <TextField label="بازار وام‌دهی" value={loop.lendingMarket} onChange={(lendingMarket) => setLoop({ ...loop, lendingMarket })} placeholder="PT-sUSDe / USDC" ltr />
-                    <TextField label="دارایی بدهی" value={loop.debtAsset} onChange={(debtAsset) => setLoop({ ...loop, debtAsset })} placeholder="USDC" ltr />
+                    <TokenSelect label="دارایی بدهی" value={loop.debtAsset} onChange={(debtAsset) => { setLoop({ ...loop, debtAsset }); setBorrowSource('unknown'); setBorrowUsd(NaN); }} tokens={tokens} />
                     <NumberField label="مقدار وام (بدهی)" value={borrowed} onChange={setBorrowed} />
                     <NumberField label="نرخ بهره‌ی وام" value={loop.borrowAPY} onChange={(borrowAPY) => setLoop({ ...loop, borrowAPY })} suffix="%" />
                     <NumberField label="آستانه‌ی لیکویید شدن (LLTV)" value={loop.lltv} onChange={(lltv) => setLoop({ ...loop, lltv })} suffix="%" />
@@ -379,7 +403,12 @@ export default function NewPosition() {
                     <input type="checkbox" checked={loop.debtIsAccountingAsset} onChange={(e) => setLoop({ ...loop, debtIsAccountingAsset: e.target.checked })} />
                     دارایی بدهی همان دارایی پایه‌ی بازار ({assetSymbol || '—'}) است
                   </label>
-                  {!loop.debtIsAccountingAsset && <NumberField label={`نرخ دلاری ${loop.debtAsset || 'دارایی بدهی'} هنگام وام`} value={borrowUsd} onChange={setBorrowUsd} suffix="$" />}
+                  {!loop.debtIsAccountingAsset && (
+                    <div className="flex flex-col gap-1">
+                      <NumberField label={`نرخ دلاری ${loop.debtAsset || 'دارایی بدهی'} هنگام وام`} value={borrowUsd} onChange={(v) => { setBorrowUsd(v); setBorrowSource('manual'); }} suffix="$" />
+                      <span className={`text-[11px] ${Number.isFinite(borrowUsd) ? 'text-success' : 'text-warning'}`}>{Number.isFinite(borrowUsd) ? RATE_FA[borrowSource] : 'نرخ نامعلوم — دستی وارد کنید'}</span>
+                    </div>
+                  )}
                   <SelectField<OracleMode>
                     label="اوراکل وثیقه"
                     value={loop.oracle}

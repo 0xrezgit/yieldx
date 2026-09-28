@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Fee, FeeKind, PositionEvent, PositionEventType, RateSource, TokenAmount } from '../../types/position';
 import { EVENT_FA, FEE_FA, RATE_FA } from '../../lib/portfolio/labels';
 import { newId } from '../../lib/portfolio/portfolio';
-import { formatNumber, formatUSD } from '../../lib/utils/formatting';
+import { formatDateTime, formatNumber, formatUSD } from '../../lib/utils/formatting';
+import { nativeToken, tokensForChain } from '../../lib/portfolio/tokens';
+import { TokenSelect, useTokenPrice } from './TokenSelect';
 import { NumberField, SelectField, TextField } from '../ui/field';
 import { Num } from '../ui/num';
 
@@ -39,9 +41,9 @@ export const emptyDraft = (type: PositionEventType, token = '', at = new Date().
   type,
   at,
   units: NaN,
-  cash: { amount: NaN, token, usdRate: NaN, rateSource: 'manual' },
+  cash: { amount: NaN, token, usdRate: NaN, rateSource: 'unknown' },
   assetUsd: NaN,
-  assetUsdSource: 'manual',
+  assetUsdSource: 'unknown',
   fees: [],
   note: '',
 });
@@ -84,17 +86,41 @@ export function draftToEvent(d: Draft): PositionEvent {
   };
 }
 
-function RateInput({ label, value, source, onChange, live, liveLabel }: { label: string; value: number; source: RateSource; onChange: (v: number, s: RateSource) => void; live: number | null; liveLabel?: string }) {
+/**
+ * USD rate for one token at the event time. A listed token's rate is filled
+ * automatically (live for recent events, historical otherwise) and follows token
+ * and time changes — until the user types a rate, which is then never overwritten.
+ */
+function RateInput({ label, symbol, at, value, source, onChange, fallback }: { label: string; symbol: string; at: string; value: number; source: RateSource; onChange: (v: number, s: RateSource) => void; fallback?: { usd: number; label: string } | null }) {
+  const price = useTokenPrice(symbol, at);
+  const prevSymbol = useRef(symbol);
+
+  useEffect(() => {
+    if (prevSymbol.current !== symbol) {
+      prevSymbol.current = symbol;
+      // A rate that was filled for the previous token no longer applies.
+      if (source !== 'manual' && !price) onChange(NaN, 'unknown');
+    }
+    if (price && source !== 'manual' && (value !== price.usd || source !== price.source)) onChange(price.usd, price.source);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to price/token changes only
+  }, [price?.usd, price?.source, symbol]);
+
   return (
     <div className="flex flex-col gap-1">
       <NumberField label={label} value={value} onChange={(v) => onChange(v, 'manual')} suffix="$" hint="نرخ دلاری در زمان همان رویداد" />
       <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span className={source === 'market' ? 'text-success' : Number.isFinite(value) ? 'text-info' : 'text-warning'}>
-          {Number.isFinite(value) ? RATE_FA[source] : 'نرخ تاریخی نامعلوم — دستی وارد کنید'}
+        <span className={source === 'market' || source === 'historical' ? 'text-success' : Number.isFinite(value) ? 'text-info' : 'text-warning'}>
+          {Number.isFinite(value) ? RATE_FA[source] : 'نرخ نامعلوم — دستی وارد کنید'}
+          {price && source === 'historical' && <> ({formatDateTime(price.at)})</>}
         </span>
-        {live !== null && (
-          <button type="button" className="text-accent underline" onClick={() => onChange(live, 'market')}>
-            {liveLabel ?? 'نرخ فعلی بازار'} <Num>{formatUSD(live, 4)}</Num>
+        {source === 'manual' && price && (
+          <button type="button" className="text-accent underline" onClick={() => onChange(price.usd, price.source)}>
+            {RATE_FA[price.source]} <Num>{formatUSD(price.usd, 4)}</Num>
+          </button>
+        )}
+        {!price && fallback && value !== fallback.usd && (
+          <button type="button" className="text-accent underline" onClick={() => onChange(fallback.usd, 'market')}>
+            {fallback.label} <Num>{formatUSD(fallback.usd, 4)}</Num>
           </button>
         )}
       </div>
@@ -104,22 +130,27 @@ function RateInput({ label, value, source, onChange, live, liveLabel }: { label:
 
 interface Props {
   draft: Draft;
-  onChange: (d: Draft) => void;
+  /** State setter: rates fill in asynchronously, so every update is applied to the latest draft. */
+  onChange: Dispatch<SetStateAction<Draft>>;
   /** Accounting asset symbol and its live USD price (offered only for recent events). */
   assetSymbol: string;
   liveAssetUsd: number | null;
   /** Allowed types; one entry hides the selector. */
   types: PositionEventType[];
+  /** Chain of the market — decides which tokens are offered. */
+  chain: string;
+  marketIcon?: string | null;
 }
 
-export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, types }: Props) {
-  const set = (p: Partial<Draft>) => onChange({ ...d, ...p });
+export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, types, chain, marketIcon }: Props) {
+  const set = (p: Partial<Draft>) => onChange((x) => ({ ...x, ...p }));
   const recent = Date.now() - new Date(d.at).getTime() <= LIVE_RATE_WINDOW_MS;
-  const live = recent && liveAssetUsd !== null && liveAssetUsd > 0 ? liveAssetUsd : null;
+  const live = recent && liveAssetUsd !== null && liveAssetUsd > 0 ? { usd: liveAssetUsd, label: 'نرخ فعلی بازار' } : null;
   const tokenIsAsset = !!assetSymbol && d.cash.token.trim().toLowerCase() === assetSymbol.toLowerCase();
   const labels = LABELS[d.type];
+  const tokens = useMemo(() => tokensForChain(chain, { symbol: assetSymbol, icon: marketIcon }), [chain, assetSymbol, marketIcon]);
 
-  const setFee = (i: number, p: Partial<Fee>) => set({ fees: d.fees.map((f, j) => (j === i ? { ...f, ...p } : f)) });
+  const setFee = (i: number, p: Partial<Fee>) => onChange((x) => ({ ...x, fees: x.fees.map((f, j) => (j === i ? { ...f, ...p } : f)) }));
 
   return (
     <div className="flex flex-col gap-3">
@@ -142,23 +173,27 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <NumberField label={labels.cash} value={d.cash.amount} onChange={(amount) => set({ cash: { ...d.cash, amount } })} />
-        <TextField label="رمزارز" value={d.cash.token} onChange={(token) => set({ cash: { ...d.cash, token } })} placeholder={assetSymbol || 'USDC'} ltr />
+        <NumberField label={labels.cash} value={d.cash.amount} onChange={(amount) => onChange((x) => ({ ...x, cash: { ...x.cash, amount } }))} />
+        <TokenSelect label={d.type === 'buy' ? 'رمزارز پرداختی' : 'رمزارز'} value={d.cash.token} onChange={(token) => onChange((x) => ({ ...x, cash: { ...x.cash, token } }))} tokens={tokens} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <RateInput
           label={`نرخ دلاری ${d.cash.token || 'رمزارز'}`}
+          symbol={d.cash.token}
+          at={d.at}
           value={d.cash.usdRate ?? NaN}
           source={d.cash.rateSource}
-          onChange={(usdRate, rateSource) => set({ cash: { ...d.cash, usdRate, rateSource }, ...(tokenIsAsset ? { assetUsd: usdRate, assetUsdSource: rateSource } : {}) })}
-          live={tokenIsAsset ? live : null}
+          onChange={(usdRate, rateSource) => onChange((x) => ({ ...x, cash: { ...x.cash, usdRate, rateSource }, ...(tokenIsAsset && rateSource === 'manual' ? { assetUsd: usdRate, assetUsdSource: rateSource } : {}) }))}
+          fallback={tokenIsAsset ? live : null}
         />
         <RateInput
           label={`نرخ دلاری دارایی پایه ${assetSymbol ? `(${assetSymbol})` : ''}`}
+          symbol={assetSymbol}
+          at={d.at}
           value={d.assetUsd}
           source={d.assetUsdSource}
-          onChange={(assetUsd, assetUsdSource) => set({ assetUsd, assetUsdSource })}
-          live={live}
+          onChange={(assetUsd, assetUsdSource) => onChange((x) => ({ ...x, assetUsd, assetUsdSource }))}
+          fallback={live}
         />
       </div>
       {Number.isFinite(d.cash.amount) && Number.isFinite(d.cash.usdRate ?? NaN) && (
@@ -179,25 +214,25 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
           <button
             type="button"
             className="flex items-center gap-1 text-sm text-accent"
-            onClick={() => set({ fees: [...d.fees, { kind: 'network', amount: NaN, token: '', usdRate: NaN, rateSource: 'manual', included: false }] })}
+            onClick={() => onChange((x) => ({ ...x, fees: [...x.fees, { kind: 'network', amount: NaN, token: nativeToken(chain), usdRate: NaN, rateSource: 'unknown', included: false }] }))}
           >
             <Plus size={14} /> افزودن کارمزد
           </button>
         </div>
         {d.fees.map((f, i) => (
           <div key={i} className="rounded-xl border border-default p-3 flex flex-col gap-2">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <SelectField<FeeKind> label="نوع" value={f.kind} onChange={(kind) => setFee(i, { kind })} options={(['network', 'trade', 'other'] as const).map((k) => ({ value: k, label: FEE_FA[k] }))} />
               <NumberField label="مقدار" value={f.amount} onChange={(amount) => setFee(i, { amount })} />
-              <TextField label="رمزارز" value={f.token} onChange={(token) => setFee(i, { token })} placeholder="ETH" ltr />
-              <NumberField label="نرخ دلاری" value={f.usdRate ?? NaN} onChange={(usdRate) => setFee(i, { usdRate, rateSource: 'manual' })} suffix="$" />
+              <TokenSelect label="رمزارز کارمزد" value={f.token} onChange={(token) => setFee(i, { token })} tokens={tokens} />
             </div>
+            <RateInput label={`نرخ دلاری ${f.token || 'رمزارز'}`} symbol={f.token} at={d.at} value={f.usdRate ?? NaN} source={f.rateSource} onChange={(usdRate, rateSource) => setFee(i, { usdRate, rateSource })} />
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-start gap-2 text-xs text-secondary">
                 <input type="checkbox" checked={f.included} onChange={(e) => setFee(i, { included: e.target.checked })} className="mt-0.5" />
                 <span>داخل مبلغ بالا حساب شده (مثلاً کارمزد سواپی که از توکن دریافتی کم شده)؛ دوباره از سود کم نشود</span>
               </label>
-              <button type="button" aria-label="حذف کارمزد" className="p-1 text-danger" onClick={() => set({ fees: d.fees.filter((_, j) => j !== i) })}>
+              <button type="button" aria-label="حذف کارمزد" className="p-1 text-danger" onClick={() => onChange((x) => ({ ...x, fees: x.fees.filter((_, j) => j !== i) }))}>
                 <Trash2 size={15} />
               </button>
             </div>
@@ -210,12 +245,12 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
 }
 
 /** Self-contained "add an event" form for the position page. */
-export function EventForm({ types, assetSymbol, liveAssetUsd, defaultToken, onSubmit, onCancel }: { types: PositionEventType[]; assetSymbol: string; liveAssetUsd: number | null; defaultToken: string; onSubmit: (e: PositionEvent) => void; onCancel: () => void }) {
+export function EventForm({ types, assetSymbol, liveAssetUsd, defaultToken, chain, marketIcon, onSubmit, onCancel }: { types: PositionEventType[]; assetSymbol: string; liveAssetUsd: number | null; defaultToken: string; chain: string; marketIcon?: string | null; onSubmit: (e: PositionEvent) => void; onCancel: () => void }) {
   const [d, setD] = useState<Draft>(() => emptyDraft(types[0], defaultToken));
   const error = validateDraft(d);
   return (
     <div className="flex flex-col gap-3">
-      <EventFields draft={d} onChange={setD} assetSymbol={assetSymbol} liveAssetUsd={liveAssetUsd} types={types} />
+      <EventFields draft={d} onChange={setD} assetSymbol={assetSymbol} liveAssetUsd={liveAssetUsd} types={types} chain={chain} marketIcon={marketIcon} />
       {error && <p className="text-xs text-warning">{error}</p>}
       <div className="flex gap-2">
         <button type="button" disabled={!!error} onClick={() => onSubmit(draftToEvent(d))} className="rounded-xl brand-gradient px-4 py-2 text-sm font-bold text-white disabled:opacity-40">

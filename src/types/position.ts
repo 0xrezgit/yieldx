@@ -11,8 +11,11 @@ import type { ProtocolId } from './protocol';
  */
 export type PositionKind = 'pt' | 'yt' | 'loop';
 
-/** Where a USD rate came from. 'market' = read from the protocol API at that moment. */
-export type RateSource = 'market' | 'manual' | 'unknown';
+/**
+ * Where a USD rate came from. 'market' = live price read at (about) the event time,
+ * 'historical' = price-history lookup for the event time (DefiLlama, ±4h).
+ */
+export type RateSource = 'market' | 'historical' | 'manual' | 'unknown';
 
 /** An amount of one token plus its USD rate at the time of the event. */
 export interface TokenAmount {
