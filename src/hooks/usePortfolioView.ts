@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Position } from '../types/position';
 import { analyzePosition, positionAlerts, type Alert, type Analysis } from '../lib/portfolio/analysis';
 import { appendSnapshot, portfolioSnapshot, portfolioTotals, positionSnapshot } from '../lib/portfolio/portfolio';
-import { valuePosition, type MarketQuote, type Valuation } from '../lib/portfolio/valuation';
+import { defaultExitSettings, valuePosition, type MarketQuote, type Valuation } from '../lib/portfolio/valuation';
+import { fetchPrices } from '../lib/data/market-data';
+import { tokenInfo } from '../lib/portfolio/tokens';
 import { usePortfolio } from './usePortfolio';
 import { quoteKey, useQuotes, type QuoteState } from './useQuotes';
 
@@ -33,15 +35,28 @@ export function usePortfolioView() {
   }, []);
   useEffect(() => setNow(Date.now()), [updatedAt]);
 
+  // Live prices of loop debt tokens that differ from the market's asset (e.g. USDC debt on an ETH PT).
+  const [debtPrices, setDebtPrices] = useState<Record<string, number>>({});
+  const debtSymbols = [...new Set((store.positions ?? []).filter((p) => p.loop && !p.loop.debtIsAccountingAsset && tokenInfo(p.loop.debtAsset)).map((p) => tokenInfo(p.loop!.debtAsset)!.symbol))].sort().join(',');
+  useEffect(() => {
+    if (!debtSymbols) return;
+    const ctrl = new AbortController();
+    fetchPrices(debtSymbols.split(','), undefined, ctrl.signal)
+      .then((p) => setDebtPrices(Object.fromEntries(Object.entries(p).map(([k, v]) => [k, v.usd]))))
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [debtSymbols, updatedAt]);
+
   const views = useMemo<PositionView[]>(
     () =>
       (store.positions ?? []).map((p) => {
         const q = quotes[quoteKey(p)];
         const quote = q?.quote ?? null;
-        const v = valuePosition(p, quote, now);
+        const debtSym = p.loop && !p.loop.debtIsAccountingAsset ? tokenInfo(p.loop.debtAsset)?.symbol : undefined;
+        const v = valuePosition(p, quote, now, defaultExitSettings, debtSym ? debtPrices[debtSym] ?? null : null);
         return { p, v, a: analyzePosition(p, v, quote), alerts: positionAlerts(p, v), quote, q };
       }),
-    [store.positions, quotes, now],
+    [store.positions, quotes, now, debtPrices],
   );
 
   const totals = useMemo(() => portfolioTotals(views), [views]);

@@ -17,6 +17,7 @@ import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
 import { TokenLogo } from '../ui/token-logo';
 import { EventForm } from './EventForm';
+import { TokenBadge } from './TokenSelect';
 import { AlertList, MarketIdentity, NoWalletNote, Pnl, QualityBadge, SnapshotChart, Stat, StatusBadge, usd } from './parts';
 
 const EVENT_TYPES: Record<Position['kind'], PositionEventType[]> = {
@@ -48,7 +49,7 @@ export function Answers({ x }: { x: PositionView }) {
           <dt className="text-muted text-xs">چه خریده‌ام؟</dt>
           <dd className="text-primary">
             <Num>{formatNumber(L.units, 4)}</Num> <span dir="ltr">{KIND_LABEL[p.kind === 'loop' ? 'pt' : p.kind]} {p.marketName}</span> روی {chainFa(p.chain)} در <span dir="ltr">{protocols[p.protocol].name}</span>
-            {p.loop && <> با بدهی {usd(v.debtUsd.value)} <span dir="ltr">{p.loop.debtAsset}</span> در <span dir="ltr">{p.loop.lendingPlatform || '—'}</span></>}
+            {p.loop && <> با بدهی {usd(v.debtUsd.value)} <TokenBadge symbol={p.loop.debtAsset} size={16} /> در <span dir="ltr">{p.loop.lendingPlatform || '—'}</span></>}
           </dd>
         </div>
         <div>
@@ -408,6 +409,8 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
           assetSymbol={p.assetSymbol}
           liveAssetUsd={quote?.assetUsd ?? null}
           defaultToken={p.assetSymbol}
+          chain={p.chain}
+          marketIcon={p.icon}
           onSubmit={(e) => {
             onSave({ ...p, events: [...p.events, e] });
             setAdding(false);
@@ -429,14 +432,14 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
             <div className="text-secondary flex flex-wrap gap-x-3">
               {e.units > 0 && <span><Num>{formatNumber(e.units, 4)}</Num> توکن</span>}
               <span>
-                <Num>{formatNumber(e.cash.amount, 6)}</Num> <span dir="ltr">{e.cash.token}</span>
+                <Num>{formatNumber(e.cash.amount, 6)}</Num> <TokenBadge symbol={e.cash.token} size={16} fallbackLogo={e.cash.token.toLowerCase() === p.assetSymbol.toLowerCase() ? p.icon : null} />
                 {e.cash.usdRate !== null ? <> (<Num>{formatUSD(e.cash.amount * e.cash.usdRate)}</Num>، {RATE_FA[e.cash.rateSource]})</> : <span className="text-warning"> (نرخ دلاری نامعلوم)</span>}
               </span>
               {e.assetUsd === null && <span className="text-warning">نرخ دارایی نامعلوم</span>}
             </div>
             {e.fees.map((f, i) => (
               <div key={i} className="text-xs text-muted">
-                {FEE_FA[f.kind]}: <Num>{formatNumber(f.amount, 6)}</Num> <span dir="ltr">{f.token}</span>
+                {FEE_FA[f.kind]}: <Num>{formatNumber(f.amount, 6)}</Num> <TokenBadge symbol={f.token} size={14} />
                 {f.usdRate !== null && <> (<Num>{formatUSD(f.amount * f.usdRate)}</Num>)</>} · {f.included ? 'داخل مبلغ حساب شده' : 'جداگانه پرداخت شده'}
               </div>
             ))}

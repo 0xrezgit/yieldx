@@ -73,7 +73,7 @@ export const EVENT_FA: Record<PositionEventType, string> = {
 
 export const FEE_FA: Record<FeeKind, string> = { network: 'کارمزد شبکه', trade: 'کارمزد معامله', other: 'هزینه‌ی جانبی' };
 
-export const RATE_FA: Record<RateSource, string> = { market: 'نرخ بازار', manual: 'ورود دستی', unknown: 'نامعلوم' };
+export const RATE_FA: Record<RateSource, string> = { market: 'نرخ لحظه‌ای بازار', historical: 'نرخ تاریخی بازار', manual: 'ورود دستی', unknown: 'نامعلوم' };
 
 export const QUALITY_FA: Record<Quality, string> = {
   market: 'به‌روز',
