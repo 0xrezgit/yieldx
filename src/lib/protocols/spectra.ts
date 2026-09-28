@@ -88,6 +88,7 @@ export class SpectraAdapter extends BaseAdapter {
               liquidity: finite(pool.liquidity?.usd) ?? finite(m.tvl?.usd),
               hasPoints: false,
               ytMultiplier: null,
+              points: null,
               categories: tags(m),
               isNew: !!m.createdAt && Date.now() - m.createdAt * 1000 < NEW_WINDOW_MS,
             };

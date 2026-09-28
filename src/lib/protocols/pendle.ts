@@ -46,9 +46,9 @@ interface PendleHistory {
   underlyingApy: string[];
 }
 
-const CHAIN_NAMES: Record<number, string> = { 1: 'Ethereum', 42161: 'Arbitrum', 8453: 'Base', 56: 'BNB Chain' };
+const CHAIN_NAMES: Record<string, string> = protocols.pendle.chainNames;
 
-const chainName = (chainId: number) => CHAIN_NAMES[chainId] ?? `chain ${chainId}`;
+const chainName = (chainId: number) => CHAIN_NAMES[String(chainId)] ?? `Chain ${chainId}`;
 
 const PAGE = 100;
 const MAX_PAGES = 5;
@@ -100,13 +100,29 @@ export class PendleAdapter extends BaseAdapter {
       liquidity: usd(m.liquidity),
       hasPoints: m.categoryIds?.includes('points') ?? false,
       ytMultiplier: null,
+      points: null,
       categories: (m.categoryIds ?? []).map((c) => c.toLowerCase()),
       isNew: !!m.isNew,
     }));
   }
 
+  /**
+   * Every chain Pendle currently supports, read from its API so newly launched chains
+   * show up without a code change. Falls back to the configured list if the call fails.
+   */
+  private async chains(): Promise<number[]> {
+    try {
+      const { chainIds } = await fetchJson<{ chainIds: number[] }>(this.name, `${this.base}/v1/chains`);
+      const ids = (chainIds ?? []).filter((id) => Number.isInteger(id) && id > 0);
+      if (ids.length) return ids;
+    } catch {
+      /* fall through */
+    }
+    return protocols.pendle.fallbackChains;
+  }
+
   async listMarkets(): Promise<MarketSummary[]> {
-    const lists = await Promise.allSettled(protocols.pendle.chains.map((c) => this.chainMarkets(c)));
+    const lists = await Promise.allSettled((await this.chains()).map((c) => this.chainMarkets(c)));
     const ok = lists.filter((r): r is PromiseFulfilledResult<MarketSummary[]> => r.status === 'fulfilled');
     if (!ok.length) throw new UpstreamError(this.name, 502);
     return ok.flatMap((r) => r.value);

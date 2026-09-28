@@ -37,5 +37,12 @@
     "positionShareWarning": 0.02,
     "ytShareWarning": 0.02,
     "ytShareCritical": 0.1
+  },
+  "opportunities": {
+    "ptMarginPP": 1,
+    "ptHighRateWarn": 30,
+    "loopMinHealth": 1.15,
+    "loopCandidateLiquidityUsd": 1000000,
+    "loopMinDays": 14
   }
 }

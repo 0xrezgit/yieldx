@@ -21,6 +21,7 @@ src/
   app/
     dashboard/              main analysis page
     history/, history/[id]  saved scenarios, re-analysed with today's date
+    opportunities/          best YT / PT / PT-loop markets across protocols + trade calculator
     guide/                  in-app guide
     api/[protocol]/         GET → active markets
     api/[protocol]/[market] GET → market data (+ ?history=<days>)
@@ -62,12 +63,22 @@ PT/YT prices are in **accounting-asset units** (PT → 1 at maturity, PT + YT �
 | Protocol | Live data | Source |
 |---|---|---|
 | Exponent | markets, prices, APYs, points multipliers | `api.exponent.finance/markets` (no USD price, no daily history) |
-| Pendle | markets on Ethereum/Arbitrum/Base/BNB, prices, APYs, liquidity, daily APY history | `api-v2.pendle.finance/core/v1` |
+| Pendle | markets on every chain Pendle supports (discovered from `/v1/chains`, falling back to `fallbackChains`), prices, APYs, liquidity, daily APY history | `api-v2.pendle.finance/core/v1` |
 | Spectra | markets on Ethereum, Base, Arbitrum, Optimism, Sonic, Avalanche, BNB, Katana, Flare, Hemi; PT/YT prices from the deepest pool, base APR, logos, USD liquidity (no points data, no daily history) | `api.spectra.finance/v1/{network}/pools` |
 
 Market lists are always live: new listings appear on the next refresh (every 5 minutes and on tab focus), and `GET /api/:protocol` flags any market past maturity as `expired` — for every protocol, even if an upstream cache still lists it. Exponent logos and USD prices come from Jupiter's token API; Pendle logos come from Pendle.
 
 Pendle market ids are `<chainId>-<address>` (a bare address means Ethereum mainnet); Spectra ids are `<network>-<ptAddress>`. An adapter without a live source can throw `LiveDataUnavailableError`, which the API answers with `501 manual_only` and the UI turns into manual inputs. To add a protocol, implement `ProtocolAdapter` (extend `BaseAdapter`), register it in `src/lib/protocols/index.ts` and add it to `src/config/protocols.json`.
+
+### Opportunities
+
+`/opportunities` merges the live lists of all protocols (`useAllMarkets`) and ranks them with `lib/risk/opportunities.ts`, using the trade simulators in `lib/calculators/trade.ts`:
+
+- **YT for points:** entry limits are the highest implied APY at which buying, holding (N days or to maturity) and selling at the *same* implied APY loses nothing (`free`) or at most the loss budget (`budget`), found by scan + bisection. Rows sort by zone, then by cash cost per $1k of multiplier-weighted exposure per day.
+- **PT:** implied vs base APY; limit = `max(implied, base + ptMarginPP)`.
+- **PT loop:** markets tagged `pt-looping` by Pendle plus liquid stablecoin candidates; borrow APY, LLTV and leverage are user inputs (not in Pendle's public API).
+
+Fees apply to every swap (entry and early exit), not to redemption at maturity. `?tab=yt|pt|loop|calc` deep-links a section.
 
 ### Risk thresholds
 

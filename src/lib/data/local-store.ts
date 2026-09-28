@@ -22,4 +22,5 @@ export const STORAGE_KEYS = {
   scenarios: 'yieldx-scenarios-v2',
   alerts: 'yieldx-alerts-v2',
   onboarded: 'yieldx-onboarded',
+  opportunities: 'yieldx-opportunities-v1',
 } as const;
