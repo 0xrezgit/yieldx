@@ -55,8 +55,9 @@ export function LoadingResult() {
     <div className="flex flex-col gap-4" aria-busy="true" aria-live="polite">
       <span className="sr-only">در حال دریافت داده‌ی بازار…</span>
       <div className="h-[76px] rounded-lg bg-surface border border-default animate-pulse" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {Array.from({ length: 4 }, (_, i) => (
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="col-span-full h-[112px] rounded-lg bg-surface border border-default animate-pulse" />
+        {Array.from({ length: 3 }, (_, i) => (
           <div key={i} className="h-[104px] rounded-lg bg-surface border border-default animate-pulse" />
         ))}
       </div>
@@ -151,7 +152,7 @@ export function ResultSummary({ p, a, verdict, focus }: { p: ScenarioParams; a: 
       {!s.available && <p className="text-sm text-warning">{s.unavailableReason}</p>}
       {isAuto && !verdict.best && <p className="text-sm text-secondary">{verdict.summary}</p>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <MetricCard
           emphasis
           label="نتیجه‌ی نقدی تخمینی تا سررسید"

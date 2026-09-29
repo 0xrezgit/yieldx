@@ -57,15 +57,25 @@ export function FinancialNumber({ value, kind = 'num', digits = 2, signed = fals
   );
 }
 
-/** A labelled figure. At most four of these in a result summary. */
+/**
+ * A labelled figure. At most four of these in a result summary. The card is a
+ * size container: the value scales with the card's own width (cqi), so a long
+ * amount shrinks to fit instead of spilling out of the box.
+ */
 export function MetricCard({ label, children, sub, help, emphasis = false }: { label: ReactNode; children: ReactNode; sub?: ReactNode; help?: ReactNode; emphasis?: boolean }) {
   return (
-    <div className={`min-w-0 flex flex-col gap-1 rounded-lg border border-default bg-surface p-4 ${emphasis ? 'sm:col-span-2 lg:col-span-1' : ''}`}>
-      <div className="text-sm text-secondary flex items-center gap-1 leading-5">
+    <div className={`@container min-w-0 flex flex-col gap-1 rounded-lg border border-default bg-surface p-3 sm:p-4 ${emphasis ? 'col-span-full' : ''}`}>
+      <div className={`text-sm text-secondary flex items-start gap-1 leading-5 ${emphasis ? '' : 'min-h-10 sm:min-h-0'}`}>
         {label}
         {help}
       </div>
-      <div className={emphasis ? 'hero-num text-primary' : 'text-xl font-semibold text-primary leading-tight'}>{children}</div>
+      <div
+        className={`min-w-0 text-primary leading-tight ${
+          emphasis ? 'font-medium tabular-nums text-[clamp(1.5rem,9cqi,2.25rem)]' : 'font-semibold text-[clamp(0.95rem,12cqi,1.25rem)]'
+        }`}
+      >
+        {children}
+      </div>
       {sub && <div className="text-xs leading-5 text-secondary">{sub}</div>}
     </div>
   );
