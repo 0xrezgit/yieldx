@@ -7,6 +7,7 @@ import { analyzePosition, compareMarkets, positionAlerts } from '../../src/lib/p
 import { allocation, appendSnapshot, mergeBackup, parseBackup, portfolioTotals } from '../../src/lib/portfolio/portfolio';
 import { ptPriceFromAPY } from '../../src/lib/calculators/implied-apy';
 import type { OpportunityListing } from '../../src/lib/risk/opportunities';
+import { maturedSummary } from '../../src/lib/portfolio/matured';
 
 const DAY = 86_400_000;
 const T0 = Date.UTC(2026, 0, 1);
@@ -324,5 +325,35 @@ describe('portfolio', () => {
     expect(parseBackup('{"version":1,"positions":[{"id":1}]}')).toBeNull();
     expect(parseBackup('nope')).toBeNull();
     expect(mergeBackup([pos({ id: 'x' }), p], file!)).toHaveLength(2);
+  });
+});
+
+describe('matured positions summary', () => {
+  const past = { maturity: iso(30) };
+  const after = T0 + 40 * DAY;
+
+  it('uses the recorded redemption: exit date, received amount, P&L', () => {
+    const p = pos({ ...past, events: [ev('buy', 0, 1000, 950), ev('redeem', 32, 1000, 1000, { cash: { amount: 1000, token: 'USDe', usdRate: 1, rateSource: 'manual' } })] });
+    const m = maturedSummary(p, valuePosition(p, quote({}, after), after));
+    expect(m.enteredAt).toBe(iso(0));
+    expect(m.exitedAt).toBe(iso(32));
+    expect(m.paid).toEqual([{ token: 'USDC', amount: 950, usd: 950 }]);
+    expect(m.received).toEqual([{ token: 'USDe', amount: 1000, usd: 1000 }]);
+    expect(m.estimated).toBe(false);
+    expect(m.pnlUsd).toBeCloseTo(50, 6);
+  });
+
+  it('labels the output as an estimate when no exit is recorded (PT → 1 asset unit each)', () => {
+    const p = pos({ ...past, events: [ev('buy', 0, 1000, 950)] });
+    const m = maturedSummary(p, valuePosition(p, quote({}, after), after));
+    expect(m.exitedAt).toBeNull();
+    expect(m.received).toEqual([]);
+    expect(m.estimated).toBe(true);
+    expect(m.estimateUnits).toBe(1000);
+  });
+
+  it('YT at maturity is worth 0 units', () => {
+    const p = pos({ ...past, kind: 'yt', events: [ev('buy', 0, 1000, 40)] });
+    expect(maturedSummary(p, valuePosition(p, quote({}, after), after)).estimateUnits).toBe(0);
   });
 });

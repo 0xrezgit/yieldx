@@ -7,9 +7,9 @@ import { Badge } from '../ui/badge';
 import { Num } from '../ui/num';
 
 const rec = {
-  buy: { tone: 'success', label: 'ارزش دارد' },
+  buy: { tone: 'success', label: 'ارزان‌تر از ارزش فرضی' },
   wait: { tone: 'warning', label: 'مرزی' },
-  avoid: { tone: 'danger', label: 'گران' },
+  avoid: { tone: 'danger', label: 'گران‌تر از ارزش فرضی' },
 } as const;
 
 /** Cost of points vs what they may be worth, plus the airdrop outlook. */
@@ -22,10 +22,17 @@ export function PointsPanel({ p, a }: { p: ScenarioParams; a: Analysis }) {
 
   return (
     <Card
-      title={`پوینت ${p.pointsName} و ایردراپ`}
+      title={`سناریوی فرضی ایردراپ${p.pointsName ? ` — ${p.pointsName}` : ''}`}
       icon={<Gift size={18} />}
-      actions={<Badge tone={rec[v.recommendation].tone}>{rec[v.recommendation].label}</Badge>}
+      actions={<Badge tone="muted">فرضی</Badge>}
     >
+      <p className="text-sm text-secondary leading-7 -mt-2">
+        این بخش با فرض‌های شما (FDV، سهم ایردراپ، کل پوینت‌ها) حساب می‌شود و در نتیجه‌ی نقدی اثری ندارد. پوینت تضمین ایردراپ نیست.
+        {p.pointsPerDay === 0 && <span className="text-warning"> نرخ پوینت این بازار صفر یا نامعلوم است؛ اگر برنامه‌ی پوینت دارد، آن را در «تنظیمات پیشرفته» وارد کنید.</span>}
+      </p>
+      <p className="text-sm">
+        ارزیابی قیمت پوینت با این فرض‌ها: <Badge tone={rec[v.recommendation].tone}>{rec[v.recommendation].label}</Badge>
+      </p>
       {free ? (
         <p className="text-success text-sm">بازده YT سرمایه را برمی‌گرداند؛ پوینت‌ها عملاً رایگان‌اند.</p>
       ) : finiteCost ? (
@@ -34,7 +41,7 @@ export function PointsPanel({ p, a }: { p: ScenarioParams; a: Analysis }) {
           <Bar label="ارزش ۱M پوینت" value={formatUSD(v.valuePerMillion, 0)} width={pct(v.valuePerMillion)} tone="bg-success" />
         </div>
       ) : (
-        <p className="text-danger text-sm">این موقعیت پوینت نمی‌گیرد.</p>
+        <p className="text-secondary text-sm">با این ورودی‌ها این موقعیت پوینتی نمی‌گیرد.</p>
       )}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -43,7 +50,7 @@ export function PointsPanel({ p, a }: { p: ScenarioParams; a: Analysis }) {
         <Item label="کل پوینت‌های شما" value={formatCompact(a.airdrop.totalPoints)} />
         <Item label="سهم از کل" value={formatPercent(a.airdrop.share * 100, 4)} />
         <Item label="ارزش هر پوینت" value={formatUSD(a.airdrop.valuePerPoint, 6)} />
-        <Item label="ارزش کل ایردراپ" value={formatUSD(a.airdrop.value)} color="text-success" />
+        <Item label="ارزش فرضی کل ایردراپ" value={formatUSD(a.airdrop.value)} />
       </dl>
     </Card>
   );

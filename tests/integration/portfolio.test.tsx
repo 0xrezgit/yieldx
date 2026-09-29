@@ -116,3 +116,29 @@ describe('portfolio render', () => {
     expect(html).toContain('Pendle');
   });
 });
+
+describe('matured section render', () => {
+  it('summarises a position past maturity in Persian', async () => {
+    const { MaturedSection } = await import('../../src/components/portfolio/Portfolio');
+    const { valuePosition } = await import('../../src/lib/portfolio/valuation');
+    const { emptyManual, emptyTargets } = await import('../../src/types/position');
+    const { renderToString } = await import('react-dom/server');
+    const { assertPersianMoney } = await import('../helpers/text');
+    const now = Date.UTC(2026, 5, 1);
+    const p = {
+      id: 'm1', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', kind: 'pt' as const, protocol: 'pendle' as const, chain: 'Ethereum',
+      marketId: '1-0xabc', marketName: 'sUSDe', platform: 'Ethena', icon: '', maturity: '2026-05-01T00:00:00.000Z', assetSymbol: 'USDe',
+      events: [
+        { id: 'b', type: 'buy' as const, at: '2026-01-02T10:00:00.000Z', units: 1000, cash: { amount: 950, token: 'USDC', usdRate: 1, rateSource: 'manual' as const }, assetUsd: 1, assetUsdSource: 'manual' as const, fees: [], note: '' },
+      ],
+      loop: null, manual: emptyManual(), targets: emptyTargets(), points: { perDay: 0, multiplier: 1, basis: 'unit' as const, valuePerPoint: 0 }, snapshots: [], note: '',
+    };
+    const v = valuePosition(p, null, now);
+    const html = renderToString(<MaturedSection views={[{ p, v, a: {} as never, alerts: [], quote: null, q: undefined }]} />);
+    expect(html).toContain('پوزیشن‌های سررسیدشده');
+    expect(html).toContain('تاریخ ورود');
+    expect(html).toContain('USDC');
+    expect(html).toContain('تخمینی');
+    assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, ''));
+  });
+});

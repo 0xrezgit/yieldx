@@ -1,59 +1,62 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * YieldX theme tokens (loaded by src/app/globals.css through `@config`).
- * Stripe-inspired dark system: near-black canvas, #1A1A22 surfaces, hairline
- * #32323A borders, one violet accent (#533AFD / #7662FD), emerald for gains,
- * orange for warnings (kept apart from red losses). One colour per strategy.
- * Extend this file instead of adding ad-hoc colours in TSX.
+ * YieldX theme — every colour points at a CSS variable defined once in
+ * src/app/globals.css (with measured contrast ratios). Older names (sx-*, brand2…)
+ * map to the same tokens so the whole app shares one palette.
+ * Extend the variables instead of adding ad-hoc colours in TSX.
  */
+const v = (name: string) => `var(--c-${name})`;
+
 export default {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
         // Surfaces
-        base: '#0B0B14',
-        surface: '#1A1A22',
-        elevated: '#26262E',
+        canvas: v('bg'),
+        surface: v('surface'),
+        elevated: v('raised'),
         // Borders
-        default: '#32323A',
-        strong: '#45455A',
+        default: v('border'),
+        strong: v('border-strong'),
+        control: v('control-border'),
         // Text
-        primary: '#F8F7FF',
-        secondary: '#B4B3BD',
-        muted: '#85848F',
-        // Brand
-        accent: '#7662FD',
-        brand2: '#533AFD',
+        primary: v('text'),
+        secondary: v('secondary'),
+        muted: v('muted'),
+        // Interaction
+        accent: v('accent'),
+        brand: v('brand'),
+        brand2: v('brand'),
         // Status
-        success: '#15BE53',
-        warning: '#FF6201',
-        danger: '#F2545B',
-        info: '#4285F4',
+        success: v('success'),
+        warning: v('warning'),
+        danger: v('danger'),
+        info: v('info'),
         // Strategies
-        'st-pt': '#4285F4',
-        'st-loop': '#A78BFA',
-        'st-yt': '#F59E0B',
-        'st-clmm': '#15BE53',
-        // Positions section — Stripe-inspired dark theme (derived dark palette).
-        'sx-bg': '#0B0B14',
-        'sx-surface': '#1A1A22',
-        'sx-raised': '#26262E',
-        'sx-text': '#F8F7FF',
-        'sx-muted': '#9E9DA6',
-        'sx-faint': '#85848F',
-        'sx-border': '#32323A',
-        'sx-accent': '#7662FD',
-        'sx-primary': '#533AFD',
-        'sx-green': '#15BE53',
-        'sx-orange': '#FF6201',
-        'sx-red': '#F2545B',
-        'sx-blue': '#4285F4',
+        'st-pt': v('st-pt'),
+        'st-loop': v('st-loop'),
+        'st-yt': v('st-yt'),
+        'st-clmm': v('st-clmm'),
+        // Legacy names of the positions section — same tokens.
+        'sx-bg': v('bg'),
+        'sx-surface': v('surface'),
+        'sx-raised': v('raised'),
+        'sx-text': v('text'),
+        'sx-muted': v('secondary'),
+        'sx-faint': v('muted'),
+        'sx-border': v('border'),
+        'sx-accent': v('accent'),
+        'sx-primary': v('brand'),
+        'sx-green': v('success'),
+        'sx-orange': v('warning'),
+        'sx-red': v('danger'),
+        'sx-blue': v('info'),
       },
       fontFamily: {
-        sans: ['Vazirmatn', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        sans: ['Vazirmatn', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Tahoma', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
     },
   },

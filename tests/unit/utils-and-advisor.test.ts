@@ -180,3 +180,37 @@ describe('alerts', () => {
     expect(isAlertRule({ ...rule({}), threshold: Infinity })).toBe(false);
   });
 });
+
+describe('missing base APY', () => {
+  it('is «unknown», never reported as cheap YT, and YT is not ranked', async () => {
+    const { analyzeScenario } = await import('../../src/lib/analysis');
+    const { buildInsights } = await import('../../src/lib/risk/advisor');
+    const { defaultScenario } = await import('../../src/types/scenario');
+    const p = { ...defaultScenario(), baseAPY: NaN };
+    const a = analyzeScenario(p);
+    expect(a.implied.status).toBe('unknown');
+    expect(buildInsights(p, a).some((i) => i.title === 'YT ارزان است')).toBe(false);
+    expect(a.strategies.find((s) => s.id === 'yt')?.available).toBe(false);
+    expect(a.ranked.some((s) => s.id === 'yt')).toBe(false);
+  });
+
+  it('ranks strategies by cash result, excluding the hypothetical airdrop', async () => {
+    const { analyzeScenario } = await import('../../src/lib/analysis');
+    const { defaultScenario } = await import('../../src/types/scenario');
+    // A huge assumed airdrop must not make YT the headline or the pick.
+    const a = analyzeScenario({ ...defaultScenario(), fdv: 1e12, pointsPerDay: 50, ytMultiplier: 20 });
+    const yt = a.strategies.find((s) => s.id === 'yt')!;
+    expect(yt.airdropValue).toBeGreaterThan(0);
+    expect(yt.pnl).toBeCloseTo(a.yt.yieldBase - 10_000, 6);
+    expect(yt.pnlWithAirdrop).toBeCloseTo(yt.pnl + yt.airdropValue, 6);
+    expect(a.best?.id).not.toBe('yt');
+  });
+
+  it('does not offer CLMM where the protocol has none', async () => {
+    const { analyzeScenario } = await import('../../src/lib/analysis');
+    const { defaultScenario } = await import('../../src/types/scenario');
+    const a = analyzeScenario({ ...defaultScenario(), protocol: 'spectra', feeAPY: 500 });
+    expect(a.strategies.find((s) => s.id === 'clmm')?.available).toBe(false);
+    expect(a.ranked.some((s) => s.id === 'clmm')).toBe(false);
+  });
+});

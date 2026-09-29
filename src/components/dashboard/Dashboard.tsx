@@ -19,7 +19,7 @@ export default function Dashboard() {
     if (new URLSearchParams(window.location.search).has('scenario')) setTab('result');
   }, [setTab]);
 
-  const count = d.verdict
+  const count = d.verdict && d.p && (d.p.marketId || d.p.manualEntry)
     ? d.triggered.length +
       d.insights.filter(
         (i) => (i.severity === 'critical' || i.severity === 'warning') && (!i.strategy || i.strategy === d.verdict?.best?.id),
@@ -30,8 +30,8 @@ export default function Dashboard() {
 
   if (!isReady(d)) {
     return (
-      <main className="grid place-items-center py-24 text-secondary">
-        <Loader2 className="animate-spin" />
+      <main className="grid place-items-center py-24 text-secondary" aria-busy="true">
+        <Loader2 className="animate-spin" aria-label="در حال بارگذاری" />
       </main>
     );
   }

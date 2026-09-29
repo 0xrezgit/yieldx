@@ -427,7 +427,7 @@ export function AnalysisPanel({ x }: { x: PositionView }) {
           </ul>
         </details>
       )}
-      <p className="text-[11px] text-sx-faint">هیچ تاریخ خروج یا سود آینده‌ای قطعی نیست و هیچ معامله‌ای خودکار انجام نمی‌شود.</p>
+      <p className="text-xs text-sx-faint">هیچ تاریخ خروج یا سود آینده‌ای قطعی نیست و هیچ معامله‌ای خودکار انجام نمی‌شود.</p>
     </Panel>
   );
 }
@@ -478,7 +478,7 @@ function SwitchPanel({ x }: { x: PositionView }) {
           ))}
         </ul>
       )}
-      <p className="text-[11px] text-sx-faint">فرض: قیمت دلاری دارایی ثابت و نرخ بازار جدید تا افق مقایسه بدون تغییر. کیفیت داده: خروج و ورود تخمینی.</p>
+      <p className="text-xs text-sx-faint">فرض: قیمت دلاری دارایی ثابت و نرخ بازار جدید تا افق مقایسه بدون تغییر. کیفیت داده: خروج و ورود تخمینی.</p>
     </div>
   );
 }
@@ -644,7 +644,7 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
             {e.note && <NoteText note={e.note} />}
             <button
               type="button"
-              className="self-start text-xs text-sx-faint hover:text-sx-red inline-flex items-center gap-1 transition-colors"
+              className="tap self-start text-sm text-sx-faint hover:text-sx-red inline-flex items-center gap-1 min-h-10 transition-colors"
               onClick={() => {
                 if (window.confirm('این رویداد حذف شود؟ محاسبات از نو انجام می‌شود.')) onSave({ ...p, events: p.events.filter((y) => y.id !== e.id) });
               }}
@@ -688,7 +688,7 @@ export default function PositionDetail({ id }: { id: string }) {
 
   return (
     <SxPage>
-      <Link href="/portfolio" className="text-sm text-sx-muted hover:text-sx-text flex items-center gap-1 self-start transition-colors">
+      <Link href="/portfolio" className="tap text-sm text-sx-muted hover:text-sx-text flex items-center gap-1 self-start min-h-10 transition-colors">
         <ArrowRight size={14} /> پرتفوی من
       </Link>
 
@@ -705,7 +705,7 @@ export default function PositionDetail({ id }: { id: string }) {
         <div className="flex flex-wrap items-end gap-x-12 gap-y-5">
           <div className="flex flex-col gap-1.5">
             <span className="text-sm text-sx-muted">ارزش خالص</span>
-            <span className="text-4xl lg:text-5xl font-light tracking-tight">
+            <span className="hero-num">
               <Usd x={v.netValueUsd} />
             </span>
           </div>

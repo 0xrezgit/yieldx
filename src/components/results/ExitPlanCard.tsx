@@ -13,7 +13,7 @@ import { ExitChart } from '../charts/ExitChart';
 
 const stepLook: Record<StepTone, { icon: typeof Info; cls: string }> = {
   primary: { icon: Target, cls: 'border-accent/50 bg-accent/12 text-accent' },
-  trigger: { icon: Zap, cls: 'border-brand2/40 bg-brand2/10 text-brand2' },
+  trigger: { icon: Zap, cls: 'border-accent/40 bg-accent/10 text-accent' },
   positive: { icon: CheckCircle2, cls: 'border-success/35 bg-success/10 text-success' },
   warning: { icon: TriangleAlert, cls: 'border-warning/40 bg-warning/10 text-warning' },
   info: { icon: Info, cls: 'border-strong bg-elevated/50 text-secondary' },
@@ -35,8 +35,8 @@ export function ExitPlanCard({ p, a, set }: { p: ScenarioParams; a: Analysis; se
       actions={plan.earnsPoints ? <Badge tone="accent">پوینت فعال</Badge> : <Badge tone="warning">بدون پوینت</Badge>}
     >
       {/* Headline */}
-      <div className="rounded-2xl p-px bg-linear-to-bl from-accent/60 to-brand2/40">
-        <div className="rounded-2xl bg-surface p-4 grid grid-cols-3 gap-3 text-center">
+      <div>
+        <div className="rounded-lg border border-default bg-elevated p-4 grid grid-cols-3 gap-3 text-center">
           <div className="min-w-0">
             <div className="text-xs text-muted">فروش در</div>
             <div className="font-extrabold text-primary text-lg leading-tight">{rec.day === 0 ? 'همین حالا' : dayToDate(rec.day)}</div>
@@ -49,7 +49,7 @@ export function ExitPlanCard({ p, a, set }: { p: ScenarioParams; a: Analysis; se
             <div className="font-extrabold text-st-yt text-lg leading-tight">
               <Num>{formatCompact(rec.points)}</Num>
             </div>
-            <div className="text-xs text-secondary truncate">{p.pointsName}</div>
+            <div className="text-xs text-secondary truncate">{p.pointsName || 'نام برنامه نامعلوم'}</div>
           </div>
           <div className="min-w-0">
             <div className="text-xs text-muted">نتیجه‌ی نقدی</div>
@@ -66,7 +66,7 @@ export function ExitPlanCard({ p, a, set }: { p: ScenarioParams; a: Analysis; se
         {steps.map((s, i) => {
           const { icon: Icon, cls } = stepLook[s.tone];
           return (
-            <li key={i} className={`flex gap-3 border rounded-xl px-3 py-2.5 ${cls}`}>
+            <li key={i} className={`flex gap-3 border rounded-lg px-3 py-2.5 ${cls}`}>
               <Icon size={18} className="shrink-0 mt-0.5" />
               <div className="min-w-0 text-sm">
                 <div className="font-bold">{s.title}</div>
@@ -115,7 +115,7 @@ export function ExitPlanCard({ p, a, set }: { p: ScenarioParams; a: Analysis; se
         </div>
       )}
 
-      <p className="text-xs text-muted">با فرض ثابت ماندن نرخ بازار و ۰٫۵٪ هزینه‌ی فروش. قیمت‌ها بر حسب دارایی پایه است.</p>
+      <p className="text-xs text-muted">با فرض ثابت ماندن نرخ بازار و ۰٫۵٪ هزینه‌ی فروش. قیمت YT بر حسب {p.dataMeta?.accountingSymbol ? <bdi dir="ltr">{p.dataMeta.accountingSymbol}</bdi> : 'دارایی پایه'} است؛ نتیجه‌ها به دلار آمریکا.</p>
     </Card>
   );
 }

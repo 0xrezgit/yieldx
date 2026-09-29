@@ -1,76 +1,36 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
-import { Bell, ChartPie, History, Radar, SlidersHorizontal, Wallet } from 'lucide-react';
-import { useShell, type MobileTab } from './AppShell';
-import { formatNumber } from '../../lib/utils/formatting';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { isActive, NAV } from './nav';
 
-const tabs: { id: MobileTab; label: string; icon: typeof Bell }[] = [
-  { id: 'market', label: 'بازار', icon: SlidersHorizontal },
-  { id: 'result', label: 'نتیجه', icon: ChartPie },
-  { id: 'alerts', label: 'هشدارها', icon: Bell },
-];
-
-/** Mobile / PWA tab bar. Hidden on desktop, where the header carries navigation. */
+/**
+ * Mobile / PWA bar: the five destinations, above the iPhone home indicator
+ * (safe area). Pages reserve its height (.pb-safe) so it never covers a form or
+ * a final action. Hidden on desktop, where the header carries navigation.
+ */
 export function BottomNav() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { tab, setTab, alertCount } = useShell();
-  const onDashboard = pathname === '/dashboard';
-  const onHistory = pathname.startsWith('/history');
-  const onOpps = pathname.startsWith('/opportunities');
-  const onPortfolio = pathname.startsWith('/portfolio');
-
-  const item = (active: boolean) =>
-    `relative flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-xs transition-colors ${
-      active ? 'text-primary' : 'text-muted'
-    }`;
-
   return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur-lg border-t border-default bottom-safe">
-      <div className="flex max-w-lg mx-auto">
-        {tabs.map(({ id, label, icon: Icon }) => {
-          const active = onDashboard && tab === id;
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-default bottom-safe" aria-label="ناوبری اصلی">
+      <ul className="flex max-w-lg mx-auto h-16">
+        {NAV.map(({ href, short, icon: Icon }) => {
+          const active = isActive(pathname, href);
           return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setTab(id);
-                if (!onDashboard) router.push('/dashboard');
-              }}
-              className={item(active)}
-              aria-current={active ? 'page' : undefined}
-            >
-              {active && <span className="absolute top-0 h-0.5 w-8 rounded-full brand-gradient" />}
-              <span className="relative">
-                <Icon size={22} />
-                {id === 'alerts' && alertCount > 0 && (
-                  <span className="absolute -top-1.5 -left-2 min-w-4 h-4 px-1 rounded-full bg-danger text-[10px] leading-4 text-white text-center num">
-                    {formatNumber(alertCount, 0)}
-                  </span>
-                )}
-              </span>
-              {label}
-            </button>
+            <li key={href} className="flex-1">
+              <Link
+                href={href}
+                aria-current={active ? 'page' : undefined}
+                className={`relative h-full flex flex-col items-center justify-center gap-0.5 text-xs transition-colors ${active ? 'text-primary font-semibold' : 'text-secondary'}`}
+              >
+                {active && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-accent" aria-hidden />}
+                <Icon size={22} aria-hidden className={active ? 'text-accent' : ''} />
+                {short}
+              </Link>
+            </li>
           );
         })}
-        <button type="button" onClick={() => router.push('/opportunities')} className={item(onOpps)} aria-current={onOpps ? 'page' : undefined}>
-          {onOpps && <span className="absolute top-0 h-0.5 w-8 rounded-full brand-gradient" />}
-          <Radar size={22} />
-          فرصت‌ها
-        </button>
-        <button type="button" onClick={() => router.push('/portfolio')} className={item(onPortfolio)} aria-current={onPortfolio ? 'page' : undefined}>
-          {onPortfolio && <span className="absolute top-0 h-0.5 w-8 rounded-full brand-gradient" />}
-          <Wallet size={22} />
-          پوزیشن‌ها
-        </button>
-        <button type="button" onClick={() => router.push('/history')} className={item(onHistory)} aria-current={onHistory ? 'page' : undefined}>
-          {onHistory && <span className="absolute top-0 h-0.5 w-8 rounded-full brand-gradient" />}
-          <History size={22} />
-          سناریوها
-        </button>
-      </div>
+      </ul>
     </nav>
   );
 }

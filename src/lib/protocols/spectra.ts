@@ -5,6 +5,7 @@ import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, UpstreamErr
 
 /** Subset of https://api.spectra.finance/v1/{network}/pools that YieldX uses. */
 interface SpectraToken {
+  address?: string | null;
   symbol?: string | null;
   logoURI?: string | null;
   protocol?: string | null;
@@ -55,6 +56,11 @@ function mainPool(m: SpectraMarket): SpectraPool | null {
 
 const name = (m: SpectraMarket) => m.baseIbt?.symbol || m.ibt.symbol || m.underlying.symbol || m.address;
 const icon = (m: SpectraMarket) => https(m.baseIbt?.logoURI) ?? https(m.ibt.logoURI) ?? https(m.underlying.logoURI);
+/** The token the logo shows (baseIbt → ibt → underlying, same order as the icon). */
+const assetRef = (m: SpectraMarket) => {
+  const t = m.baseIbt?.logoURI ? m.baseIbt : m.ibt.logoURI ? m.ibt : m.underlying.logoURI ? m.underlying : m.baseIbt ?? m.ibt;
+  return { symbol: t.symbol ?? null, address: t.address ?? null };
+};
 const tags = (m: SpectraMarket) => (m.tags ?? []).map((t) => (t === 'stable' ? 'stables' : t.toLowerCase()));
 
 export class SpectraAdapter extends BaseAdapter {
@@ -91,6 +97,8 @@ export class SpectraAdapter extends BaseAdapter {
               points: null,
               categories: tags(m),
               isNew: !!m.createdAt && Date.now() - m.createdAt * 1000 < NEW_WINDOW_MS,
+              asset: assetRef(m),
+              accountingSymbol: m.underlying.symbol ?? null,
             };
           })
           .filter((m): m is MarketSummary => m !== null);
@@ -132,6 +140,8 @@ export class SpectraAdapter extends BaseAdapter {
       icon: icon(m),
       chain: NETWORKS[network],
       fetchedAt: new Date().toISOString(),
+      asset: assetRef(m),
+      accountingSymbol: m.underlying.symbol ?? null,
     };
   }
 

@@ -2,17 +2,18 @@
 
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { ChevronLeft, FolderOpen, Loader2, Trash2 } from 'lucide-react';
-import protocols from '../../config/protocols.json';
+import { ChevronLeft, FlaskConical, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useScenarios } from '../../hooks/useScenarios';
 import { analyzeScenario } from '../../lib/analysis';
 import { buildInsights, buildVerdict } from '../../lib/risk/advisor';
-import { formatDate, formatPercent, formatUSD } from '../../lib/utils/formatting';
+import { formatDate, formatPercent } from '../../lib/utils/formatting';
 import { Num } from '../../components/ui/num';
-import { TokenLogo } from '../../components/ui/token-logo';
+import { AssetIdentity } from '../../components/ui/asset-identity';
+import { button, EmptyState, FinancialNumber } from '../../components/ui/financial';
 
 const dot = { go: 'bg-success', caution: 'bg-warning', stop: 'bg-danger' } as const;
 
+/** Saved what-if analyses — clearly apart from real, recorded positions (پرتفوی من). */
 export default function HistoryPage() {
   const { items, loading, remove } = useScenarios();
   const rows = useMemo(
@@ -25,72 +26,75 @@ export default function HistoryPage() {
   );
 
   return (
-    <main className="max-w-matrix mx-auto px-4 lg:px-6 py-5 flex flex-col gap-4">
-      <h1 className="text-3xl lg:text-4xl font-medium tracking-tight text-primary">سناریوها</h1>
+    <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="page-title">سناریوها</h1>
+          <p className="text-sm text-secondary max-w-2xl">
+            تحلیل‌های «چه می‌شد اگر» که ذخیره کرده‌اید. سناریو معامله‌ی واقعی نیست؛ خریدهای واقعی در{' '}
+            <Link href="/portfolio" className="text-accent underline underline-offset-4">
+              پرتفوی من
+            </Link>{' '}
+            ثبت می‌شوند.
+          </p>
+        </div>
+        {rows.length > 0 && (
+          <Link href="/dashboard" className={button.primary}>
+            <Plus size={16} aria-hidden /> سناریوی جدید
+          </Link>
+        )}
+      </header>
 
-      {loading && <Loader2 className="animate-spin text-secondary mx-auto my-10" />}
+      {loading && <Loader2 className="animate-spin text-secondary mx-auto my-10" aria-label="در حال بارگذاری" />}
 
       {!loading && rows.length === 0 && (
-        <div className="flex flex-col items-center gap-3 text-center bg-surface/80 border border-default rounded-2xl p-10">
-          <FolderOpen size={36} className="text-muted" />
-          <p className="text-secondary">هنوز سناریویی ذخیره نکرده‌اید.</p>
-          <Link href="/dashboard" className="rounded-xl px-4 py-2 text-white brand-gradient">
-            رفتن به داشبورد
-          </Link>
-        </div>
+        <EmptyState
+          icon={<FlaskConical size={24} aria-hidden />}
+          title="هنوز سناریویی ندارید"
+          action={
+            <Link href="/dashboard" className={button.primary}>
+              <Plus size={16} aria-hidden /> ساخت اولین سناریو
+            </Link>
+          }
+        >
+          در «تحلیل بازار» یک بازار و سرمایه انتخاب کنید و نتیجه را با نامی ذخیره کنید تا بعداً با تاریخ روز دوباره تحلیل شود.
+        </EmptyState>
       )}
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {rows.map(({ s, a, verdict }) => (
-          <div key={s.id} className="bg-surface/80 border border-default rounded-2xl p-4 flex flex-col gap-3">
+          <li key={s.id} className="rounded-lg border border-dashed border-strong bg-surface p-4 flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
-              <Link href={`/history/${encodeURIComponent(s.id)}`} className="min-w-0 flex-1 group flex items-center gap-3">
-                <TokenLogo src={s.data.marketIcon} name={s.data.marketName || s.name} size={40} />
-                <span className="min-w-0">
-                  <span className="block font-bold text-primary truncate group-hover:text-accent">{s.name}</span>
-                  <span className="block text-xs text-muted truncate">
-                    {protocols[s.data.protocol]?.name ?? s.data.protocol}
-                    {s.data.chain ? ` · ${s.data.chain}` : ''} · {formatDate(s.updatedAt)}
-                  </span>
+              <Link href={`/history/${encodeURIComponent(s.id)}`} className="min-w-0 flex-1 flex flex-col gap-2 group">
+                <span className="inline-flex items-center gap-1.5 text-xs text-info">
+                  <FlaskConical size={13} aria-hidden /> سناریوی فرضی
                 </span>
+                <span className="font-semibold text-primary truncate group-hover:text-accent">{s.name}</span>
+                {s.data.marketName && <AssetIdentity symbol={s.data.marketName} icon={s.data.marketIcon} chain={s.data.chain} protocol={s.data.protocol} maturity={s.data.maturity} size={24} />}
               </Link>
-              {new Date(s.data.maturity).getTime() <= Date.now() && (
-                <span className="shrink-0 rounded-full bg-danger/15 text-danger text-[11px] px-2 py-0.5">منقضی</span>
-              )}
-              <button
-                type="button"
-                onClick={() => confirm(`«${s.name}» حذف شود؟`) && remove(s.id)}
-                className="p-1.5 text-muted hover:text-danger"
-                aria-label="حذف"
-              >
-                <Trash2 size={16} />
+              <button type="button" onClick={() => confirm(`«${s.name}» حذف شود؟`) && remove(s.id)} className="tap grid place-items-center size-10 rounded-lg text-secondary hover:text-danger" aria-label={`حذف سناریوی ${s.name}`}>
+                <Trash2 size={16} aria-hidden />
               </button>
             </div>
 
             <div className="flex items-center gap-2 text-sm">
-              <span className={`size-2.5 rounded-full shrink-0 ${dot[verdict.level]}`} />
+              <span className={`size-2.5 rounded-full shrink-0 ${dot[verdict.level]}`} aria-hidden />
               <span className="text-secondary truncate">{verdict.title}</span>
-              {verdict.best && (
-                <Num className={`mr-auto font-bold ${verdict.best.pnl >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {formatUSD(verdict.best.pnl, 0)}
-                </Num>
-              )}
+              {verdict.best && <FinancialNumber value={verdict.best.pnl} kind="usd" digits={0} signed tone className="mr-auto font-semibold" />}
             </div>
 
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">
-                نرخ بازار <Num className="text-primary">{formatPercent(a.implied.impliedAPY)}</Num>
+              <span className="text-secondary">
+                ذخیره {formatDate(s.updatedAt)} · نرخ بازار <Num className="text-primary">{formatPercent(a.implied.impliedAPY)}</Num>
+                {new Date(s.data.maturity).getTime() <= Date.now() && <span className="text-danger"> · سررسیدشده</span>}
               </span>
-              <Link
-                href={`/dashboard?scenario=${encodeURIComponent(s.id)}`}
-                className="flex items-center gap-1 text-accent font-medium"
-              >
-                باز کردن <ChevronLeft size={16} />
+              <Link href={`/dashboard?scenario=${encodeURIComponent(s.id)}`} className="tap flex items-center gap-1 text-accent font-semibold">
+                باز کردن <ChevronLeft size={16} aria-hidden />
               </Link>
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </main>
   );
 }

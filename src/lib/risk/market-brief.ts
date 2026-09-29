@@ -25,7 +25,13 @@ export function buildMarketBrief(p: ScenarioParams, a: Analysis): BriefLine[] {
   });
 
   const status = a.implied.status;
-  lines.push({
+  if (status === 'unknown') {
+    lines.push({
+      label: 'نرخ‌ها',
+      text: `نرخ بازار ${formatPercent(a.implied.impliedAPY)}؛ PT همین نرخ را تا سررسید قفل می‌کند. بازده پایه در API نیست، پس ارزان یا گران بودن YT معلوم نیست.`,
+      tone: 'warn',
+    });
+  } else lines.push({
     label: 'نرخ‌ها',
     text:
       `بازده فعلی ${formatPercent(p.baseAPY)}، نرخ بازار ${formatPercent(a.implied.impliedAPY)}. ` +
@@ -39,7 +45,7 @@ export function buildMarketBrief(p: ScenarioParams, a: Analysis): BriefLine[] {
     const season = p.pointsSeason !== null ? `، فصل ${formatNumber(p.pointsSeason, 0)}` : '';
     lines.push({
       label: 'پوینت',
-      text: `برنامه‌ی «${p.pointsName}» فعال است${season}: ${formatNumber(p.pointsPerDay, 4)} پوینت روزانه به ازای ${basis}، ضریب YT ${formatMultiplier(p.ytMultiplier, 0)} و LP ${formatMultiplier(p.lpMultiplier, 0)}.`,
+      text: `برنامه‌ی «${p.pointsName || 'بدون نام'}» فعال است${season}: ${formatNumber(p.pointsPerDay, 4)} پوینت روزانه به ازای ${basis}، ضریب YT ${formatMultiplier(p.ytMultiplier, 0)} و LP ${formatMultiplier(p.lpMultiplier, 0)}.`,
       tone: 'good',
     });
   } else if (p.pointsStatus === 'active') {

@@ -1,19 +1,41 @@
 import type { ReactNode } from 'react';
 import { DOLLAR } from '../../lib/utils/formatting';
 
-const WITH_UNIT = new RegExp(`^(.*)\\s(${DOLLAR})$`, 's');
+/** Persian/Arabic letters (not digits or number punctuation). */
+const WORDS = /[\u0621-\u063A\u0641-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC\u06C0]/;
+/** A signed number run with its own symbols: «−۱۲٬۳۴۵٫۶۷», «+۳٫۲۵٪», «۲×». */
+const NUMBER = /([−+-]?[۰-۹0-9][۰-۹0-9٬٫,.]*[٪%×]?)/g;
+const ISOLATES = /[\u2066-\u2069]/g;
 
 /**
- * Isolates a formatted number (LTR) inside RTL text so signs and symbols stay put.
- * A trailing «دلار» (from formatUSD) is kept outside the LTR run, so it reads
- * after the number: «۱۲٫۵ دلار».
+ * Isolates formatted numbers (LTR) inside RTL text so signs and symbols stay put.
+ * Text that also contains Persian words («۱۲٫۵ میلیون دلار», «بیش از ۱٬۰۰۰٪») stays
+ * RTL and only its numeric runs are isolated — so words never swap places. A trailing
+ * «دلار» is set a little smaller, after the number.
  */
 export function Num({ children, className = '' }: { children: ReactNode; className?: string }) {
-  const m = typeof children === 'string' ? WITH_UNIT.exec(children) : null;
-  if (m) {
+  if (typeof children === 'string' && WORDS.test(children)) {
+    const text = children.replace(ISOLATES, '');
+    const unit = text.endsWith(` ${DOLLAR}`);
+    const body = unit ? text.slice(0, -DOLLAR.length - 1) : text;
+    const parts = body.split(NUMBER);
     return (
       <span className={`num whitespace-nowrap ${className}`}>
-        <bdi dir="ltr">{m[1]}</bdi> <span className="text-[0.78em] font-light opacity-75">{m[2]}</span>
+        {parts.map((p, i) =>
+          i % 2 === 1 ? (
+            <bdi key={i} dir="ltr">
+              {p}
+            </bdi>
+          ) : (
+            p
+          ),
+        )}
+        {unit && (
+          <>
+            {' '}
+            <span className="text-[max(12px,0.8em)] font-normal text-secondary">{DOLLAR}</span>
+          </>
+        )}
       </span>
     );
   }

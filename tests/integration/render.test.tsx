@@ -19,8 +19,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => {} }),
 }));
 
+const LIVE_META = { source: 'api' as const, fetchedAt: new Date().toISOString(), sourceUpdatedAt: null, missing: [], manual: [], accountingSymbol: 'USDe', asset: null, historySource: 'none' as const };
+
 const cases: Record<string, Partial<ScenarioParams>> = {
   default: {},
+  unknownBase: { baseAPY: NaN, protocol: 'spectra', dataMeta: { ...LIVE_META, missing: ['baseAPY', 'apyHistory'] } },
+  manual: { marketId: '', manualEntry: true, dataMeta: { ...LIVE_META, source: 'manual' } },
   withHistory: { apyHistory: Array.from({ length: 40 }, (_, i) => 8 + Math.sin(i / 3) - i * 0.05) },
   invalid: { capital: 0, ptPrice: 1.5, ltv: 95 },
   outOfRange: { rangeLowerAPY: 1, rangeUpperAPY: 2, loops: 8, ltv: 84 },
@@ -32,8 +36,8 @@ const cases: Record<string, Partial<ScenarioParams>> = {
   usdBasis: { pointsBasis: 'usd', underlyingPrice: 2500, maxExitLoss: 0 },
 };
 
-function dashboard(over: Partial<ScenarioParams>): ReadyDashboard {
-  const p = { ...defaultScenario(), ...over };
+function dashboard(over: Partial<ScenarioParams>, started = true): ReadyDashboard {
+  const p = { ...defaultScenario(), ...(started ? { marketId: 'test-market', marketName: 'sUSDe', chain: 'Ethereum', dataMeta: LIVE_META } : {}), ...over };
   const analysis = analyzeScenario(p);
   const insights = buildInsights(p, analysis);
   const noop = () => {};
@@ -51,7 +55,17 @@ function dashboard(over: Partial<ScenarioParams>): ReadyDashboard {
     storageMode: 'local',
     save: { name: '', setName: noop, run: async () => {}, state: 'idle', isUpdate: false },
     reset: noop,
-  } as ReadyDashboard;
+    setProtocol: noop,
+    pickMarket: noop,
+    refresh: noop,
+    startManual: noop,
+    md: { live: true, markets: [], listState: 'ready', listStale: false, updatedAt: Date.now(), state: 'ready', error: null, last: null, load: async () => null },
+    carry: false,
+    setCarry: noop,
+    focus: 'auto',
+    setFocus: noop,
+    fromScenario: false,
+  } as unknown as ReadyDashboard;
 }
 
 function shell(tab: MobileTab) {
@@ -77,7 +91,7 @@ describe('dashboard layouts render', () => {
           <WebDashboard d={dashboard(over)} />
         </ShellContext.Provider>,
       );
-      expect(html).toContain('استراتژی‌ها');
+      expect(html).toContain('نتیجه‌ی نقدی تخمینی تا سررسید');
       expect(html).toContain('درباره‌ی این بازار');
       assertClean(html);
     });
@@ -94,7 +108,21 @@ describe('dashboard layouts render', () => {
     }
   }
 
-  it('renders the app chrome with a badge on the alerts tab', () => {
+  it('shows a start state, not a sample result, before a market is chosen', () => {
+    for (const Layout of [WebDashboard, MobileDashboard]) {
+      const html = renderToString(
+        <ShellContext.Provider value={shell('result')}>
+          <Layout d={dashboard({}, false)} />
+        </ShellContext.Provider>,
+      );
+      expect(html).toContain('یک بازار انتخاب کنید');
+      expect(html).not.toContain('نتیجه‌ی نقدی تخمینی تا سررسید');
+      expect(html).not.toContain('پیشنهاد:');
+      assertClean(html);
+    }
+  });
+
+  it('renders the app chrome: five destinations, «تحلیل بازار» on /dashboard', () => {
     const html = renderToString(
       <ShellContext.Provider value={shell('result')}>
         <AppHeader />
@@ -102,7 +130,9 @@ describe('dashboard layouts render', () => {
       </ShellContext.Provider>,
     );
     expect(html).toContain('نصب اپ');
-    expect(html).toContain('هشدارها');
-    expect(html).toContain('۳');
+    expect(html).toContain('تحلیل بازار');
+    expect(html).toContain('href="/dashboard"');
+    expect((html.match(/<li/g) ?? []).length).toBe(5);
+    expect(html).toContain('aria-current="page"');
   });
 });

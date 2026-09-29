@@ -19,6 +19,15 @@ interface PendleListItem {
   impliedApy: number;
   underlyingApy?: number;
   liquidity?: { usd: number } | number;
+  underlyingAsset?: PendleToken;
+  accountingAsset?: PendleToken;
+  dataUpdatedAt?: string;
+}
+
+interface PendleToken {
+  address?: string;
+  symbol?: string;
+  price?: { usd: number };
 }
 
 interface PendlePage {
@@ -39,8 +48,13 @@ interface PendleMarket {
   underlyingApy: number;
   liquidity?: { usd: number } | number;
   tradingVolume?: { usd: number } | number;
-  accountingAsset?: { symbol?: string; price?: { usd: number } };
+  accountingAsset?: PendleToken;
+  underlyingAsset?: PendleToken;
+  dataUpdatedAt?: string;
 }
+
+const tokenRef = (t: PendleToken | undefined) => (t ? { symbol: t.symbol ?? null, address: t.address ?? null } : null);
+const isoOrNull = (x: string | undefined) => (x && Number.isFinite(new Date(x).getTime()) ? new Date(x).toISOString() : null);
 
 interface PendleHistory {
   underlyingApy: string[];
@@ -103,6 +117,9 @@ export class PendleAdapter extends BaseAdapter {
       points: null,
       categories: (m.categoryIds ?? []).map((c) => c.toLowerCase()),
       isNew: !!m.isNew,
+      asset: tokenRef(m.underlyingAsset),
+      accountingSymbol: m.accountingAsset?.symbol ?? null,
+      sourceUpdatedAt: isoOrNull(m.dataUpdatedAt),
     }));
   }
 
@@ -162,6 +179,9 @@ export class PendleAdapter extends BaseAdapter {
       icon: icon(m),
       chain: chainName(chainId),
       fetchedAt: new Date().toISOString(),
+      asset: tokenRef(m.underlyingAsset),
+      accountingSymbol: m.accountingAsset?.symbol ?? null,
+      sourceUpdatedAt: isoOrNull(m.dataUpdatedAt),
     };
   }
 

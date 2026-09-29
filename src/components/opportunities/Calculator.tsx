@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { CheckCircle2, Info, TriangleAlert, XCircle } from 'lucide-react';
+import { useCallback, useState, type ReactNode } from 'react';
+import { CheckCircle2, ChevronDown, Info, TriangleAlert, XCircle } from 'lucide-react';
 import type { PointsBasis } from '../../types/market';
 import type { ProtocolId } from '../../types/protocol';
 import thresholds from '../../config/thresholds.json';
@@ -12,7 +12,8 @@ import { defaultScreenSettings, rankingExclusions, type ScreenSettings } from '.
 import type { OpportunityListing } from '../../lib/risk/opportunities';
 import { NumberField, SelectField } from '../ui/field';
 import { Num } from '../ui/num';
-import { TokenLogo } from '../ui/token-logo';
+import { AssetIdentity } from '../ui/asset-identity';
+import { MarketPicker } from '../forms/MarketPicker';
 import { Bound, Metric, Segmented, signedPct } from './parts';
 
 export type CalcMode = 'yt' | 'pt' | 'loop';
@@ -88,17 +89,20 @@ export function CalculatorPanel({
   /** Screening rules of the boards, to explain why a picked market isn't ranked. */
   screen?: ScreenSettings;
 }) {
-  const options = markets
-    .filter((m) => !m.expired)
-    .sort((a, b) => (b.liquidity ?? 0) - (a.liquidity ?? 0))
-    .slice(0, 300);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const closePicker = useCallback(() => setPickerOpen(false), []);
+  const options = markets;
   const key = (m: OpportunityListing) => `${m.protocol}:${m.id}`;
   const current = c.protocol ? `${c.protocol}:${c.marketId}` : '';
-  const issues = dataIssues(c, markets.find((m) => key(m) === current) ?? null, screen);
+  const row = markets.find((m) => key(m) === current) ?? null;
+  const issues = dataIssues(c, row, screen);
+  // Market numbers vs. assumptions: labelled so a typed rate is never mistaken for market data.
+  const fromMarket = c.protocol ? 'از داده‌ی بازار — قابل ویرایش' : 'ورود دستی';
+  const assumption = 'فرض شما';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[22rem_minmax(0,1fr)] gap-4 items-start">
-      <section className="rounded-2xl border border-default bg-surface/80 p-4 flex flex-col gap-4 lg:sticky lg:top-22">
+      <section className="sx-card p-4 flex flex-col gap-4">
         <Segmented
           value={c.mode}
           onChange={(mode) => set({ mode })}
@@ -110,50 +114,48 @@ export function CalculatorPanel({
           ]}
         />
 
-        <div className="flex items-center gap-3">
-          {c.marketName && <TokenLogo src={c.icon} name={c.marketName} size={36} />}
-          <div className="flex-1 min-w-0">
-            <SelectField
-              label={loadingMarket ? 'در حال دریافت بازار…' : 'بازار'}
-              value={current}
-              onChange={(v) => {
-                const m = options.find((x) => key(x) === v);
-                if (m) onPick(m);
-                else set({ protocol: null, marketId: '', marketName: '', icon: null });
-              }}
-              options={[
-                { value: '', label: 'دستی' },
-                ...(current && !options.some((m) => key(m) === current) ? [{ value: current, label: c.marketName }] : []),
-                ...options.map((m) => ({ value: key(m), label: `${m.name} · ${m.chain} · ${formatPercent(m.impliedAPY, 1)}` })),
-              ]}
-            />
-          </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-sm text-secondary">بازار {loadingMarket && <span className="text-muted">— در حال دریافت…</span>}</span>
+          <button type="button" onClick={() => setPickerOpen(true)} aria-haspopup="dialog" className="w-full flex items-center gap-3 rounded-lg border border-control bg-elevated px-3 min-h-14 text-right">
+            {c.marketName && c.protocol ? (
+              <AssetIdentity symbol={c.marketName} icon={c.icon} chain={row?.chain ?? ''} protocol={c.protocol} maturity={row?.maturity} size={32} className="flex-1" />
+            ) : (
+              <span className="flex-1 text-secondary">انتخاب بازار — یا ورود دستی مقادیر</span>
+            )}
+            <ChevronDown size={18} className="text-muted shrink-0" aria-hidden />
+          </button>
+          {c.protocol && (
+            <button type="button" className="tap self-start text-sm text-accent underline underline-offset-4" onClick={() => set({ protocol: null, marketId: '', marketName: '', icon: null })}>
+              ورود دستی (بدون بازار)
+            </button>
+          )}
+          <MarketPicker open={pickerOpen} onClose={closePicker} markets={options} loading={!markets.length} selectedId={c.marketId} onSelect={(m) => onPick(m as OpportunityListing)} title="انتخاب بازار از همه‌ی پروتکل‌ها" updatedAt={null} showProtocol />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <NumberField label="سرمایه" value={c.capital} onChange={(v) => set({ capital: v })} suffix="دلار" />
-          <NumberField label="روز تا سررسید" value={c.days} onChange={(v) => set({ days: v })} />
-          <NumberField label="نرخ ورود (Implied)" value={c.entryAPY} onChange={(v) => set({ entryAPY: v })} suffix="%" />
-          {c.mode === 'yt' && <NumberField label="بازده پایه" value={c.baseAPY} onChange={(v) => set({ baseAPY: v })} suffix="%" />}
+          <NumberField label="روز تا سررسید" value={c.days} onChange={(v) => set({ days: v })} note={fromMarket} />
+          <NumberField label="نرخ ورود (Implied)" value={c.entryAPY} onChange={(v) => set({ entryAPY: v })} suffix="%" note={fromMarket} />
+          {c.mode === 'yt' && <NumberField label="بازده پایه" value={c.baseAPY} onChange={(v) => set({ baseAPY: v })} suffix="%" note={fromMarket} />}
           {c.mode !== 'loop' && (
             <>
-              <NumberField label="روز نگه‌داری" value={c.holdDays} onChange={(v) => set({ holdDays: v })} hint="برابر روز تا سررسید = نگه‌داری کامل" />
-              <NumberField label="نرخ روز فروش" value={c.exitAPY} onChange={(v) => set({ exitAPY: v })} suffix="%" />
+              <NumberField label="روز نگه‌داری" value={c.holdDays} onChange={(v) => set({ holdDays: v })} help="برابر روز تا سررسید = نگه‌داری کامل." note={assumption} />
+              <NumberField label="نرخ روز فروش" value={c.exitAPY} onChange={(v) => set({ exitAPY: v })} suffix="%" note={assumption} help="نرخ Implied بازار در روزی که می‌فروشید — یک فرض، نه داده." />
             </>
           )}
           {c.mode === 'loop' && (
             <>
-              <NumberField label="اهرم" value={c.leverage} onChange={(v) => set({ leverage: v })} suffix="×" />
-              <NumberField label="بهره‌ی وام" value={c.borrowAPY} onChange={(v) => set({ borrowAPY: v })} suffix="%" />
-              <NumberField label="LLTV" value={c.lltv} onChange={(v) => set({ lltv: v })} suffix="%" />
+              <NumberField label="اهرم" value={c.leverage} onChange={(v) => set({ leverage: v })} suffix="×" note={assumption} />
+              <NumberField label="بهره‌ی وام" value={c.borrowAPY} onChange={(v) => set({ borrowAPY: v })} suffix="%" note={assumption} />
+              <NumberField label="LLTV" value={c.lltv} onChange={(v) => set({ lltv: v })} suffix="%" note={assumption} help="آستانه‌ی لیکوئید بازار وام‌دهی." />
             </>
           )}
-          <NumberField label="کارمزد هر معامله" value={c.fee} onChange={(v) => set({ fee: v })} suffix="%" />
+          <NumberField label="کارمزد هر معامله" value={c.fee} onChange={(v) => set({ fee: v })} suffix="%" note={assumption} />
         </div>
 
         {c.mode === 'yt' && (
           <details className="group rounded-xl border border-default" open>
-            <summary className="px-3 py-2 text-sm font-bold text-primary">پوینت و ایردراپ</summary>
+            <summary className="tap px-3 min-h-11 flex items-center text-sm font-semibold text-primary">پوینت و ایردراپ — فرضی</summary>
             <div className="grid grid-cols-2 gap-3 p-3 pt-0">
               <NumberField label="پوینت روزانه" value={c.pointsPerDay} onChange={(v) => set({ pointsPerDay: v })} />
               <SelectField
@@ -167,7 +169,7 @@ export function CalculatorPanel({
               />
               <NumberField label="ضریب YT" value={c.ytMultiplier} onChange={(v) => set({ ytMultiplier: v })} suffix="×" />
               <NumberField label="قیمت دارایی" value={c.underlyingPrice} onChange={(v) => set({ underlyingPrice: v })} suffix="دلار" />
-              <NumberField label="ارزش هر ۱M پوینت" value={c.valuePerMillion} onChange={(v) => set({ valuePerMillion: v })} suffix="دلار" />
+              <NumberField label="ارزش هر ۱M پوینت" value={c.valuePerMillion} onChange={(v) => set({ valuePerMillion: v })} suffix="دلار" note="فرض ایردراپ" />
               <NumberField label="سقف ضرر" value={c.lossBudget} onChange={(v) => set({ lossBudget: v })} suffix="%" />
             </div>
           </details>
@@ -176,7 +178,7 @@ export function CalculatorPanel({
 
       <div className="flex flex-col gap-4 min-w-0">
         <DataWarnings {...issues} />
-        <div className={`flex flex-col gap-4 ${issues.unreliable ? 'opacity-50' : ''}`}>
+        <div className={`flex flex-col gap-4 ${issues.unreliable ? 'rounded-lg border border-dashed border-danger/60 p-3' : ''}`} aria-describedby={issues.unreliable ? 'calc-unreliable' : undefined}>
           {c.mode === 'yt' && <YtResult c={c} unreliable={issues.unreliable} />}
           {c.mode === 'pt' && <PtResult c={c} unreliable={issues.unreliable} />}
           {c.mode === 'loop' && <LoopResult c={c} unreliable={issues.unreliable} />}
@@ -247,7 +249,7 @@ function DataWarnings({ items, unreliable }: ReturnType<typeof dataIssues>) {
         </Verdict>
       ))}
       {unreliable && (
-        <p className="text-sm text-secondary">
+        <p id="calc-unreliable" className="text-sm text-secondary">
           اعداد زیر فقط حاصل ریاضی همین ورودی‌ها هستند و به‌خاطر مشکل بالا <b className="text-danger">قابل اتکا نیستند</b>؛ جمع‌بندی سبز/زرد نمایش داده نمی‌شود.
         </p>
       )}
@@ -257,12 +259,12 @@ function DataWarnings({ items, unreliable }: ReturnType<typeof dataIssues>) {
 
 function Headline({ items }: { items: { label: string; value: ReactNode; hint?: ReactNode; tone?: string }[] }) {
   return (
-    <div className="rounded-2xl p-px bg-linear-to-bl from-accent/60 to-brand2/40">
-      <div className="rounded-2xl bg-surface p-4 grid gap-3 text-center" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+    <div>
+      <div className="rounded-lg border border-default bg-surface p-4 grid gap-3 text-center" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((i, k) => (
           <div key={i.label} className={`min-w-0 ${k ? 'border-r border-default' : ''}`}>
             <div className="text-xs text-muted">{i.label}</div>
-            <div className={`font-extrabold text-lg leading-tight ${i.tone ?? 'text-primary'}`}>{i.value}</div>
+            <div className={`font-semibold text-lg leading-tight ${i.tone ?? 'text-primary'}`}>{i.value}</div>
             {i.hint && <div className="text-xs text-secondary">{i.hint}</div>}
           </div>
         ))}
@@ -285,7 +287,7 @@ function Verdict({ kind, children }: { kind: 'good' | 'ok' | 'bad' | 'info'; chi
   }[kind];
   const Icon = look.icon;
   return (
-    <div className={`flex gap-3 border rounded-xl px-3 py-2.5 text-sm ${look.cls}`}>
+    <div className={`flex gap-3 border rounded-lg px-3 py-2.5 text-sm ${look.cls}`}>
       <Icon size={18} className="shrink-0 mt-0.5" />
       <div className="text-primary">{children}</div>
     </div>
@@ -294,7 +296,7 @@ function Verdict({ kind, children }: { kind: 'good' | 'ok' | 'bad' | 'info'; chi
 
 function Details({ rows }: { rows: [string, ReactNode][] }) {
   return (
-    <dl className="rounded-2xl border border-default bg-surface/80 divide-y divide-default text-sm">
+    <dl className="rounded-lg border border-default bg-surface divide-y divide-default text-sm">
       {rows.map(([k, v]) => (
         <div key={k} className="flex items-center justify-between gap-3 px-4 py-2.5">
           <dt className="text-secondary">{k}</dt>
@@ -307,14 +309,15 @@ function Details({ rows }: { rows: [string, ReactNode][] }) {
 
 function Table({ title, head, rows, highlight }: { title: string; head: string[]; rows: ReactNode[][]; highlight?: number }) {
   return (
-    <section className="rounded-2xl border border-default bg-surface/80 p-4 flex flex-col gap-2">
-      <h3 className="text-sm font-bold text-primary">{title}</h3>
+    <section className="rounded-lg border border-default bg-surface p-4 flex flex-col gap-2">
+      <h3 className="text-sm font-semibold text-primary">{title}</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
+          <caption className="sr-only">{title}</caption>
           <thead>
             <tr className="text-xs text-muted">
               {head.map((h) => (
-                <th key={h} className="text-right font-normal py-1.5 px-2">
+                <th key={h} scope="col" className="text-right font-normal py-1.5 px-2">
                   {h}
                 </th>
               ))}
@@ -402,7 +405,7 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
         items={[
           { label: 'نتیجه‌ی نقدی', value: <Num>{money(t.cash)}</Num>, hint: <Num>{signedPct(t.cashPercent)}</Num>, tone: tone(t.cash) },
           { label: 'پوینت', value: <Num>{formatCompact(t.points)}</Num>, hint: <>در <Num>{formatNumber(t.heldDays, 0)}</Num> روز</>, tone: 'text-st-yt' },
-          { label: 'با ایردراپ', value: <Num>{money(t.total)}</Num>, hint: c.valuePerMillion > 0 ? 'با ارزش فرضی' : 'ارزش پوینت = ۰', tone: tone(t.total) },
+          { label: 'با ایردراپ فرضی', value: <Num>{money(t.total)}</Num>, hint: c.valuePerMillion > 0 ? 'سناریو، نه نتیجه‌ی نقدی' : 'ارزش پوینت = ۰', tone: 'text-secondary' },
         ]}
       />
       <ResultVerdict off={unreliable} kind={kind}>{verdict}</ResultVerdict>
@@ -418,8 +421,8 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
             <Bound label="Implied" op="≤" x={limits.budget} />
           </Metric>
         </div>
-        <div className="rounded-xl bg-brand2/8 border border-brand2/25 px-3 py-2.5">
-          <Metric label={early ? `فروش بی‌ضرر روز ${formatNumber(t.heldDays, 0)}` : 'تا سررسید'} tone="text-brand2" hint={early ? 'نرخ بازار در روز فروش' : undefined}>
+        <div className="rounded-xl bg-accent/8 border border-accent/30 px-3 py-2.5">
+          <Metric label={early ? `فروش بی‌ضرر روز ${formatNumber(t.heldDays, 0)}` : 'تا سررسید'} tone="text-accent" hint={early ? 'نرخ بازار در روز فروش' : undefined}>
             {early ? <Bound label="Implied" op="≥" x={t.breakEvenExitAPY} /> : t.cash >= 0 ? 'بی‌ضرر' : 'زیان‌ده'}
           </Metric>
         </div>
@@ -440,7 +443,7 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
 
       <Table
         title={early ? 'اگر نرخ بازار در روز فروش فرق کند' : 'اگر بازده پایه فرق کند'}
-        head={[early ? 'نرخ روز فروش' : 'بازده پایه', 'نقدی', 'درصد', 'با ایردراپ']}
+        head={[early ? 'نرخ روز فروش' : 'بازده پایه', 'نقدی', 'درصد', 'با ایردراپ فرضی']}
         highlight={2}
         rows={scen.map(({ v, r }) => [
           <Num key="v">{formatPercent(v, 2)}</Num>,

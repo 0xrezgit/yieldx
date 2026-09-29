@@ -114,3 +114,14 @@ describe('buckets', () => {
     expect(b.leastProfit[0].m.id).toBe('slow');
   });
 });
+
+describe('bucket size', () => {
+  it('lists up to 15 markets per bucket by default', () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({ m: { id: String(i), protocol: 'pendle' }, pnl: i - 20, perDay: i - 20 }) as unknown as LeaderRow);
+    const b = buckets(many);
+    expect(b.topProfit).toHaveLength(15);
+    expect(b.topLoss).toHaveLength(15);
+    expect(b.leastProfit).toHaveLength(5);
+    expect(b.leastLoss).toHaveLength(5);
+  });
+});

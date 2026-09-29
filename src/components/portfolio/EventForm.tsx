@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { Fee, FeeKind, PositionEvent, PositionEventType, RateSource, TokenAmount } from '../../types/position';
 import { EVENT_FA, FEE_FA, RATE_FA } from '../../lib/portfolio/labels';
@@ -62,6 +62,20 @@ const LABELS: Record<PositionEventType, { cash: string; units?: string }> = {
   repay: { cash: 'مقدار بازپرداخت' },
 };
 
+export type DraftField = 'at' | 'units' | 'amount' | 'token' | 'fees';
+
+/** Per-field errors, each saying how to fix it; empty when the draft is valid. */
+export function validateDraftFields(d: Draft): Partial<Record<DraftField, string>> {
+  const e: Partial<Record<DraftField, string>> = {};
+  if (!d.at) e.at = 'تاریخ و ساعت تراکنش را وارد کنید.';
+  else if (new Date(d.at).getTime() > Date.now() + 5 * 60_000) e.at = 'تاریخ رویداد نمی‌تواند در آینده باشد؛ زمان واقعی تراکنش را وارد کنید.';
+  if (usesUnits(d.type) && !(d.units > 0)) e.units = 'تعداد توکن باید بیشتر از صفر باشد؛ عدد را از جزئیات تراکنش بخوانید.';
+  if (!(d.cash.amount >= 0) || (d.type !== 'claim_reward' && !(d.cash.amount > 0))) e.amount = 'مبلغ باید بیشتر از صفر باشد.';
+  if (!d.cash.token.trim()) e.token = 'ارز را انتخاب کنید یا نماد آن را بنویسید.';
+  if (d.fees.some((f) => !(f.amount >= 0) || !f.token.trim())) e.fees = 'برای هر کارمزد مقدار و ارز را کامل کنید، یا آن را حذف کنید.';
+  return e;
+}
+
 export function validateDraft(d: Draft): string | null {
   if (!d.at) return 'تاریخ و ساعت را وارد کنید.';
   if (new Date(d.at).getTime() > Date.now() + 5 * 60_000) return 'تاریخ رویداد نمی‌تواند در آینده باشد.';
@@ -110,7 +124,7 @@ function RateInput({ label, symbol, at, value, source, onChange, fallback }: { l
   return (
     <div className="flex flex-col gap-1">
       <NumberField persian label={label} value={value} onChange={(v) => onChange(v, 'manual')} suffix="دلار" hint="نرخ دلاری در زمان همان رویداد" />
-      <div className="flex items-center justify-between gap-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2 text-xs">
         <span className={source === 'market' || source === 'historical' ? 'text-sx-green' : Number.isFinite(value) ? 'text-sx-blue' : 'text-sx-orange'}>
           {Number.isFinite(value) ? RATE_FA[source] : 'نرخ نامعلوم — دستی وارد کنید'}
           {price && source === 'historical' && <> ({formatDateTime(price.at)})</>}
@@ -142,88 +156,130 @@ interface Props {
   /** Chain of the market — decides which tokens are offered. */
   chain: string;
   marketIcon?: string | null;
+  /** Show every error (after a submit attempt), not only for touched fields. */
+  showErrors?: boolean;
 }
 
-export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, types, chain, marketIcon }: Props) {
+function Group({ n, title, note, children }: { n?: number; title: string; note?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="min-w-0 border-t border-sx-border pt-4 first:border-t-0 first:pt-0">
+    <fieldset className="flex flex-col gap-3 min-w-0">
+      <legend className="text-[15px] font-semibold text-sx-text mb-3 flex items-center gap-2">
+        {n !== undefined && <span className="grid place-items-center size-6 rounded-full bg-sx-accent/15 text-sx-accent text-xs num">{formatNumber(n, 0)}</span>}
+        {title}
+      </legend>
+      {note && <p className="text-xs leading-5 text-sx-faint -mt-1">{note}</p>}
+      {children}
+    </fieldset>
+    </div>
+  );
+}
+
+function FieldError({ msg }: { msg?: string }) {
+  return msg ? (
+    <p role="alert" className="text-xs text-sx-red leading-5">
+      {msg}
+    </p>
+  ) : null;
+}
+
+export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, types, chain, marketIcon, showErrors = false }: Props) {
   const set = (p: Partial<Draft>) => onChange((x) => ({ ...x, ...p }));
+  const [touched, setTouched] = useState<Partial<Record<DraftField, boolean>>>({});
+  const touch = (f: DraftField) => setTouched((t) => (t[f] ? t : { ...t, [f]: true }));
+  const errors = validateDraftFields(d);
+  const err = (f: DraftField) => (showErrors || touched[f] ? errors[f] : undefined);
   const recent = Date.now() - new Date(d.at).getTime() <= LIVE_RATE_WINDOW_MS;
   const live = recent && liveAssetUsd !== null && liveAssetUsd > 0 ? { usd: liveAssetUsd, label: 'نرخ فعلی بازار' } : null;
   const tokenIsAsset = !!assetSymbol && d.cash.token.trim().toLowerCase() === assetSymbol.toLowerCase();
   const labels = LABELS[d.type];
   const tokens = useMemo(() => tokensForChain(chain, { symbol: assetSymbol, icon: marketIcon }), [chain, assetSymbol, marketIcon]);
 
+  // Paying with the market's own asset: one rate serves both — no duplicate input.
+  useEffect(() => {
+    if (tokenIsAsset && d.cash.usdRate !== d.assetUsd && Number.isFinite(d.cash.usdRate ?? NaN)) onChange((x) => ({ ...x, assetUsd: x.cash.usdRate ?? NaN, assetUsdSource: x.cash.rateSource }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- follow the payment rate only
+  }, [tokenIsAsset, d.cash.usdRate, d.cash.rateSource]);
+
   const setFee = (i: number, p: Partial<Fee>) => onChange((x) => ({ ...x, fees: x.fees.map((f, j) => (j === i ? { ...f, ...p } : f)) }));
 
   return (
-    <div className="flex flex-col gap-4">
-      {types.length > 1 && (
-        <SelectField label="نوع رویداد" value={d.type} onChange={(type) => set({ type })} options={types.map((t) => ({ value: t, label: EVENT_FA[t] }))} />
-      )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="min-w-0">
-          <label className="text-sm block mb-1.5">تاریخ و ساعت</label>
-          <input
-            type="datetime-local"
-            dir="ltr"
-            value={toLocalInput(d.at)}
-            max={toLocalInput(new Date().toISOString())}
-            onChange={(e) => set({ at: fromLocalInput(e.target.value) })}
-            className="w-full px-3 py-2.5 text-base"
-          />
-          {d.at && <p className="text-[11px] text-sx-muted mt-1">{formatDateTime(d.at)}</p>}
-        </div>
-        {labels.units && <NumberField persian label={labels.units} value={d.units} onChange={(units) => set({ units })} />}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <NumberField persian label={labels.cash} value={d.cash.amount} onChange={(amount) => onChange((x) => ({ ...x, cash: { ...x.cash, amount } }))} />
-        <TokenSelect label={d.type === 'buy' ? 'رمزارز پرداختی' : 'رمزارز'} value={d.cash.token} onChange={(token) => onChange((x) => ({ ...x, cash: { ...x.cash, token } }))} tokens={tokens} />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <RateInput
-          label={`نرخ دلاری ${d.cash.token || 'رمزارز'}`}
-          symbol={d.cash.token}
-          at={d.at}
-          value={d.cash.usdRate ?? NaN}
-          source={d.cash.rateSource}
-          onChange={(usdRate, rateSource) => onChange((x) => ({ ...x, cash: { ...x.cash, usdRate, rateSource }, ...(tokenIsAsset && rateSource === 'manual' ? { assetUsd: usdRate, assetUsdSource: rateSource } : {}) }))}
-          fallback={tokenIsAsset ? live : null}
-        />
-        <RateInput
-          label={`نرخ دلاری دارایی پایه ${assetSymbol ? `(${assetSymbol})` : ''}`}
-          symbol={assetSymbol}
-          at={d.at}
-          value={d.assetUsd}
-          source={d.assetUsdSource}
-          onChange={(assetUsd, assetUsdSource) => onChange((x) => ({ ...x, assetUsd, assetUsdSource }))}
-          fallback={live}
-        />
-      </div>
-      {Number.isFinite(d.cash.amount) && Number.isFinite(d.cash.usdRate ?? NaN) && (
-        <p className="text-sm text-sx-muted rounded-md bg-sx-raised/50 px-3 py-2">
-          ارزش دلاری: <span className="text-sx-text">{formatDollar(d.cash.amount * (d.cash.usdRate ?? NaN))}</span>
-          {usesUnits(d.type) && d.units > 0 && Number.isFinite(d.assetUsd) && (
-            <>
-              {' '}
-              · قیمت مؤثر هر توکن: <Num>{formatNumber((d.cash.amount * (d.cash.usdRate ?? NaN)) / d.assetUsd / d.units, 6)}</Num> {assetSymbol || 'واحد دارایی'}
-            </>
+    <div className="flex flex-col gap-5">
+      <Group n={1} title="زمان و مقدار واقعی" note="از جزئیات همان تراکنش؛ قیمت امروز جایگزین آن نمی‌شود.">
+        {types.length > 1 && <SelectField label="نوع رویداد" value={d.type} onChange={(type) => set({ type })} options={types.map((t) => ({ value: t, label: EVENT_FA[t] }))} />}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="min-w-0" onBlur={() => touch('at')}>
+            <label className="text-sm block mb-1.5" htmlFor="event-at">
+              تاریخ و ساعت
+            </label>
+            <input id="event-at" type="datetime-local" dir="ltr" value={toLocalInput(d.at)} max={toLocalInput(new Date().toISOString())} onChange={(e) => set({ at: fromLocalInput(e.target.value) })} aria-invalid={!!err('at')} className="w-full px-3 py-2.5 text-base" />
+            {d.at && !err('at') && (
+              <p className="text-xs text-sx-muted mt-1">
+                {formatDateTime(d.at)} · <span className="text-sx-faint">زمان محلی مرورگر؛ به‌صورت UTC ذخیره می‌شود</span>
+              </p>
+            )}
+            <FieldError msg={err('at')} />
+          </div>
+          {labels.units && (
+            <div onBlur={() => touch('units')}>
+              <NumberField persian label={labels.units} value={d.units} onChange={(units) => set({ units })} error={errors.units} forceErrors={showErrors || touched.units} />
+            </div>
           )}
-        </p>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-sx-text">کارمزدها</span>
-          <button
-            type="button"
-            className="flex items-center gap-1 text-sm text-sx-accent hover:opacity-80"
-            onClick={() => onChange((x) => ({ ...x, fees: [...x.fees, { kind: 'network', amount: NaN, token: nativeToken(chain), usdRate: NaN, rateSource: 'unknown', included: false }] }))}
-          >
-            <Plus size={14} /> افزودن کارمزد
-          </button>
         </div>
+      </Group>
+
+      <Group
+        n={2}
+        title={d.type === 'buy' ? 'ارز پرداختی و نرخ تبدیل' : 'ارز و نرخ تبدیل'}
+        note={tokenIsAsset ? `با خود ${assetSymbol} پرداخت شده؛ یک نرخ هم برای مبلغ و هم برای دارایی پایه کافی است.` : 'نرخ ارز پرداختی بهای خرید را به دلار می‌سازد؛ نرخ دارایی پایه ارزش PT را در سررسید (PT = ۱ واحد دارایی پایه). این دو فقط وقتی یکی‌اند که با خود دارایی پایه پرداخت کنید.'}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div onBlur={() => touch('amount')}>
+            <NumberField persian label={labels.cash} value={d.cash.amount} onChange={(amount) => onChange((x) => ({ ...x, cash: { ...x.cash, amount } }))} error={errors.amount} forceErrors={showErrors || touched.amount} />
+          </div>
+          <div>
+            <TokenSelect label={d.type === 'buy' ? 'رمزارز پرداختی' : 'رمزارز'} value={d.cash.token} onChange={(token) => { touch('token'); onChange((x) => ({ ...x, cash: { ...x.cash, token } })); }} tokens={tokens} />
+            <FieldError msg={err('token')} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <RateInput
+            label={`نرخ دلاری ${d.cash.token || 'رمزارز'}${tokenIsAsset ? ' (= دارایی پایه)' : ''}`}
+            symbol={d.cash.token}
+            at={d.at}
+            value={d.cash.usdRate ?? NaN}
+            source={d.cash.rateSource}
+            onChange={(usdRate, rateSource) => onChange((x) => ({ ...x, cash: { ...x.cash, usdRate, rateSource }, ...(tokenIsAsset ? { assetUsd: usdRate, assetUsdSource: rateSource } : {}) }))}
+            fallback={tokenIsAsset ? live : null}
+          />
+          {!tokenIsAsset && (
+            <RateInput
+              label={`نرخ دلاری دارایی پایه ${assetSymbol ? `(${assetSymbol})` : ''}`}
+              symbol={assetSymbol}
+              at={d.at}
+              value={d.assetUsd}
+              source={d.assetUsdSource}
+              onChange={(assetUsd, assetUsdSource) => onChange((x) => ({ ...x, assetUsd, assetUsdSource }))}
+              fallback={live}
+            />
+          )}
+        </div>
+        {Number.isFinite(d.cash.amount) && Number.isFinite(d.cash.usdRate ?? NaN) && (
+          <p className="text-sm text-sx-muted rounded-md bg-sx-raised px-3 py-2">
+            ارزش دلاری: <span className="text-sx-text">{formatDollar(d.cash.amount * (d.cash.usdRate ?? NaN))}</span>
+            {usesUnits(d.type) && d.units > 0 && Number.isFinite(d.assetUsd) && (
+              <>
+                {' '}
+                · قیمت مؤثر هر توکن: <Num>{formatNumber((d.cash.amount * (d.cash.usdRate ?? NaN)) / d.assetUsd / d.units, 6)}</Num> <bdi dir="ltr">{assetSymbol || 'واحد دارایی'}</bdi>
+              </>
+            )}
+          </p>
+        )}
+      </Group>
+
+      <Group n={3} title="کارمزدها" note="کارمزدی که از مبلغ یا تعداد دریافتی کم شده را «داخل مبلغ» علامت بزنید تا دو بار کم نشود.">
         {d.fees.map((f, i) => (
-          <div key={i} className="rounded-lg border border-sx-border bg-sx-raised/30 p-4 flex flex-col gap-3">
+          <div key={i} className="rounded-lg border border-sx-border bg-sx-raised/40 p-4 flex flex-col gap-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               <SelectField<FeeKind> label="نوع" value={f.kind} onChange={(kind) => setFee(i, { kind })} options={(['network', 'trade', 'other'] as const).map((k) => ({ value: k, label: FEE_FA[k] }))} />
               <NumberField persian label="مقدار" value={f.amount} onChange={(amount) => setFee(i, { amount })} />
@@ -231,18 +287,29 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
             </div>
             <RateInput label={`نرخ دلاری ${f.token || 'رمزارز'}`} symbol={f.token} at={d.at} value={f.usdRate ?? NaN} source={f.rateSource} onChange={(usdRate, rateSource) => setFee(i, { usdRate, rateSource })} />
             <div className="flex items-center justify-between gap-2">
-              <label className="flex items-start gap-2 text-xs text-sx-muted leading-5">
-                <input type="checkbox" checked={f.included} onChange={(e) => setFee(i, { included: e.target.checked })} className="mt-0.5" />
+              <label className="flex items-start gap-2 text-sm text-sx-muted leading-6 min-h-11">
+                <input type="checkbox" checked={f.included} onChange={(e) => setFee(i, { included: e.target.checked })} className="mt-1" />
                 <span>داخل مبلغ بالا حساب شده (مثلاً کارمزد سواپی که از توکن دریافتی کم شده)؛ دوباره از سود کم نشود</span>
               </label>
-              <button type="button" aria-label="حذف کارمزد" className="p-2 rounded-md text-sx-faint hover:text-sx-red hover:bg-sx-red/10" onClick={() => onChange((x) => ({ ...x, fees: x.fees.filter((_, j) => j !== i) }))}>
-                <Trash2 size={15} />
+              <button type="button" aria-label="حذف کارمزد" className="tap grid place-items-center size-10 rounded-md text-sx-faint hover:text-sx-red hover:bg-sx-red/10" onClick={() => onChange((x) => ({ ...x, fees: x.fees.filter((_, j) => j !== i) }))}>
+                <Trash2 size={16} aria-hidden />
               </button>
             </div>
           </div>
         ))}
-      </div>
-      <TextField label="یادداشت (اختیاری)" value={d.note} onChange={(note) => set({ note })} placeholder="مثلاً هش تراکنش" />
+        <FieldError msg={showErrors ? errors.fees : undefined} />
+        <button
+          type="button"
+          className="tap self-start flex items-center gap-1 text-sm text-sx-accent hover:opacity-80 min-h-10"
+          onClick={() => onChange((x) => ({ ...x, fees: [...x.fees, { kind: 'network', amount: NaN, token: nativeToken(chain), usdRate: NaN, rateSource: 'unknown', included: false }] }))}
+        >
+          <Plus size={14} aria-hidden /> افزودن کارمزد
+        </button>
+      </Group>
+
+      <Group n={4} title="جزئیات اختیاری">
+        <TextField label="یادداشت" value={d.note} onChange={(note) => set({ note })} placeholder="مثلاً هش تراکنش یا لینک آن" />
+      </Group>
     </div>
   );
 }
@@ -250,13 +317,14 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
 /** Self-contained "add an event" form for the position page. */
 export function EventForm({ types, assetSymbol, liveAssetUsd, defaultToken, chain, marketIcon, onSubmit, onCancel }: { types: PositionEventType[]; assetSymbol: string; liveAssetUsd: number | null; defaultToken: string; chain: string; marketIcon?: string | null; onSubmit: (e: PositionEvent) => void; onCancel: () => void }) {
   const [d, setD] = useState<Draft>(() => emptyDraft(types[0], defaultToken));
+  const [tried, setTried] = useState(false);
   const error = validateDraft(d);
   return (
     <div className="flex flex-col gap-3">
-      <EventFields draft={d} onChange={setD} assetSymbol={assetSymbol} liveAssetUsd={liveAssetUsd} types={types} chain={chain} marketIcon={marketIcon} />
-      {error && <p className="text-xs text-sx-orange">{error}</p>}
+      <EventFields draft={d} onChange={setD} assetSymbol={assetSymbol} liveAssetUsd={liveAssetUsd} types={types} chain={chain} marketIcon={marketIcon} showErrors={tried} />
+      {tried && error && <p className="text-sm text-sx-red" role="alert">ثبت نشد: موارد قرمز بالا را اصلاح کنید.</p>}
       <div className="flex gap-2">
-        <button type="button" disabled={!!error} onClick={() => onSubmit(draftToEvent(d))} className={btn.primary}>
+        <button type="button" onClick={() => (error ? setTried(true) : onSubmit(draftToEvent(d)))} className={btn.primary}>
           ثبت رویداد
         </button>
         <button type="button" onClick={onCancel} className={btn.ghost}>

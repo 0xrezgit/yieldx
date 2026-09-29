@@ -5,7 +5,8 @@ import { ChevronDown, Star } from 'lucide-react';
 import type { Analysis, StrategyId, StrategySummary } from '../../lib/analysis';
 import type { Insight, Verdict } from '../../lib/risk/advisor';
 import type { ScenarioParams, ScenarioSetter } from '../../types/scenario';
-import { formatCompact, formatMultiplier, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
+import { formatCompact, formatMultiplier, formatNumber, formatPercent, formatRateCapped, formatUSD } from '../../lib/utils/formatting';
+import { CappedRate, FinancialNumber } from '../ui/financial';
 import { Badge, riskLabel, riskTone, strategyColor } from '../ui/badge';
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
@@ -62,18 +63,19 @@ function StrategyItem({
   const problems = insights.filter((i) => i.severity === 'critical' || i.severity === 'warning').length;
   return (
     <details
-      className={`group rounded-2xl border bg-surface/80 min-w-0 transition-colors ${best ? `${c.border} ${c.soft}` : 'border-default'}`}
+      className={`group rounded-lg border bg-surface min-w-0 transition-colors ${best ? 'border-accent' : 'border-default'} ${s.available ? '' : 'border-dashed'}`}
     >
-      <summary className="flex items-center gap-3 p-4">
-        <span className={`self-stretch w-1.5 rounded-full ${c.bg}`} aria-hidden />
+      <summary className="tap flex items-center gap-3 p-4">
+        <span className={`self-stretch w-1 rounded-full ${c.bg}`} aria-hidden />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-primary">{s.name}</span>
             {best && (
               <Badge tone="accent">
-                <Star size={11} /> پیشنهاد
+                <Star size={11} aria-hidden /> پیشنهاد
               </Badge>
             )}
+            {!s.available && <Badge tone="muted">فقط برای مقایسه</Badge>}
           </div>
           <div className="text-sm text-muted flex items-center gap-2 flex-wrap">
             {TAGLINE[s.id]}
@@ -81,17 +83,22 @@ function StrategyItem({
             {problems > 0 && <Badge tone="danger">{formatNumber(problems, 0)} هشدار</Badge>}
           </div>
         </div>
-        <div className="text-left shrink-0">
-          <div className={`text-lg font-extrabold ${s.pnl >= 0 ? 'text-success' : 'text-danger'}`}>
-            <Num>{formatUSD(s.pnl, 0)}</Num>
-          </div>
-          <div className="text-xs text-secondary">
-            <Num>{formatPercent(s.roi, 1, true)}</Num>
-          </div>
+        <div className="text-left shrink-0 flex flex-col items-end">
+          {Number.isFinite(s.pnl) && (s.available || s.id === 'clmm') ? (
+            <>
+              <FinancialNumber value={s.pnl} kind="usd" digits={0} signed tone className="text-lg font-semibold" />
+              <span className="text-xs text-secondary">
+                <Num>{formatPercent(s.roi, 1, true)}</Num> · نقدی
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-muted">—</span>
+          )}
         </div>
         <ChevronDown size={18} className="text-muted transition-transform group-open:rotate-180 shrink-0" />
       </summary>
       <div className="px-4 pb-4 flex flex-col gap-4">
+        {s.unavailableReason && <p className="text-sm text-warning">{s.unavailableReason}</p>}
         {insights.length > 0 && (
           <ul className="flex flex-col gap-2">
             {insights.map((i) => (
@@ -153,7 +160,7 @@ function Details({
           ['بازده تا سررسید', n(formatUSD(yt.yieldBase))],
           ['APY سربه‌سر', n(formatPercent(yt.breakEvenAPY)), yt.breakEvenAPY > p.baseAPY ? 'text-warning' : 'text-success'],
           ['پوینت', n(formatCompact(yt.points))],
-          ['ارزش ایردراپ', n(formatUSD(yt.airdropValue)), 'text-success'],
+          ['ارزش فرضی ایردراپ (سناریو)', n(formatUSD(yt.airdropValue)), 'text-secondary'],
           ['سوخت سرمایه', n(formatUSD(yt.valuation.burn)), yt.valuation.burn > 0 ? 'text-danger' : 'text-success'],
         ]}
       />
@@ -182,7 +189,9 @@ function Details({
           items={[
             ['اهرم', n(formatMultiplier(l.leverage, 2))],
             ['APY خالص', n(formatPercent(l.netAPY)), l.netAPY >= 0 ? 'text-success' : 'text-danger'],
-            ['لیکوئید در Implied', n(formatPercent(l.liquidation.liquidationImpliedAPY, 1))],
+            ['لیکوئید در Implied', <CappedRate key="liq" x={l.liquidation.liquidationImpliedAPY} />],
+          ['بدهی', n(formatUSD(l.debt, 0))],
+          ['Health Factor', n(Number.isFinite(l.liquidation.healthFactor) ? formatNumber(l.liquidation.healthFactor, 2) : '∞')],
             ['نرخ وام سربه‌سر', n(formatPercent(l.breakEvenBorrowAPY))],
           ]}
         />

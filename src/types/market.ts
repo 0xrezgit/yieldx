@@ -21,7 +21,24 @@ export interface MarketPointsProgram {
   season: number | null;
 }
 
-export interface MarketData {
+/** The token a market is built on, identified by network + address/mint (never by symbol alone). */
+export interface TokenRef {
+  symbol: string | null;
+  /** EVM contract address or Solana mint, exactly as the API gives it; null when unknown. */
+  address: string | null;
+}
+
+/** Identity and provenance fields shared by list rows and market data (all optional: older data lacks them). */
+export interface MarketIdentityFields {
+  /** Underlying token (what the icon shows). */
+  asset?: TokenRef | null;
+  /** Symbol of the unit PT redeems into / prices are quoted in. */
+  accountingSymbol?: string | null;
+  /** When the protocol itself last updated these numbers (not when we fetched them). */
+  sourceUpdatedAt?: string | null;
+}
+
+export interface MarketData extends MarketIdentityFields {
   protocol: string;
   marketId: string;
   name: string;
@@ -53,7 +70,7 @@ export interface MarketData {
 }
 
 /** One row of a protocol's market list — everything the market picker shows. */
-export interface MarketSummary {
+export interface MarketSummary extends MarketIdentityFields {
   id: string;
   name: string;
   /** Project behind the underlying. */

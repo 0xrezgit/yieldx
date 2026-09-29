@@ -13,6 +13,14 @@ const CASE_LABEL = { bear: 'بد', base: 'عادی', bull: 'خوب' } as const;
 /** What happens to a YT position if APY moves — chart plus three outcomes. */
 export function ApyOutlook({ p, a }: { p: ScenarioParams; a: Analysis }) {
   const { scenarios } = a.scenarios;
+  if (!Number.isFinite(p.baseAPY)) {
+    return (
+      <Card title="اگر APY تغییر کند" icon={<LineChart size={18} />}>
+        <p className="text-sm text-secondary">بازده پایه‌ی این بازار معلوم نیست؛ حالت‌های بد/عادی/خوب قابل محاسبه نیست.</p>
+        <ApyChart history={p.apyHistory} impliedAPY={a.implied.impliedAPY} />
+      </Card>
+    );
+  }
   return (
     <Card
       title="اگر APY تغییر کند"
@@ -25,18 +33,21 @@ export function ApyOutlook({ p, a }: { p: ScenarioParams; a: Analysis }) {
         {(['bear', 'base', 'bull'] as const).map((k) => {
           const s = scenarios[k];
           return (
-            <div key={k} className={`rounded-xl border bg-elevated/50 p-3 text-center min-w-0 ${CASE_STYLE[k]}`}>
+            <div key={k} className={`rounded-lg border bg-elevated p-3 text-center min-w-0 ${CASE_STYLE[k]}`}>
               <div className="text-xs text-muted">
                 حالت {CASE_LABEL[k]} · <Num>{formatPercent(s.apy, 1)}</Num>
               </div>
-              <div className={`font-extrabold mt-1 ${s.pnlWithAirdrop >= 0 ? 'text-success' : 'text-danger'}`}>
-                <Num>{formatUSD(s.pnlWithAirdrop, 0)}</Num>
+              <div className={`font-semibold mt-1 ${s.pnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                <Num>{formatUSD(s.pnl, 0, true)}</Num>
+              </div>
+              <div className="text-xs text-muted">
+                با ایردراپ فرضی <Num>{formatUSD(s.pnlWithAirdrop, 0, true)}</Num>
               </div>
             </div>
           );
         })}
       </div>
-      <p className="text-xs text-muted">نتیجه‌ی خرید YT با احتساب ایردراپ.</p>
+      <p className="text-xs text-muted">نتیجه‌ی نقدی خرید YT تا سررسید در سه حالت بازده پایه؛ خط دوم با ایردراپ فرضی.</p>
     </Card>
   );
 }

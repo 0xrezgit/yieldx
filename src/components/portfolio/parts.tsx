@@ -3,14 +3,13 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, Info, Minus, ShieldAlert, TrendingDown, TrendingUp } from 'lucide-react';
 import type { Position } from '../../types/position';
-import protocols from '../../config/protocols.json';
-import { chainFa, chainLogo, KIND_LABEL, protocolLogo, QUALITY_FA, QUALITY_TONE, STATUS_FA } from '../../lib/portfolio/labels';
+import { KIND_LABEL, QUALITY_FA, QUALITY_TONE, STATUS_FA } from '../../lib/portfolio/labels';
+import { AssetIdentity } from '../ui/asset-identity';
 import type { Alert } from '../../lib/portfolio/analysis';
 import type { PositionStatus, Quality } from '../../lib/portfolio/valuation';
 import { dollarNumber, formatDollar } from '../../lib/portfolio/format';
 import { EMPTY, formatDate, formatNumber, formatPercent } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
-import { TokenLogo } from '../ui/token-logo';
 
 /*
  * Building blocks of the positions section, in a Stripe-inspired dark style:
@@ -40,12 +39,12 @@ const TONE_CHIP: Record<Tone, string> = {
 
 export const btn = {
   primary:
-    'inline-flex items-center justify-center gap-2 h-10 px-5 rounded-md bg-sx-primary text-white text-sm font-normal hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed',
+    'tap inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-lg bg-sx-primary text-white text-[15px] font-semibold hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed',
   secondary:
-    'inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-sx-accent/45 text-sx-accent text-sm font-normal hover:bg-sx-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+    'tap inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-sx-accent/70 text-sx-text text-[15px] hover:bg-sx-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
   ghost:
-    'inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-md text-sx-muted text-sm hover:text-sx-text hover:bg-sx-raised transition-colors disabled:opacity-40',
-  danger: 'inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sx-red text-sm hover:bg-sx-red/10 transition-colors',
+    'tap inline-flex items-center justify-center gap-1.5 min-h-10 px-3 rounded-lg text-sx-muted text-sm hover:text-sx-text hover:bg-sx-raised transition-colors disabled:opacity-40',
+  danger: 'tap inline-flex items-center gap-1.5 min-h-10 px-3 rounded-lg text-sx-red text-sm hover:bg-sx-red/10 transition-colors',
 };
 
 export function Chip({ tone = 'muted', children }: { tone?: Tone; children: ReactNode }) {
@@ -57,7 +56,7 @@ export function Usd({ x, digits = 2, className = '' }: { x: number; digits?: num
   if (!Number.isFinite(x)) return <span className="text-sx-faint">{EMPTY}</span>;
   return (
     <span className={`whitespace-nowrap ${className}`}>
-      <Num>{dollarNumber(x, digits)}</Num> <span className="text-[0.78em] font-light text-sx-muted">دلار</span>
+      <Num>{dollarNumber(x, digits)}</Num> <span className="text-[max(12px,0.8em)] font-normal text-sx-muted">دلار</span>
     </span>
   );
 }
@@ -106,7 +105,7 @@ export function Stat({ label, children, q, hint, className = '' }: { label: stri
     <div className={`min-w-0 flex flex-col gap-1 border-t border-sx-border pt-3 ${className}`}>
       <div className="text-xs text-sx-muted flex flex-wrap items-baseline justify-between gap-x-2 leading-5">
         <span>{label}</span>
-        {q && q !== 'market' && q !== 'rule' && <span className={`text-[11px] ${TONE_TEXT[QUALITY_TONE[q]]}`}>{QUALITY_FA[q]}</span>}
+        {q && q !== 'market' && q !== 'rule' && <span className={`text-xs ${TONE_TEXT[QUALITY_TONE[q]]}`}>{QUALITY_FA[q]}</span>}
       </div>
       <div className="text-[17px] font-normal text-sx-text leading-snug min-w-0">{children}</div>
       {hint && <div className="text-xs text-sx-faint">{hint}</div>}
@@ -179,42 +178,10 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
   );
 }
 
-/** Token logo with the chain logo on its corner, plus platform and maturity. */
+/** Position identity: underlying logo + network badge, PT/YT marker, protocol · network · maturity. */
 export function MarketIdentity({ p, size = 44 }: { p: Pick<Position, 'protocol' | 'chain' | 'icon' | 'marketName' | 'platform' | 'maturity' | 'kind'>; size?: number }) {
-  return (
-    <div className="flex items-center gap-3.5 min-w-0">
-      <div className="relative shrink-0">
-        <TokenLogo src={p.icon || null} name={p.marketName} size={size} />
-        <span className="absolute -bottom-1 -left-1 rounded-full ring-2 ring-sx-surface" title={chainFa(p.chain)}>
-          <TokenLogo src={chainLogo(p.chain)} name={p.chain} size={Math.round(size * 0.42)} />
-        </span>
-      </div>
-      <div className="min-w-0 flex flex-col gap-0.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[11px] font-medium px-1.5 rounded bg-sx-accent/15 text-sx-accent shrink-0" dir="ltr">
-            {KIND_LABEL[p.kind]}
-          </span>
-          <span className="text-base font-medium text-sx-text truncate" dir="ltr">
-            {p.marketName}
-          </span>
-        </div>
-        <div className="text-xs text-sx-muted flex items-center gap-1.5 flex-wrap">
-          <TokenLogo src={protocolLogo(p.protocol)} name={protocols[p.protocol].name} size={14} />
-          <span dir="ltr">{protocols[p.protocol].name}</span>
-          <span className="text-sx-faint">·</span>
-          {chainFa(p.chain)}
-          {p.platform ? (
-            <>
-              <span className="text-sx-faint">·</span>
-              <span dir="ltr">{p.platform}</span>
-            </>
-          ) : null}
-          <span className="text-sx-faint">·</span>
-          سررسید {formatDate(p.maturity)}
-        </div>
-      </div>
-    </div>
-  );
+  const s = size >= 44 ? 48 : size >= 32 ? 32 : 24;
+  return <AssetIdentity symbol={p.marketName} icon={p.icon || null} chain={p.chain} protocol={p.protocol} platform={p.platform} maturity={p.maturity} kind={KIND_LABEL[p.kind] as 'PT' | 'YT' | 'PT Loop'} size={s} />;
 }
 
 const ALERT_ICON = { danger: ShieldAlert, warning: AlertTriangle, info: Info, success: CheckCircle2 };
@@ -244,9 +211,9 @@ export function AlertList({ alerts }: { alerts: Alert[] }) {
 
 export function NoWalletNote() {
   return (
-    <p className="text-xs text-sx-muted leading-6 flex items-start gap-2">
-      <Info size={14} className="mt-1 shrink-0 text-sx-blue" aria-hidden />
-      کیف پول متصل نیست: موجودی و رویدادها فقط بر اساس ثبت شما هستند و از روی بلاکچین تأیید نمی‌شوند. اطلاعات فقط در همین مرورگر ذخیره می‌شود؛ برای پشتیبان از «خروجی» استفاده کنید.
+    <p className="text-sm text-sx-muted leading-7 flex items-start gap-2">
+      <Info size={16} className="mt-1.5 shrink-0 text-sx-blue" aria-hidden />
+      کیف پول متصل نیست: موجودی و رویدادها فقط بر اساس ثبت شما هستند و از روی بلاکچین تأیید نمی‌شوند. اطلاعات فقط در همین مرورگر ذخیره می‌شود؛ از بخش «پشتیبان» فایل بگیرید.
     </p>
   );
 }
@@ -279,14 +246,14 @@ export function SnapshotChart({ points, label, gapMs = 3 * 86_400_000 }: { point
     d += `${i === 0 || gap ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(p.y).toFixed(1)} `;
   });
   const up = pts[pts.length - 1].y >= pts[0].y;
-  const color = up ? '#15BE53' : '#F2545B';
+  const color = up ? 'var(--c-success)' : 'var(--c-danger)';
   return (
     <figure className="flex flex-col gap-2">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-44" role="img" aria-label={label} preserveAspectRatio="none">
         {[0.25, 0.5, 0.75].map((f) => (
-          <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="#32323A" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+          <line key={f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="var(--c-border)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
         ))}
-        {lo < 0 && hi > 0 && <line x1="0" x2={W} y1={y(0)} y2={y(0)} stroke="#6F6E7A" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />}
+        {lo < 0 && hi > 0 && <line x1="0" x2={W} y1={y(0)} y2={y(0)} stroke="var(--c-secondary)" strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />}
         <path d={d} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
         {pts.length <= 60 && pts.map((p, i) => <circle key={i} cx={x(p.t)} cy={y(p.y)} r="2.5" fill={color} />)}
       </svg>
@@ -314,7 +281,7 @@ export function ShareBars({ slices, name }: { slices: { key: string; share: numb
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-sx-raised overflow-hidden" dir="ltr">
-            <div className={`h-full rounded-full ${s.share >= 50 ? 'bg-sx-orange' : 'bg-gradient-to-r from-sx-primary to-sx-accent'}`} style={{ width: `${Math.max(2, s.share)}%` }} />
+            <div className={`h-full rounded-full ${s.share >= 50 ? 'bg-sx-orange' : 'bg-sx-accent'}`} style={{ width: `${Math.max(2, s.share)}%` }} />
           </div>
         </li>
       ))}
@@ -324,5 +291,5 @@ export function ShareBars({ slices, name }: { slices: { key: string; share: numb
 
 /** Page wrapper for the section: scoped theme, generous spacing. */
 export function SxPage({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
-  return <main className={`sx w-full min-w-0 ${narrow ? 'max-w-3xl' : 'max-w-6xl'} mx-auto px-4 lg:px-8 py-6 lg:py-10 flex flex-col gap-6 text-sx-text`}>{children}</main>;
+  return <main className={`sx w-full min-w-0 ${narrow ? 'max-w-3xl' : 'max-w-matrix'} mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-6 text-sx-text`}>{children}</main>;
 }

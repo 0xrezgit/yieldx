@@ -1,21 +1,43 @@
+'use client';
+
+import { useCallback, useState } from 'react';
 import type { ExitPlan } from '../../lib/calculators/exit-plan';
-import { formatCompact } from '../../lib/utils/formatting';
+import { DAY_MS } from '../../lib/utils/math';
+import { formatCompact, formatDate, formatUSD, MINUS } from '../../lib/utils/formatting';
+import { C, LegendItem, Tip, useHover } from './chart-kit';
 
-/** Axis label: compact signed number (the unit, dollars, is in the legend). */
-const axis = (x: number) => `${x < 0 ? '−' : ''}${formatCompact(Math.abs(x))}`;
+/** Axis label: compact signed dollars (the unit is in the legend). */
+const axis = (x: number) => `${x < 0 ? MINUS : ''}${formatCompact(Math.abs(x))}`;
 
-const W = 600;
-const H = 200;
-const PAD = { top: 16, right: 56, bottom: 22, left: 8 };
+const W = 640;
+const H = 220;
+const PAD = { top: 18, right: 60, bottom: 26, left: 8 };
+
+type Mode = 'cash' | 'total';
 
 /**
- * Result of selling YT on each day until maturity: cash only (amber) and with the
- * airdrop (green). The red band is the accepted loss; markers show the plan.
- * Time runs left→right.
+ * Result of selling YT on each day until maturity. The cash result and the result
+ * including the hypothetical airdrop are shown one at a time (toggle), each on its
+ * own scale, so a large assumed airdrop can never flatten a real cash loss.
+ * Zero line and loss area are drawn; time runs left → right.
  */
-export function ExitChart({ plan, days }: { plan: ExitPlan; days: number }) {
+export function ExitChart({ plan, days, now = Date.now() }: { plan: ExitPlan; days: number; now?: number }) {
+  const [mode, setMode] = useState<Mode>('cash');
   const s = plan.series;
-  const values = [...s.map((x) => x.cash), ...s.map((x) => x.total), 0, -plan.lossBudget];
+  const toIndex = useCallback(
+    (px: number) => {
+      const day = ((px - PAD.left) / (W - PAD.left - PAD.right)) * Math.max(1, days);
+      let best = 0;
+      for (let k = 1; k < s.length; k++) if (Math.abs(s[k].day - day) < Math.abs(s[best].day - day)) best = k;
+      return best;
+    },
+    [s, days],
+  );
+  const hover = useHover(W, toIndex);
+  if (!s.length) return null;
+
+  const key = mode;
+  const values = [...s.map((p) => p[key]), 0, -plan.lossBudget];
   let lo = Math.min(...values);
   let hi = Math.max(...values);
   if (hi - lo < 1) {
@@ -25,61 +47,71 @@ export function ExitChart({ plan, days }: { plan: ExitPlan; days: number }) {
   const pad = (hi - lo) * 0.1;
   const yMin = lo - pad;
   const yMax = hi + pad;
-
   const x = (d: number) => PAD.left + (d / Math.max(1, days)) * (W - PAD.left - PAD.right);
   const y = (v: number) => PAD.top + (1 - (v - yMin) / (yMax - yMin)) * (H - PAD.top - PAD.bottom);
-  const path = (key: 'cash' | 'total') => s.map((p, i) => `${i ? 'L' : 'M'}${x(p.day).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
-
-  const marker = (day: number, color: string, dashed = false) => (
-    <line x1={x(day)} x2={x(day)} y1={PAD.top} y2={H - PAD.bottom} stroke={color} strokeWidth={2} strokeDasharray={dashed ? '4 4' : undefined} />
-  );
+  const path = s.map((p, i) => `${i ? 'L' : 'M'}${x(p.day).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ');
+  const color = mode === 'cash' ? C.warning : C.success;
+  const dateAt = (day: number) => formatDate(new Date(now + day * DAY_MS).toISOString());
+  const rec = plan.recommended;
+  const minCash = Math.min(...s.map((p) => p.cash));
+  const summary = `اگر YT را در روزهای مختلف تا سررسید بفروشید، نتیجه‌ی نقدی بین ${formatUSD(minCash, 0)} و ${formatUSD(Math.max(...s.map((p) => p.cash)), 0)} است. فروش پیشنهادی در ${dateAt(rec.day)} با نتیجه‌ی نقدی ${formatUSD(rec.cash, 0)}.`;
 
   return (
-    <div dir="ltr">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="نتیجه‌ی فروش YT در هر روز تا سررسید">
-        {/* Accepted-loss band */}
-        <rect x={PAD.left} width={W - PAD.left - PAD.right} y={y(0)} height={Math.max(0, y(-plan.lossBudget) - y(0))} fill="#F2545B" opacity={0.1} />
-        <line x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} stroke="#45455A" />
-        <text x={W - PAD.right + 6} y={y(0) + 4} fontSize={12} fill="#85848F">
-          ۰
-        </text>
-        <text x={W - PAD.right + 6} y={y(hi) + 4} fontSize={12} fill="#85848F">
-          {axis(hi)}
-        </text>
-        <text x={W - PAD.right + 6} y={y(lo) + 4} fontSize={12} fill="#85848F">
-          {axis(lo)}
-        </text>
-
-        {plan.horizon < days && marker(plan.horizon, '#4285F4', true)}
-        {plan.bestTotal.day !== plan.recommended.day && marker(plan.bestTotal.day, '#15BE53', true)}
-        {marker(plan.recommended.day, '#7662FD')}
-
-        <path d={path('total')} fill="none" stroke="#15BE53" strokeWidth={2.5} strokeLinejoin="round" />
-        <path d={path('cash')} fill="none" stroke="#FF6201" strokeWidth={2.5} strokeLinejoin="round" />
-        <circle cx={x(plan.recommended.day)} cy={y(plan.recommended.cash)} r={5} fill="#7662FD" stroke="#0B0B14" strokeWidth={2} />
-
-        <text x={PAD.left} y={H - 4} fontSize={12} fill="#85848F">
-          امروز
-        </text>
-        <text x={W - PAD.right} y={H - 4} fontSize={12} fill="#85848F" textAnchor="end">
-          سررسید
-        </text>
-      </svg>
-      <div dir="rtl" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary mt-2">
-        <Legend cls="bg-warning" label="نتیجه‌ی نقدی (دلار)" />
-        <Legend cls="bg-success" label="با ایردراپ" />
-        <Legend cls="bg-accent" label="زمان پیشنهادی فروش" />
-        {plan.horizon < days && <Legend cls="bg-brand2" label="اسنپ‌شات" />}
-        <Legend cls="bg-danger/40" label="محدوده‌ی ضرر قابل قبول" />
+    <figure className="flex flex-col gap-2">
+      <div className="flex gap-1 p-1 rounded-lg bg-elevated border border-default self-start" role="radiogroup" aria-label="نوع نتیجه در نمودار">
+        {(
+          [
+            ['cash', 'نتیجه‌ی نقدی'],
+            ['total', 'با ایردراپ فرضی'],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" role="radio" aria-checked={mode === id} onClick={() => setMode(id)} className={`tap rounded-md px-3 min-h-9 text-sm ${mode === id ? 'bg-surface text-primary ring-1 ring-accent' : 'text-secondary'}`}>
+            {label}
+          </button>
+        ))}
       </div>
-    </div>
-  );
-}
-
-function Legend({ cls, label }: { cls: string; label: string }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <i className={`inline-block w-3 h-1.5 rounded ${cls}`} /> {label}
-    </span>
+      <div dir="ltr" className="relative">
+        {hover.i !== null && (
+          <Tip x={x(s[hover.i].day)} width={W}>
+            {dateAt(s[hover.i].day)} (روز {formatCompact(s[hover.i].day)}): نقدی <b className="num">{formatUSD(s[hover.i].cash, 0)}</b> · با ایردراپ فرضی <b className="num">{formatUSD(s[hover.i].total, 0)}</b>
+          </Tip>
+        )}
+        <svg ref={hover.ref} viewBox={`0 0 ${W} ${H}`} className="w-full h-auto touch-pan-y" role="img" aria-label="نتیجه‌ی فروش YT در هر روز تا سررسید" onPointerMove={hover.onMove} onPointerDown={hover.onMove} onPointerLeave={hover.onLeave}>
+          {/* Loss area: everything below zero. */}
+          <rect x={PAD.left} width={W - PAD.left - PAD.right} y={y(0)} height={Math.max(0, H - PAD.bottom - y(0))} fill={C.danger} opacity={0.08} />
+          <line x1={PAD.left} x2={W - PAD.right} y1={y(-plan.lossBudget)} y2={y(-plan.lossBudget)} stroke={C.danger} strokeDasharray="4 4" opacity={0.7} />
+          <line x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} stroke={C.zero} />
+          <text x={W - PAD.right + 6} y={y(0) + 4} fontSize={12} fill={C.axis}>
+            ۰
+          </text>
+          <text x={W - PAD.right + 6} y={y(hi) + 4} fontSize={12} fill={C.axis}>
+            {axis(hi)}
+          </text>
+          {lo < 0 && (
+            <text x={W - PAD.right + 6} y={y(lo) + 4} fontSize={12} fill={C.axis}>
+              {axis(lo)}
+            </text>
+          )}
+          {plan.horizon < days && <line x1={x(plan.horizon)} x2={x(plan.horizon)} y1={PAD.top} y2={H - PAD.bottom} stroke={C.info} strokeWidth={2} strokeDasharray="4 4" />}
+          <line x1={x(rec.day)} x2={x(rec.day)} y1={PAD.top} y2={H - PAD.bottom} stroke={C.accent} strokeWidth={2} />
+          <path d={path} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
+          <circle cx={x(rec.day)} cy={y(rec[key])} r={5} fill={C.accent} stroke={C.surface} strokeWidth={2} />
+          {hover.i !== null && <circle cx={x(s[hover.i].day)} cy={y(s[hover.i][key])} r={4} fill={color} />}
+          <text x={PAD.left} y={H - 6} fontSize={12} fill={C.axis}>
+            امروز
+          </text>
+          <text x={W - PAD.right} y={H - 6} fontSize={12} fill={C.axis} textAnchor="end">
+            سررسید {dateAt(days)}
+          </text>
+        </svg>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-secondary">
+        <LegendItem color={color} label={mode === 'cash' ? 'نتیجه‌ی نقدی (دلار)' : 'با ایردراپ فرضی (دلار) — سناریو'} />
+        <LegendItem color={C.accent} label="زمان پیشنهادی فروش" />
+        {plan.horizon < days && <LegendItem color={C.info} label="اسنپ‌شات" dashed />}
+        <LegendItem color={C.danger} label="سقف ضرر قابل قبول" dashed />
+      </div>
+      <figcaption className="sr-only">{summary}</figcaption>
+    </figure>
   );
 }

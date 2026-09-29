@@ -1,83 +1,54 @@
 'use client';
 
-import { Bell, Gift, SlidersHorizontal } from 'lucide-react';
-import { Card, Collapsible } from '../ui/card';
-import { Badge } from '../ui/badge';
 import { MarketForm } from '../forms/MarketForm';
-import { AirdropForm } from '../forms/AirdropForm';
-import { VerdictHero } from '../results/VerdictHero';
-import { InsightList } from '../results/InsightList';
-import { KeyNumbers } from '../results/KeyNumbers';
-import { StrategyList } from '../results/StrategyList';
-import { PointsPanel } from '../results/PointsPanel';
-import { ApyOutlook } from '../results/ApyOutlook';
-import { SensitivityPanel } from '../results/SensitivityPanel';
-import { ExitPlanCard } from '../results/ExitPlanCard';
-import { MarketBrief } from '../results/MarketBrief';
-import { AlertRules } from '../alerts/AlertRules';
 import { SaveBar } from './SaveBar';
-import type { ReadyDashboard } from './useDashboard';
-import { formatNumber } from '../../lib/utils/formatting';
-import { TokenLogo } from '../ui/token-logo';
+import { hasMarket, type ReadyDashboard } from './useDashboard';
+import { LoadingResult, MarketHeader, ResultSections, ResultSummary, StartState, Warnings } from './ResultView';
 
-/** Desktop: inputs in a sticky side panel, results in the main column. */
-export function WebDashboard({ d }: { d: ReadyDashboard }) {
-  const { p, analysis: a, verdict, insights, msg } = d;
-  const activeRules = d.triggered.length;
-
+/** Page title row, identical position on every page. */
+export function PageHeader({ d }: { d: ReadyDashboard }) {
   return (
-    <main className="max-w-matrix mx-auto px-6 py-6 grid grid-cols-[22rem_minmax(0,1fr)] gap-6 items-start">
-      <aside className="sticky top-22 max-h-[calc(100dvh-7rem)] overflow-y-auto flex flex-col gap-4 pl-1">
-        <Card title="بازار" icon={<SlidersHorizontal size={18} />}>
-          <MarketForm p={p} set={d.set} replace={d.setP} msg={msg} />
-        </Card>
-        <Collapsible title="پوینت و ایردراپ" icon={<Gift size={18} />} defaultOpen>
-          <AirdropForm p={p} set={d.set} msg={msg} />
-        </Collapsible>
-      </aside>
+    <header className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col gap-1">
+        <h1 className="page-title">تحلیل بازار</h1>
+        <p className="text-sm text-secondary">این استراتژی در این بازار چه نتیجه‌ای دارد؟</p>
+      </div>
+      {hasMarket(d.p) && <SaveBar d={d} />}
+    </header>
+  );
+}
 
-      <div className="flex flex-col gap-5 min-w-0">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            {p.marketName && <TokenLogo src={p.marketIcon} name={p.marketName} size={44} />}
-            <div className="min-w-0">
-              <h1 className="text-3xl lg:text-4xl font-medium tracking-tight text-primary truncate">{p.marketName || 'داشبورد'}</h1>
-              {p.marketName && (
-                <p className="text-sm text-muted truncate">{[p.platform, p.chain].filter(Boolean).join(' · ')}</p>
-              )}
-            </div>
-          </div>
-          <SaveBar d={d} />
-        </div>
+/** The result column: start state, loading placeholder, or the analysis. */
+export function ResultColumn({ d }: { d: ReadyDashboard }) {
+  const { p } = d;
+  if (!hasMarket(p)) return <StartState onManual={d.startManual} />;
+  const loading = !!p.marketId && !p.dataMeta && !p.manualEntry && d.md.state === 'loading';
+  return (
+    <div className="flex flex-col gap-6 min-w-0">
+      <MarketHeader d={d} />
+      {loading ? (
+        <LoadingResult />
+      ) : (
+        <>
+          <ResultSummary p={p} a={d.analysis} verdict={d.verdict} focus={d.focus} />
+          <Warnings d={d} />
+          <ResultSections d={d} />
+        </>
+      )}
+    </div>
+  );
+}
 
-        <VerdictHero verdict={verdict} />
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-start">
-          <InsightList insights={insights} verdict={verdict} triggered={d.triggered} />
-          <MarketBrief p={p} a={a} />
-        </div>
-        <KeyNumbers p={p} a={a} />
-
-        <section className="flex flex-col gap-3">
-          <h2 className="font-bold text-primary">استراتژی‌ها</h2>
-          <StrategyList p={p} a={a} verdict={verdict} insights={insights} set={d.set} msg={msg} columns={2} />
-        </section>
-
-        <ExitPlanCard p={p} a={a} set={d.set} />
-
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <PointsPanel p={p} a={a} />
-          <ApyOutlook p={p} a={a} />
-        </div>
-
-        <SensitivityPanel p={p} days={a.days} />
-
-        <Collapsible
-          title="هشدارهای من"
-          icon={<Bell size={18} />}
-          badge={activeRules > 0 && <Badge tone="accent">{formatNumber(activeRules, 0)} فعال</Badge>}
-        >
-          <AlertRules analysis={a} alerts={d.alerts} />
-        </Collapsible>
+/** Desktop (≥ 1024px): form (340px) beside a flexible result column; one page scroll. */
+export function WebDashboard({ d }: { d: ReadyDashboard }) {
+  return (
+    <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-6">
+      <PageHeader d={d} />
+      <div className="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)] gap-6 items-start">
+        <aside className="sx-card p-5 flex flex-col gap-5 min-w-0" aria-label="ورودی‌ها">
+          <MarketForm d={d} />
+        </aside>
+        <ResultColumn d={d} />
       </div>
     </main>
   );

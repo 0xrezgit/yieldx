@@ -1,10 +1,31 @@
 import type { ProtocolId } from './protocol';
-import type { PointsBasis, PointsStatus } from './market';
+import type { PointsBasis, PointsStatus, TokenRef } from './market';
 
 /**
  * Everything the user enters (or a protocol adapter fills in) for one analysis.
  * Prices of PT/YT are in accounting-asset units, APYs are percentages.
  */
+/**
+ * Where the market numbers came from — kept separate from the numbers themselves.
+ * Origin: API or manual; freshness is derived from `fetchedAt` at render time;
+ * `sourceUpdatedAt` is the protocol's own timestamp (fetched now ≠ produced now).
+ */
+export interface DataMeta {
+  source: 'api' | 'manual';
+  /** When YieldX received the data. */
+  fetchedAt: string | null;
+  /** When the protocol last updated it, when the API says so. */
+  sourceUpdatedAt: string | null;
+  /** Market fields the API did not provide (shown as «—», never as 0). */
+  missing: string[];
+  /** Market fields the user typed over (kept on refresh, labelled «دستی»). */
+  manual: string[];
+  /** Unit PT redeems into / PT and YT prices are quoted in. */
+  accountingSymbol: string | null;
+  asset: TokenRef | null;
+  historySource: 'api' | 'manual' | 'none';
+}
+
 export interface ScenarioParams {
   // Market
   protocol: ProtocolId;
@@ -63,6 +84,11 @@ export interface ScenarioParams {
   rangeLowerAPY: number;
   rangeUpperAPY: number;
   feeAPY: number;
+
+  /** Provenance of the market numbers (absent in data saved by older versions). */
+  dataMeta?: DataMeta;
+  /** The user chose to enter a market by hand (no market picked). */
+  manualEntry?: boolean;
 }
 
 export type ScenarioKey = keyof ScenarioParams;
