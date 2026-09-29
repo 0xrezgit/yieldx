@@ -50,7 +50,7 @@ export function AlertRules({ analysis, alerts }: { analysis: Analysis; alerts: A
           return (
             <li
               key={r.id}
-              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm ${
+              className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 min-h-12 text-sm ${
                 on ? 'border-accent/50 bg-accent/10' : 'border-default bg-elevated/40'
               }`}
             >
@@ -76,7 +76,7 @@ export function AlertRules({ analysis, alerts }: { analysis: Analysis; alerts: A
                 type="button"
                 onClick={() => alerts.remove(r.id)}
                 aria-label="حذف"
-                className="p-1.5 text-muted hover:text-danger transition-colors"
+                className="tap grid place-items-center size-10 rounded-lg text-muted hover:text-danger transition-colors"
               >
                 <Trash2 size={16} />
               </button>
@@ -94,7 +94,7 @@ export function AlertRules({ analysis, alerts }: { analysis: Analysis; alerts: A
         <button
           type="button"
           onClick={() => alerts.add({ metric, operator, threshold, enabled: true })}
-          className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 font-medium text-white brand-gradient"
+          className="tap col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 rounded-lg px-4 min-h-11 font-semibold text-white bg-brand"
         >
           <Plus size={16} /> افزودن
         </button>

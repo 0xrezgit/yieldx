@@ -183,11 +183,21 @@ describe('mergeMarketData points handling', () => {
     expect(p.pointsPerDay).toBe(0);
   });
 
-  it('keeps the user’s rates when the program exists but is not detailed', () => {
-    const before = { ...defaultScenario(), pointsPerDay: 3, ytMultiplier: 7 };
+  it('does not carry another market’s points rates into a program without details', () => {
+    const before = { ...defaultScenario(), marketId: 'other', pointsName: 'Onre Points', pointsPerDay: 3, ytMultiplier: 7 };
     const p = mergeMarketData(before, market({ pointsStatus: 'active' }), null);
+    expect(p.pointsPerDay).toBe(0);
+    expect(p.pointsName).toBe('');
+    expect(p.ytMultiplier).toBe(1);
+  });
+
+  it('keeps the user’s rates on a refresh of the same market', () => {
+    const first = mergeMarketData(defaultScenario(), market({ pointsStatus: 'active' }), null);
+    const edited = { ...first, pointsPerDay: 3, ytMultiplier: 7 };
+    const p = mergeMarketData(edited, market({ pointsStatus: 'active', ptPrice: 0.971 }), null);
     expect(p.pointsPerDay).toBe(3);
     expect(p.ytMultiplier).toBe(7);
+    expect(p.ptPrice).toBe(0.971);
   });
 
   it('applies a detailed program including its basis', () => {

@@ -19,7 +19,8 @@ export function ptPriceFromAPY(apy: number, daysToMaturity: number): number {
   return Math.pow(1 + apy / 100, -daysToMaturity / 365);
 }
 
-export type GapStatus = 'safe' | 'warning' | 'danger';
+/** 'unknown' when the base APY is missing — never treated as «cheap». */
+export type GapStatus = 'safe' | 'warning' | 'danger' | 'unknown';
 
 export interface ImpliedMetrics {
   impliedAPY: number;
@@ -42,7 +43,8 @@ export function calculateImpliedMetrics(ptPrice: number, daysToMaturity: number,
   const gapPercent = baseAPY > 0 ? (gap / baseAPY) * 100 : gap > 0 ? Infinity : 0;
 
   let status: GapStatus;
-  if (!(gap > 0)) status = 'safe';
+  if (!Number.isFinite(gap)) status = 'unknown';
+  else if (!(gap > 0)) status = 'safe';
   else if (gapPercent < thresholds.gap.warningPercent) status = 'warning';
   else status = 'danger';
 

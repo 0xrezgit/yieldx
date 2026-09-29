@@ -1,11 +1,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Clock, Gift, Repeat } from 'lucide-react';
+import { Gift, Repeat } from 'lucide-react';
 import type { OpportunityListing } from '../../lib/risk/opportunities';
 import { isLoopable } from '../../lib/risk/opportunities';
-import { formatNumber, formatPercent, formatUSDCompact } from '../../lib/utils/formatting';
-import protocols from '../../config/protocols.json';
+import { formatDate, formatGregorian, formatNumber, formatPercent, formatUSDCompact } from '../../lib/utils/formatting';
+import { protocolIdentity } from '../../lib/registry/identity';
+import type { ProtocolFeed } from '../../hooks/useAllMarkets';
+import { AssetIdentity } from '../ui/asset-identity';
 import { TokenLogo } from '../ui/token-logo';
 import { Num } from '../ui/num';
 import type { Tone } from '../ui/badge';
@@ -38,52 +40,86 @@ export function Pill({ tone = 'muted', children }: { tone?: Tone; children: Reac
     accent: 'bg-accent/15 text-accent',
     muted: 'bg-elevated text-secondary',
   };
-  return <span className={`inline-flex items-center gap-1 rounded px-1.5 h-5 text-[11px] font-medium whitespace-nowrap ${cls[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded px-1.5 min-h-6 text-xs font-medium whitespace-nowrap ${cls[tone]}`}>{children}</span>;
 }
 
-/** Logo, name and the facts that matter for every strategy. */
-export function MarketHead({ m, size = 40 }: { m: OpportunityListing; size?: number }) {
+/** Identity for tables and cards: token + network badge, symbol, protocol · network · maturity. */
+export function MarketIdentityCell({ m, size = 24 }: { m: OpportunityListing; size?: 24 | 32 }) {
+  return <AssetIdentity symbol={m.name} icon={m.icon} chain={m.chain} protocol={m.protocol} platform={m.platform} maturity={m.maturity} size={size} />;
+}
+
+/** Logo, name and the facts that matter for every strategy (details / cards). */
+export function MarketHead({ m }: { m: OpportunityListing; size?: number }) {
   const season = m.points?.season;
   return (
-    <div className="flex items-center gap-3 min-w-0">
-      <TokenLogo src={m.icon} name={m.name} size={size} />
-      <div className="min-w-0">
-        <div className="font-bold text-primary truncate" dir="ltr">
-          {m.name}
-        </div>
-        <div className="text-xs text-muted truncate">
-          {protocols[m.protocol].name} · {m.chain}
-          {m.platform ? ` · ${m.platform}` : ''}
-        </div>
-        <div className="flex items-center gap-1 mt-1 flex-wrap">
-          <Pill>
-            <Clock size={11} /> <Num>{formatNumber(m.daysToMaturity, 0)}</Num> روز
+    <div className="flex flex-col gap-2 min-w-0">
+      <MarketIdentityCell m={m} size={32} />
+      <div className="flex items-center gap-1 flex-wrap">
+        {m.platform && <Pill>پروژه: <bdi dir="ltr">{m.platform}</bdi></Pill>}
+        {m.hasPoints && (
+          <Pill tone="info">
+            <Gift size={12} aria-hidden /> <bdi dir="ltr">{m.points?.name ?? 'پوینت'}</bdi>
+            {m.points && m.points.ytMultiplier !== 1 && <Num>×{formatNumber(m.points.ytMultiplier, 1)}</Num>}
+            {season != null && (
+              <>
+                {' '}
+                · فصل <Num>{formatNumber(season, 0)}</Num>
+              </>
+            )}
           </Pill>
-          {m.liquidity !== null && (
-            <Pill>
-              <Num>{formatUSDCompact(m.liquidity)}</Num>
-            </Pill>
-          )}
-          {m.hasPoints && (
-            <Pill tone="warning">
-              <Gift size={11} /> {m.points?.name ?? 'پوینت'}
-              {m.points && m.points.ytMultiplier !== 1 && <Num>×{formatNumber(m.points.ytMultiplier, 1)}</Num>}
-              {season != null && (
-                <>
-                  {' '}
-                  · فصل <Num>{formatNumber(season, 0)}</Num>
-                </>
-              )}
-            </Pill>
-          )}
-          {isLoopable(m) && (
-            <Pill tone="accent">
-              <Repeat size={11} /> لوپ
-            </Pill>
-          )}
-        </div>
+        )}
+        {isLoopable(m) && (
+          <Pill tone="accent">
+            <Repeat size={12} aria-hidden /> لوپ
+          </Pill>
+        )}
       </div>
     </div>
+  );
+}
+
+/** Below 1280px the protocol and data columns fold into the identity cell. */
+export function CompactMeta({ m, feed }: { m: OpportunityListing; feed?: ProtocolFeed }) {
+  return (
+    <span className="xl:hidden flex flex-wrap items-center gap-x-1.5 text-xs text-secondary">
+      <ProtocolCell m={m} />
+      {feed?.stale && <span className="text-warning">· داده‌ی قدیمی</span>}
+    </span>
+  );
+}
+
+export const ProtocolCell = ({ m }: { m: OpportunityListing }) => (
+  <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+    <TokenLogo src={protocolIdentity(m.protocol).logo} name={protocolIdentity(m.protocol).name} size={16} square />
+    <bdi dir="ltr">{protocolIdentity(m.protocol).name}</bdi>
+  </span>
+);
+
+export const MaturityCell = ({ m }: { m: OpportunityListing }) => (
+  <span className="flex flex-col whitespace-nowrap" title={`میلادی: ${formatGregorian(m.maturity)}`}>
+    <span className="text-primary">{formatDate(m.maturity)}</span>
+    <span className="text-xs text-secondary">
+      <Num>{formatNumber(m.daysToMaturity, 0)}</Num> روز
+    </span>
+  </span>
+);
+
+export const LiquidityCell = ({ m }: { m: OpportunityListing }) =>
+  m.liquidity === null ? <span className="text-muted" title="نقدینگی در API این پروتکل نیست">—</span> : <Num>{formatUSDCompact(m.liquidity)}</Num>;
+
+/** Freshness of the row's protocol feed, plus missing inputs — words, not only colour. */
+export function DataCell({ m, feed, needsBase = false }: { m: OpportunityListing; feed?: ProtocolFeed; needsBase?: boolean }) {
+  const stale = feed?.stale;
+  const noBase = needsBase && (m.baseAPY === null || !Number.isFinite(m.baseAPY));
+  return (
+    <span className="flex flex-col gap-0.5 text-xs whitespace-nowrap">
+      <span className={`inline-flex items-center gap-1 ${stale ? 'text-warning' : 'text-secondary'}`}>
+        <span className={`size-1.5 rounded-full ${stale ? 'bg-warning' : 'bg-success'}`} aria-hidden />
+        {stale ? 'قدیمی' : 'به‌روز'}
+      </span>
+      {noBase && <span className="text-warning">بازده پایه —</span>}
+      {m.liquidity === null && <span className="text-muted">نقدینگی —</span>}
+    </span>
   );
 }
 
@@ -108,7 +144,7 @@ export function RangeBar({ segments, marker, max, label }: { segments: Segment[]
         return <span key={i} className={`absolute inset-y-0 ${s.cls} ${i === 0 ? 'rounded-l-full' : ''}`} style={{ left, width }} />;
       })}
       <span
-        className="absolute -top-1 h-4.5 w-1 -translate-x-1/2 rounded-full bg-primary ring-2 ring-base"
+        className="absolute -top-1 h-4.5 w-1 -translate-x-1/2 rounded-full bg-primary ring-2 ring-canvas"
         style={{ left: pos(marker) }}
       />
     </div>
@@ -137,9 +173,9 @@ export function Segmented<T extends string>({
           role="radio"
           aria-checked={value === o.id}
           onClick={() => onChange(o.id)}
-          className={`flex-1 whitespace-nowrap flex items-center justify-center gap-1.5 rounded-md transition-colors ${
-            size === 'sm' ? 'px-2.5 h-8 text-sm' : 'px-3 h-9 text-sm'
-          } ${value === o.id ? 'bg-elevated text-primary shadow-sm font-medium' : 'text-secondary hover:text-primary'}`}
+          className={`tap flex-1 shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 rounded-md transition-colors [&>svg]:hidden sm:[&>svg]:inline ${
+            size === 'sm' ? 'px-2.5 min-h-9 text-sm' : 'px-2 sm:px-3 min-h-10 text-[15px]'
+          } ${value === o.id ? 'bg-elevated text-primary font-semibold ring-1 ring-accent' : 'text-secondary hover:text-primary'}`}
         >
           {o.label}
         </button>
@@ -152,9 +188,9 @@ export function Segmented<T extends string>({
 export function Metric({ label, children, tone, hint }: { label: string; children: ReactNode; tone?: string; hint?: ReactNode }) {
   return (
     <div className="min-w-0">
-      <div className="text-[11px] text-muted truncate">{label}</div>
-      <div className={`font-bold leading-tight ${tone ?? 'text-primary'}`}>{children}</div>
-      {hint && <div className="text-[11px] text-secondary truncate">{hint}</div>}
+      <div className="text-xs text-secondary truncate">{label}</div>
+      <div className={`font-semibold leading-tight ${tone ?? 'text-primary'}`}>{children}</div>
+      {hint && <div className="text-xs text-secondary truncate">{hint}</div>}
     </div>
   );
 }
@@ -172,5 +208,5 @@ export function Legend({ items }: { items: { cls: string; label: string }[] }) {
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-2xl border border-dashed border-strong p-8 text-center text-secondary text-sm">{children}</div>;
+  return <div className="rounded-lg border border-dashed border-strong p-8 text-center text-secondary text-sm">{children}</div>;
 }

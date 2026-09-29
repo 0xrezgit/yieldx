@@ -21,6 +21,7 @@ import { formatDollar, formatDollarCompact, priceDigits } from '../../lib/portfo
 import { NumberField, SelectField, TextField } from '../ui/field';
 import { Num } from '../ui/num';
 import { TokenLogo } from '../ui/token-logo';
+import { LogoWithNetwork } from '../ui/asset-identity';
 import { draftToEvent, emptyDraft, EventFields, validateDraft, type Draft } from './EventForm';
 import { btn, NoWalletNote, Panel, Segmented, SxPage } from './parts';
 import { TokenSelect, useTokenPrice } from './TokenSelect';
@@ -46,19 +47,44 @@ const defaultLoop = (debtAsset: string): LoopInfo => ({
   debtOverride: null,
 });
 
+/** One option of a single-choice group (radio semantics: role=radio inside role=radiogroup). */
 function Choice({ selected, onClick, children, disabled }: { selected?: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
   return (
     <button
       type="button"
+      role="radio"
       onClick={onClick}
       disabled={disabled}
-      aria-pressed={selected}
-      className={`w-full text-right rounded-lg border p-4 flex items-center gap-3.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-        selected ? 'border-sx-accent bg-sx-accent/10' : 'border-sx-border bg-sx-surface hover:border-[#4a4a55] hover:bg-sx-raised/50'
+      aria-checked={!!selected}
+      className={`w-full text-right rounded-lg border p-4 min-h-16 flex items-center gap-3.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        selected ? 'border-sx-accent bg-sx-accent/10 ring-1 ring-sx-accent' : 'border-sx-border bg-sx-surface hover:border-strong hover:bg-sx-raised'
       }`}
     >
+      <span className={`grid place-items-center size-5 rounded-full border-2 shrink-0 ${selected ? 'border-sx-accent' : 'border-control'}`} aria-hidden>
+        {selected && <span className="size-2.5 rounded-full bg-sx-accent" />}
+      </span>
       {children}
     </button>
+  );
+}
+
+/** Choices made so far, each one editable (jumps back to its step). */
+function Summary({ items }: { items: { step: number; label: string; value: ReactNode; go: () => void }[] }) {
+  if (!items.length) return null;
+  return (
+    <dl className="sx-card px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm" aria-label="انتخاب‌های شما">
+      {items.map((i) => (
+        <div key={i.step} className="flex items-center justify-between gap-2 min-w-0">
+          <dt className="text-sx-muted shrink-0">{i.label}</dt>
+          <dd className="flex items-center gap-2 min-w-0">
+            <span className="truncate text-sx-text">{i.value}</span>
+            <button type="button" onClick={i.go} className="tap text-sx-accent underline underline-offset-4 shrink-0">
+              ویرایش
+            </button>
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -87,6 +113,7 @@ export default function NewPosition() {
   const [planAmount, setPlanAmount] = useState(1000);
   const [planToken, setPlanToken] = useState('');
   const [planFee, setPlanFee] = useState(thresholds.exit.costPercent);
+  const [tried, setTried] = useState(false);
 
   useEffect(() => {
     if (!protocol) return;
@@ -205,10 +232,10 @@ export default function NewPosition() {
   return (
     <SxPage narrow>
       <header className="flex flex-col gap-4">
-        <Link href="/portfolio" className="text-sm text-sx-muted hover:text-sx-text flex items-center gap-1 self-start transition-colors">
+        <Link href="/portfolio" className="tap text-sm text-sx-muted hover:text-sx-text flex items-center gap-1 self-start min-h-10 transition-colors">
           <ArrowRight size={14} /> پرتفوی من
         </Link>
-        <h1 className="text-3xl font-medium tracking-tight">ثبت پوزیشن</h1>
+        <h1 className="page-title">ثبت پوزیشن</h1>
         <ol className="grid grid-cols-5 gap-2" aria-label="مراحل">
           {STEPS.map((s, i) => (
             <li key={s} aria-current={i === step ? 'step' : undefined} className="flex flex-col gap-2">
@@ -221,9 +248,18 @@ export default function NewPosition() {
         </ol>
       </header>
 
+      <Summary
+        items={[
+          ...(protocol && step > 0 ? [{ step: 0, label: 'پلتفرم', value: <bdi dir="ltr">{protocols[protocol].name}</bdi>, go: () => setStep(0) }] : []),
+          ...(chain && step > 1 ? [{ step: 1, label: 'شبکه', value: chainFa(chain), go: () => setStep(1) }] : []),
+          ...(market && step > 2 ? [{ step: 2, label: 'بازار', value: <><bdi dir="ltr">{market.name}</bdi> · سررسید {formatDate(market.maturity)}</>, go: () => setStep(2) }] : []),
+          ...(kind && step > 3 ? [{ step: 3, label: 'نوع', value: KIND_FA[kind], go: () => setStep(3) }] : []),
+        ]}
+      />
+
       {step === 0 && (
         <Panel title="پلتفرم را انتخاب کنید" subtitle="بازارهای زنده‌ی هر پلتفرم از API خودش خوانده می‌شود.">
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="پلتفرم">
             {LIVE.map((id) => (
               <Choice key={id} selected={protocol === id} onClick={() => { setProtocol(id); setChain(null); setMarket(null); setStep(1); }}>
                 <TokenLogo src={protocolLogo(id)} name={protocols[id].name} size={40} />
@@ -231,7 +267,7 @@ export default function NewPosition() {
                   <div className="font-medium text-sx-text" dir="ltr">{protocols[id].name}</div>
                   <div className="text-xs text-sx-muted leading-5">{protocols[id].description}</div>
                 </div>
-                <ChevronLeft className="mr-auto text-sx-faint shrink-0" size={18} />
+                <ChevronLeft className="mr-auto text-sx-faint shrink-0" size={18} aria-hidden />
               </Choice>
             ))}
           </div>
@@ -242,7 +278,7 @@ export default function NewPosition() {
         <Panel title={`شبکه‌های ${protocols[protocol].name}`} subtitle="فقط شبکه‌هایی که این پلتفرم در آن‌ها بازار فعال دارد.">
           {listState === 'loading' && <p className="text-sm text-sx-muted flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> در حال دریافت بازارها…</p>}
           {listState === 'error' && <p className="text-sm text-sx-red">دریافت بازارها ناموفق بود. کمی بعد دوباره تلاش کنید.</p>}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" role="radiogroup" aria-label="شبکه">
             {chains.map(([c, n]) => (
               <Choice key={c} selected={chain === c} onClick={() => { setChain(c); setMarket(null); setStep(2); }}>
                 <TokenLogo src={chainLogo(c)} name={c} size={34} />
@@ -271,23 +307,24 @@ export default function NewPosition() {
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={showExpired} onChange={(e) => setShowExpired(e.target.checked)} /> نمایش بازارهای سررسیدشده
           </label>
-          <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto -mx-1 px-1">
+          <div className="flex flex-col gap-2" role="radiogroup" aria-label="بازار">
             {list.map((m) => (
               <Choice key={m.id} selected={market?.id === m.id} onClick={() => { setMarket(m); setKind(null); setStep(3); }}>
-                <TokenLogo src={m.icon} name={m.name} size={38} />
+                <LogoWithNetwork icon={m.icon} name={m.name} chain={m.chain} size={32} />
                 <div className="min-w-0 flex-1 flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sx-text truncate" dir="ltr">{m.name}</span>
-                    {m.expired && <span className="text-[11px] text-sx-orange">سررسیدشده</span>}
+                    <bdi className="font-medium text-sx-text truncate" dir="ltr">{m.name}</bdi>
+                    {m.expired && <span className="text-xs text-sx-orange">سررسیدشده</span>}
                   </div>
                   <div className="text-xs text-sx-muted">
                     {m.platform ? <span dir="ltr">{m.platform} · </span> : null}
                     سررسید <span className={dupNames.has(m.name) ? 'font-medium text-sx-text' : ''}>{formatDate(m.maturity)}</span> · <Num>{formatNumber(m.daysToMaturity, 0)}</Num> روز
                   </div>
-                  <div className="text-[11px] text-sx-faint flex flex-wrap gap-x-3">
+                  <div className="text-xs text-sx-faint flex flex-wrap gap-x-3">
                     <span>Implied <Num>{formatPercent(m.impliedAPY, 2)}</Num></span>
                     {m.liquidity !== null && <span>نقدینگی {formatDollarCompact(m.liquidity)}</span>}
-                    <span className="font-mono" dir="ltr" title={m.id}>{shortId(m.id)}</span>
+                    <span className="font-mono whitespace-nowrap" dir="ltr" title={m.id}>{shortId(m.id)}</span>
+                    {m.asset?.address && <span className="font-mono" dir="ltr" title={`${m.asset.symbol ?? ''} ${m.asset.address}`}>{m.asset.symbol} {shortId(m.asset.address)}</span>}
                   </div>
                 </div>
               </Choice>
@@ -299,7 +336,7 @@ export default function NewPosition() {
 
       {step === 3 && market && (
         <Panel title="نوع پوزیشن">
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="نوع پوزیشن">
             {(['pt', 'yt', 'loop'] as const).map((k) => {
               const loopOk = k !== 'loop' || isLoopable(market);
               return (
@@ -334,7 +371,7 @@ export default function NewPosition() {
               <div className="min-w-0 flex flex-col gap-0.5">
                 <div className="font-medium text-lg" dir="ltr">{kind === 'loop' ? 'PT' : kind.toUpperCase()} {market.name}</div>
                 <div className="text-xs text-sx-muted">
-                  <span dir="ltr">{protocols[protocol].name}</span> · {chainFa(market.chain)} · سررسید {formatDate(market.maturity)} · <span className="font-mono" dir="ltr">{shortId(market.id)}</span>
+                  <span dir="ltr">{protocols[protocol].name}</span> · {chainFa(market.chain)} · سررسید {formatDate(market.maturity)} · <span className="font-mono whitespace-nowrap" dir="ltr" title={market.id}>{shortId(market.id)}</span>
                 </div>
               </div>
             </div>
@@ -404,7 +441,7 @@ export default function NewPosition() {
           ) : (
             <>
               <Panel title="جزئیات خرید" subtitle="مبنای محاسبات، مبلغ واقعی پرداختی و تعداد واقعی دریافتی از تراکنش شماست؛ قیمت امروز جایگزین قیمت ورود نمی‌شود.">
-                <EventFields draft={draft} onChange={setDraft} assetSymbol={assetSymbol} liveAssetUsd={assetUsd} types={['buy']} chain={market.chain} marketIcon={market.icon} />
+                <EventFields draft={draft} onChange={setDraft} assetSymbol={assetSymbol} liveAssetUsd={assetUsd} types={['buy']} chain={market.chain} marketIcon={market.icon} showErrors={tried} />
               </Panel>
 
               {kind === 'loop' && (
@@ -424,7 +461,7 @@ export default function NewPosition() {
                   {!loop.debtIsAccountingAsset && (
                     <div className="flex flex-col gap-1">
                       <NumberField persian label={`نرخ دلاری ${loop.debtAsset || 'دارایی بدهی'} هنگام وام`} value={borrowUsd} onChange={(v) => { setBorrowUsd(v); setBorrowSource('manual'); }} suffix="دلار" />
-                      <span className={`text-[11px] ${Number.isFinite(borrowUsd) ? 'text-sx-green' : 'text-sx-orange'}`}>{Number.isFinite(borrowUsd) ? RATE_FA[borrowSource] : 'نرخ نامعلوم — دستی وارد کنید'}</span>
+                      <span className={`text-xs ${Number.isFinite(borrowUsd) ? 'text-sx-green' : 'text-sx-orange'}`}>{Number.isFinite(borrowUsd) ? RATE_FA[borrowSource] : 'نرخ نامعلوم — دستی وارد کنید'}</span>
                     </div>
                   )}
                   <SelectField<OracleMode>
@@ -455,9 +492,13 @@ export default function NewPosition() {
 
               <div className="sx-card p-5 flex flex-col gap-4">
                 <NoWalletNote />
-                {(draftError || loopError) && <p className="text-sm text-sx-orange">{draftError ?? loopError}</p>}
-                <button type="button" disabled={!!draftError || !!loopError} onClick={create} className={`${btn.primary} h-12 text-base`}>
-                  <Check size={18} /> ذخیره‌ی پوزیشن
+                {tried && (draftError || loopError) && (
+                  <p className="text-sm text-sx-red" role="alert">
+                    ذخیره نشد: {loopError ?? 'موارد قرمز بالا را اصلاح کنید.'}
+                  </p>
+                )}
+                <button type="button" onClick={() => (draftError || loopError ? setTried(true) : create())} className={`${btn.primary} h-12 text-base`}>
+                  <Check size={18} aria-hidden /> ذخیره‌ی پوزیشن
                 </button>
               </div>
             </>

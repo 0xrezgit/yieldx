@@ -4,55 +4,18 @@ import type { PositionStatus, Quality } from './valuation';
 
 /** Persian labels and logos for the portfolio section. Token symbols stay official (Latin). */
 
-export const CHAIN_FA: Record<string, string> = {
-  Ethereum: 'اتریوم',
-  Arbitrum: 'آربیتروم',
-  Base: 'بیس',
-  Optimism: 'آپتیمیزم',
-  'BNB Chain': 'زنجیره‌ی BNB',
-  Sonic: 'سونیک',
-  Mantle: 'منتل',
-  Berachain: 'براچین',
-  HyperEVM: 'هایپر EVM',
-  Plasma: 'پلاسما',
-  Monad: 'موناد',
-  Solana: 'سولانا',
-  Avalanche: 'اولانچ',
-  Katana: 'کاتانا',
-  Flare: 'فلر',
-  Hemi: 'همی',
-  'X Layer': 'ایکس لیر',
-  'Robinhood Chain': 'زنجیره‌ی رابین‌هود',
-};
+import { NETWORKS, networkByName } from '../registry/networks';
+import { protocolIdentity } from '../registry/identity';
 
-export const chainFa = (chain: string) => CHAIN_FA[chain] ?? chain;
+/** Persian network names, from the shared registry. */
+export const CHAIN_FA: Record<string, string> = Object.fromEntries(NETWORKS.map((n) => [n.name, n.nameFa]));
 
-/** DefiLlama chain icon slugs (TokenLogo falls back to a monogram if one fails). */
-const CHAIN_SLUG: Record<string, string> = {
-  Ethereum: 'ethereum',
-  Arbitrum: 'arbitrum',
-  Base: 'base',
-  Optimism: 'optimism',
-  'BNB Chain': 'binance',
-  Sonic: 'sonic',
-  Mantle: 'mantle',
-  Berachain: 'berachain',
-  HyperEVM: 'hyperliquid',
-  Plasma: 'plasma',
-  Monad: 'monad',
-  Solana: 'solana',
-  Avalanche: 'avalanche',
-  Katana: 'katana',
-  Flare: 'flare',
-  Hemi: 'hemi',
-  'X Layer': 'xlayer',
-};
+export const chainFa = (chain: string) => networkByName(chain).nameFa;
 
-export const chainLogo = (chain: string) =>
-  CHAIN_SLUG[chain] ? `https://icons.llamao.fi/icons/chains/rsz_${CHAIN_SLUG[chain]}.jpg` : null;
+/** Local network logo (null → monogram). */
+export const chainLogo = (chain: string) => networkByName(chain).logo;
 
-const PROTOCOL_SLUG: Record<ProtocolId, string> = { pendle: 'pendle', exponent: 'exponent', spectra: 'spectra' };
-export const protocolLogo = (id: ProtocolId) => `https://icons.llamao.fi/icons/protocols/${PROTOCOL_SLUG[id]}?w=64&h=64`;
+export const protocolLogo = (id: ProtocolId) => protocolIdentity(id).logo;
 
 export const KIND_LABEL: Record<PositionKind, string> = { pt: 'PT', yt: 'YT', loop: 'PT Loop' };
 export const KIND_FA: Record<PositionKind, string> = {

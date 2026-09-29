@@ -2,11 +2,11 @@
  * YieldX service worker.
  * - App pages: network first, cached copy when offline (analysis runs in the browser,
  *   so the dashboard keeps working offline with manually entered data).
- * - Build assets (/_next/static) and fonts: cache first — they are content-hashed.
- * - /api/*: never cached; market data must be live.
+ * - Build assets (/_next/static), the local font and logos: cache first — they are content-hashed or static.
+ * - /api/*: never cached; market data must be live. Offline, the UI labels what it shows as saved data, never as live.
  */
-const VERSION = 'yieldx-v2';
-const PAGES = ['/dashboard', '/portfolio', '/history', '/guide'];
+const VERSION = 'yieldx-v3';
+const PAGES = ['/opportunities', '/dashboard', '/portfolio', '/history', '/guide'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -64,6 +64,6 @@ self.addEventListener('fetch', (event) => {
   }
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
-  const immutable = url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/pwa-icon/');
+  const immutable = ['/_next/static/', '/pwa-icon/', '/fonts/', '/logos/'].some((p) => url.pathname.startsWith(p));
   event.respondWith(immutable ? cacheFirst(request) : networkFirst(request));
 });

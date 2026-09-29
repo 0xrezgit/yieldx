@@ -190,14 +190,18 @@ describe('GET /api/:protocol/:market', () => {
     expect(history).toBeNull();
   });
 
-  it('keeps the user’s base APY when Spectra reports none', async () => {
+  it('marks the base APY unknown (not the previous market’s) when Spectra reports none', async () => {
     const noApr = [{ ...spectraMarkets[0], ibt: { ...spectraMarkets[0].ibt, apr: { total: null } } }];
     mockFetch({ 'api.spectra.finance/v1/base/pools': { body: noApr } });
     const id = `base-${SPECTRA_PT}`;
     const { market } = await (await getMarket(req(`/api/spectra/${id}`), ctx({ protocol: 'spectra', market: id }))).json();
     expect(market.baseAPY).toBeNull(); // NaN serialises to null
     const p = mergeMarketData({ ...defaultScenario(), baseAPY: 7 }, { ...market, baseAPY: NaN }, null);
-    expect(p.baseAPY).toBe(7);
+    expect(p.baseAPY).toBeNaN();
+    expect(p.dataMeta?.missing).toContain('baseAPY');
+    // A refresh of the same market keeps a base APY the user typed in.
+    const typed = { ...p, baseAPY: 6.5, dataMeta: { ...p.dataMeta!, manual: ['baseAPY'] } };
+    expect(mergeMarketData(typed, { ...market, baseAPY: NaN }, null).baseAPY).toBe(6.5);
   });
 
   it('rejects malformed Spectra ids and unknown networks', async () => {
@@ -392,9 +396,12 @@ describe('fetched data → analysis', () => {
       chain: 'Solana',
       fetchedAt: new Date().toISOString(),
     };
-    const p = mergeMarketData(defaultScenario(), m, null);
-    expect(p.underlyingPrice).toBe(defaultScenario().underlyingPrice); // kept when the API has none
-    expect(p.ytMultiplier).toBe(8);
+    const merged = mergeMarketData(defaultScenario(), m, null);
+    // No USD price from the API: unknown, and the user is asked for it — never a stale number.
+    expect(merged.underlyingPrice).toBeNaN();
+    expect(merged.dataMeta?.missing).toContain('underlyingPrice');
+    expect(merged.ytMultiplier).toBe(8);
+    const p = { ...merged, underlyingPrice: 1 };
     const a = analyzeScenario(p);
     expect(a.validation.valid).toBe(true);
     // Maturity is truncated to a date, so allow a day of drift.

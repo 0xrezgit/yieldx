@@ -28,7 +28,9 @@ export function validatePosition(p: {
 }): ValidationResult {
   const issues: ValidationIssue[] = [];
   if (!(p.capital > 0)) issues.push({ field: 'capital', level: 'error', message: 'سرمایه باید بیشتر از صفر باشد.' });
-  if (!(p.underlyingPrice > 0))
+  if (!Number.isFinite(p.underlyingPrice))
+    issues.push({ field: 'underlyingPrice', level: 'error', message: 'قیمت دلاری دارایی پایه از API نیامده؛ آن را در «تنظیمات پیشرفته» وارد کنید.' });
+  else if (!(p.underlyingPrice > 0))
     issues.push({ field: 'underlyingPrice', level: 'error', message: 'قیمت دارایی پایه باید بیشتر از صفر باشد.' });
   if (!(p.ptPrice > 0 && p.ptPrice < 1))
     issues.push({ field: 'ptPrice', level: 'error', message: 'قیمت PT باید بین ۰ و ۱ (بر حسب دارایی پایه) باشد.' });
@@ -52,6 +54,8 @@ export function validateScenario(p: ScenarioParams, now = Date.now()): Validatio
     i.field === 'maturity' && p.marketId ? { ...i, message: 'این بازار منقضی شده؛ بازار دیگری انتخاب کنید.' } : i,
   );
 
+  if (!Number.isFinite(p.baseAPY))
+    issues.push({ field: 'baseAPY', level: 'warning', message: 'بازده پایه (APY) این بازار معلوم نیست؛ برای محاسبه‌ی YT آن را از سایت پروژه وارد کنید.' });
   if (p.baseAPY < 0) issues.push({ field: 'baseAPY', level: 'error', message: 'APY پایه نمی‌تواند منفی باشد.' });
   if (!(p.ltv > 0 && p.ltv < 100)) issues.push({ field: 'ltv', level: 'error', message: 'LTV باید بین ۰ و ۱۰۰ باشد.' });
   if (p.ltv >= p.liquidationThreshold)

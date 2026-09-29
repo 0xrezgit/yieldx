@@ -86,6 +86,9 @@ export class ExponentAdapter extends BaseAdapter {
         points: pb ? program(pb) : null,
         categories: (m.categories ?? []).map((c) => c.toLowerCase()),
         isNew: !!m.startDateUnixTs && Date.now() - m.startDateUnixTs * 1000 < NEW_WINDOW_MS,
+        // Solana mints are case-sensitive: kept exactly as the API gives them.
+        asset: { symbol: m.underlyingAsset?.ticker ?? m.tokenName ?? null, address: m.underlyingAsset?.mint ?? null },
+        accountingSymbol: m.tokenName ?? null,
       };
     });
   }
@@ -120,6 +123,8 @@ export class ExponentAdapter extends BaseAdapter {
       icon: token?.icon ?? null,
       chain: 'Solana',
       fetchedAt: new Date().toISOString(),
+      asset: { symbol: m.underlyingAsset?.ticker ?? m.tokenName ?? null, address: m.underlyingAsset?.mint ?? null },
+      accountingSymbol: m.tokenName ?? null,
     };
   }
 

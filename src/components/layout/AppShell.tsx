@@ -39,6 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     setTabState(t);
     window.scrollTo({ top: 0 });
   }, []);
+  // Tabs of the analysis page on mobile: «ورودی», «نتیجه», «هشدارها».
 
   useEffect(() => {
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
@@ -76,7 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ShellContext.Provider value={value}>
       <AppHeader />
-      <div className="pb-safe lg:pb-0">{children}</div>
+      <div className="pb-safe lg:pb-10">{children}</div>
       <BottomNav />
     </ShellContext.Provider>
   );

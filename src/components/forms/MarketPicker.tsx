@@ -2,22 +2,26 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Clock, Gift, Loader2, RefreshCw, Search, Sparkles, X } from 'lucide-react';
+import { Check, Clock, Gift, Loader2, Search, Sparkles, X } from 'lucide-react';
 import type { MarketListing } from '../../types/market';
-import { formatCompact, formatDate, formatNumber, formatPercent, formatUSDCompact } from '../../lib/utils/formatting';
-import { TokenLogo } from '../ui/token-logo';
+import type { ProtocolId } from '../../types/protocol';
+import { formatDate, formatNumber, formatPercent, formatUSDCompact, normalizeSearch } from '../../lib/utils/formatting';
+import { networkByName } from '../../lib/registry/networks';
+import { protocolIdentity } from '../../lib/registry/identity';
+import { LogoWithNetwork } from '../ui/asset-identity';
+import { DataStatus } from '../ui/data-status';
 import { Num } from '../ui/num';
 
+type Row = MarketListing & { protocol?: ProtocolId };
 type SortKey = 'liquidity' | 'apy' | 'maturity';
-type Filter = { kind: 'all' } | { kind: 'points' } | { kind: 'new' } | { kind: 'chain'; value: string } | { kind: 'tag'; value: string };
 
 const SORTS: { id: SortKey; label: string }[] = [
   { id: 'liquidity', label: 'نقدینگی' },
-  { id: 'apy', label: 'نرخ' },
+  { id: 'apy', label: 'نرخ ثابت' },
   { id: 'maturity', label: 'سررسید' },
 ];
 
-const TAG_LABEL: Record<string, string> = {
+export const TAG_LABEL: Record<string, string> = {
   stables: 'استیبل',
   stablecoins: 'استیبل',
   eth: 'ETH',
@@ -31,172 +35,212 @@ const TAG_LABEL: Record<string, string> = {
   lrt: 'LRT',
 };
 
+/** Everything a row can be found by: symbol, project, protocol, network (English + Persian), market id and token address. */
+export function searchText(m: Row): string {
+  const net = networkByName(m.chain);
+  return normalizeSearch(
+    [m.name, m.platform ?? '', m.protocol ? protocolIdentity(m.protocol).name : '', m.protocol ? protocolIdentity(m.protocol).nameFa : '', m.chain, net.nameFa, m.id, m.asset?.address ?? '', m.asset?.symbol ?? '', m.categories.join(' ')].join(' '),
+  );
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
-  markets: MarketListing[];
+  markets: Row[];
   loading: boolean;
   selectedId: string;
-  onSelect: (id: string) => void;
-  protocolName: string;
+  onSelect: (m: Row) => void;
+  title: string;
   updatedAt: number | null;
+  stale?: boolean;
+  /** Show the protocol on each row (cross-protocol lists). */
+  showProtocol?: boolean;
 }
 
-/** Searchable, filterable market list: bottom sheet on mobile, dialog on desktop. */
-export function MarketPicker({ open, onClose, markets, loading, selectedId, onSelect, protocolName, updatedAt }: Props) {
+/** Searchable market list: bottom sheet on mobile, dialog on desktop. Focus is trapped and returned. */
+export function MarketPicker({ open, onClose, markets, loading, selectedId, onSelect, title, updatedAt, stale = false, showProtocol = false }: Props) {
   const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>({ kind: 'all' });
+  const [chain, setChain] = useState<string | null>(null);
+  const [tag, setTag] = useState<string | null>(null);
+  const [pointsOnly, setPointsOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>('liquidity');
   const [showExpired, setShowExpired] = useState(false);
 
-  // Lock page scroll, close on Escape, focus search on desktop.
+  // Every open starts clean: a search typed for another protocol must not hide this list.
   useEffect(() => {
     if (!open) return;
+    setQuery('');
+    setChain(null);
+    setTag(null);
+    setPointsOnly(false);
+    const opener = document.activeElement as HTMLElement | null;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    requestAnimationFrame(() => searchRef.current?.focus());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const f = panelRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input, [tabindex="0"]');
+        if (!f.length) return;
+        const first = f[0];
+        const last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
     window.addEventListener('keydown', onKey);
-    if (window.matchMedia('(min-width: 1024px)').matches) searchRef.current?.focus();
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
+      // Deferred: returning focus during the key event that closed the dialog would let
+      // that same Enter press re-open it from the trigger button.
+      requestAnimationFrame(() => opener?.focus?.());
     };
   }, [open, onClose]);
 
   const active = useMemo(() => markets.filter((m) => !m.expired), [markets]);
   const expiredCount = markets.length - active.length;
 
-  const chips = useMemo(() => {
-    const chains = [...new Set(active.map((m) => m.chain))];
+  const facets = useMemo(() => {
+    const chainCount = new Map<string, number>();
     const tagCount = new Map<string, number>();
-    for (const m of active) for (const t of m.categories) if (t !== 'points') tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
-    const tags = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t]) => t);
-    return { chains: chains.length > 1 ? chains : [], tags };
+    for (const m of active) {
+      chainCount.set(m.chain, (chainCount.get(m.chain) ?? 0) + 1);
+      for (const t of m.categories) if (t !== 'points') tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
+    }
+    return {
+      chains: [...chainCount.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c),
+      tags: [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t]) => t),
+    };
+  }, [active]);
+
+  const index = useMemo(() => new Map(markets.map((m) => [m, searchText(m)])), [markets]);
+  // Same symbol more than once → the maturity (and network) are what tell rows apart.
+  const dupNames = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const m of active) c.set(m.name, (c.get(m.name) ?? 0) + 1);
+    return new Set([...c.entries()].filter(([, n]) => n > 1).map(([k]) => k));
   }, [active]);
 
   const list = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const pool = showExpired ? markets : active;
-    const rows = pool.filter((m) => {
-      if (q && !`${m.name} ${m.platform ?? ''} ${m.chain} ${m.categories.join(' ')}`.toLowerCase().includes(q)) return false;
-      switch (filter.kind) {
-        case 'points':
-          return m.hasPoints;
-        case 'new':
-          return m.isNew;
-        case 'chain':
-          return m.chain === filter.value;
-        case 'tag':
-          return m.categories.includes(filter.value);
-        default:
-          return true;
-      }
-    });
-    const by: Record<SortKey, (a: MarketListing, b: MarketListing) => number> = {
+    const q = normalizeSearch(query);
+    const rows = (showExpired ? markets : active).filter(
+      (m) => (!q || q.split(' ').every((w) => index.get(m)?.includes(w))) && (!chain || m.chain === chain) && (!tag || m.categories.includes(tag)) && (!pointsOnly || m.hasPoints),
+    );
+    const by: Record<SortKey, (a: Row, b: Row) => number> = {
       liquidity: (a, b) => (b.liquidity ?? -1) - (a.liquidity ?? -1),
       apy: (a, b) => b.impliedAPY - a.impliedAPY,
       maturity: (a, b) => a.daysToMaturity - b.daysToMaturity,
     };
     return rows.sort((a, b) => Number(a.expired) - Number(b.expired) || by[sort](a, b));
-  }, [markets, active, query, filter, sort, showExpired]);
+  }, [markets, active, index, query, chain, tag, pointsOnly, sort, showExpired]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
-  const pick = (m: MarketListing) => {
+  const pick = (m: Row) => {
     if (m.expired) return;
-    onSelect(m.id);
+    onSelect(m);
     onClose();
   };
+  const filtersOn = !!(query || chain || tag || pointsOnly);
 
-  const chip = (f: Filter, label: ReactNode, key: string) => {
-    const on = JSON.stringify(f) === JSON.stringify(filter);
-    return (
-      <button
-        key={key}
-        type="button"
-        onClick={() => setFilter(on ? { kind: 'all' } : f)}
-        className={`shrink-0 flex items-center gap-1 rounded-full px-3 py-1.5 text-sm border transition-colors ${
-          on ? 'border-accent bg-accent/20 text-primary' : 'border-strong text-secondary hover:text-primary'
-        }`}
-      >
-        {label}
-      </button>
-    );
-  };
-
-  // Rendered into <body>: the picker opens from a sticky side panel, whose own
-  // stacking context would otherwise let later page content paint over the dialog.
-  if (typeof document === 'undefined') return null;
+  // Rendered into <body>: the picker opens from inside cards whose stacking context would clip it.
   return createPortal(
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <button type="button" aria-label="بستن" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
+    <div className="sx fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <button type="button" aria-label="بستن" tabIndex={-1} onClick={onClose} className="absolute inset-0 bg-black/70" />
       <div
-        className="absolute inset-x-0 bottom-0 top-8 rounded-t-3xl lg:inset-x-auto lg:bottom-auto lg:top-[7vh] lg:left-1/2 lg:-translate-x-1/2 lg:w-[48rem] lg:h-[84vh] lg:rounded-3xl
-          bg-surface border border-default shadow-2xl shadow-black/60 flex flex-col overflow-hidden"
+        ref={panelRef}
+        className="absolute inset-x-0 bottom-0 top-6 rounded-t-2xl lg:inset-x-auto lg:bottom-auto lg:top-[6vh] lg:left-1/2 lg:-translate-x-1/2 lg:w-[52rem] lg:h-[86vh] lg:rounded-2xl
+          bg-surface border border-default shadow-2xl flex flex-col overflow-hidden"
       >
-        {/* Grab handle (mobile) */}
-        <div className="lg:hidden flex justify-center pt-2.5">
-          <span className="h-1.5 w-10 rounded-full bg-strong" />
-        </div>
-
-        <header className="px-4 lg:px-6 pt-3 lg:pt-5 pb-3 flex flex-col gap-3 border-b border-default">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 id={titleId} className="text-lg font-extrabold text-primary">
-                بازارهای {protocolName}
+        <header className="px-4 lg:px-6 pt-4 pb-3 flex flex-col gap-3 border-b border-default">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex flex-col gap-1">
+              <h2 id={titleId} className="text-lg font-semibold text-primary">
+                {title}
               </h2>
-              <p className="text-xs text-muted flex items-center gap-1.5">
-                {loading ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" /> در حال دریافت…
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw size={12} /> <Num>{formatNumber(active.length, 0)}</Num> بازار فعال · به‌روزرسانی خودکار
-                    {updatedAt && (
-                      <>
-                        {' '}
-                        · <Num>{new Date(updatedAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</Num>
-                      </>
-                    )}
-                  </>
-                )}
-              </p>
+              {loading && !markets.length ? (
+                <p className="text-sm text-secondary flex items-center gap-1.5">
+                  <Loader2 size={13} className="animate-spin" /> در حال دریافت بازارها…
+                </p>
+              ) : (
+                <DataStatus source="api" fetchedAt={updatedAt} stale={stale} label={<><Num>{formatNumber(active.length, 0)}</Num> بازار فعال</>} />
+              )}
             </div>
-            <button type="button" onClick={onClose} aria-label="بستن" className="p-2 rounded-xl text-secondary hover:text-primary hover:bg-elevated">
+            <button type="button" onClick={onClose} aria-label="بستن" className="tap grid place-items-center size-10 rounded-lg text-secondary hover:text-primary hover:bg-elevated">
               <X size={20} />
             </button>
           </div>
 
           <div className="relative">
-            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" aria-hidden />
             <input
               ref={searchRef}
+              type="search" dir="auto"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && list[0] && pick(list[0])}
-              placeholder="جستجوی توکن، پروژه یا شبکه"
-              aria-label="جستجو"
-              className="w-full bg-elevated/70 border border-strong rounded-xl pr-10 pl-3 py-2.5 text-base focus:border-accent focus:ring-2 focus:ring-accent/25"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && list[0]) {
+                  e.preventDefault();
+                  pick(list[0]);
+                }
+              }}
+              placeholder="نماد، پروژه، شبکه یا آدرس"
+              aria-label="جست‌وجوی بازار"
+              className="w-full bg-elevated border border-control rounded-lg pr-10 pl-3 min-h-11 text-base"
             />
           </div>
 
-          <div className="flex gap-1.5 overflow-x-auto -mx-4 px-4 lg:-mx-6 lg:px-6 pb-0.5">
-            {chip({ kind: 'all' }, 'همه', 'all')}
-            {chip({ kind: 'points' }, <><Gift size={13} /> پوینت‌دار</>, 'points')}
-            {active.some((m) => m.isNew) && chip({ kind: 'new' }, <><Sparkles size={13} /> جدید</>, 'new')}
-            {chips.chains.map((c) => chip({ kind: 'chain', value: c }, c, `c-${c}`))}
-            {chips.tags.map((t) => chip({ kind: 'tag', value: t }, TAG_LABEL[t] ?? t, `t-${t}`))}
-          </div>
+          {facets.chains.length > 1 && (
+            <ChipRow label="شبکه">
+              {facets.chains.map((c) => (
+                <Chip key={c} on={chain === c} onClick={() => setChain(chain === c ? null : c)}>
+                  {networkByName(c).nameFa}
+                </Chip>
+              ))}
+            </ChipRow>
+          )}
+          <ChipRow label="دسته">
+            <Chip on={pointsOnly} onClick={() => setPointsOnly(!pointsOnly)}>
+              <Gift size={13} aria-hidden /> پوینت‌دار
+            </Chip>
+            {facets.tags.map((t) => (
+              <Chip key={t} on={tag === t} onClick={() => setTag(tag === t ? null : t)}>
+                {TAG_LABEL[t] ?? t}
+              </Chip>
+            ))}
+          </ChipRow>
 
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-muted">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="text-secondary" aria-live="polite">
               <Num>{formatNumber(list.length, 0)}</Num> نتیجه
+              {filtersOn && (
+                <button
+                  type="button"
+                  className="tap mr-2 text-accent underline underline-offset-4"
+                  onClick={() => {
+                    setQuery('');
+                    setChain(null);
+                    setTag(null);
+                    setPointsOnly(false);
+                  }}
+                >
+                  پاک‌کردن فیلترها
+                </button>
+              )}
             </span>
-            <div className="flex gap-1 p-1 rounded-xl bg-elevated/60 border border-default" role="radiogroup" aria-label="مرتب‌سازی">
+            <div className="flex gap-1 p-1 rounded-lg bg-elevated border border-default" role="radiogroup" aria-label="مرتب‌سازی">
               {SORTS.map((s) => (
                 <button
                   key={s.id}
@@ -204,7 +248,7 @@ export function MarketPicker({ open, onClose, markets, loading, selectedId, onSe
                   role="radio"
                   aria-checked={sort === s.id}
                   onClick={() => setSort(s.id)}
-                  className={`rounded-lg px-3 py-1 transition-colors ${sort === s.id ? 'bg-surface text-primary shadow' : 'text-secondary'}`}
+                  className={`tap rounded-md px-3 min-h-9 ${sort === s.id ? 'bg-surface text-primary ring-1 ring-accent/60' : 'text-secondary'}`}
                 >
                   {s.label}
                 </button>
@@ -213,34 +257,31 @@ export function MarketPicker({ open, onClose, markets, loading, selectedId, onSe
           </div>
         </header>
 
-        <ul className="flex-1 overflow-y-auto overscroll-contain p-2 lg:p-3">
-          {loading && !markets.length &&
-            Array.from({ length: 6 }, (_, i) => (
-              <li key={i} className="flex items-center gap-3 p-3">
-                <span className="size-10 rounded-full bg-elevated animate-pulse" />
+        <ul className="flex-1 overflow-y-auto overscroll-contain p-2 lg:p-3" aria-label="بازارها">
+          {loading &&
+            !markets.length &&
+            Array.from({ length: 7 }, (_, i) => (
+              <li key={i} className="flex items-center gap-3 p-3 h-[72px]" aria-hidden>
+                <span className="size-8 rounded-full bg-elevated animate-pulse" />
                 <span className="flex-1 space-y-2">
                   <span className="block h-3 w-1/3 rounded bg-elevated animate-pulse" />
                   <span className="block h-2.5 w-1/2 rounded bg-elevated animate-pulse" />
                 </span>
               </li>
             ))}
-
-          {!loading && list.length === 0 && (
-            <li className="py-16 text-center text-secondary">بازاری با این فیلتر پیدا نشد.</li>
-          )}
-
+          {!loading && list.length === 0 && <li className="py-16 text-center text-secondary">بازاری با این جست‌وجو یا فیلتر پیدا نشد.</li>}
           {list.map((m) => (
-            <li key={m.id}>
-              <MarketRow m={m} selected={m.id === selectedId} onPick={() => pick(m)} />
+            <li key={`${m.protocol ?? ''}:${m.id}`}>
+              <MarketRow m={m} selected={m.id === selectedId} dup={dupNames.has(m.name)} showProtocol={showProtocol} onPick={() => pick(m)} />
             </li>
           ))}
         </ul>
 
         {expiredCount > 0 && (
           <footer className="border-t border-default px-4 lg:px-6 py-3 bottom-safe">
-            <label className="flex items-center gap-2 text-sm text-secondary">
-              <input type="checkbox" checked={showExpired} onChange={(e) => setShowExpired(e.target.checked)} className="accent-accent size-4" />
-              نمایش <Num>{formatNumber(expiredCount, 0)}</Num> بازار منقضی
+            <label className="flex items-center gap-2 text-sm text-secondary min-h-11">
+              <input type="checkbox" checked={showExpired} onChange={(e) => setShowExpired(e.target.checked)} />
+              نمایش <Num>{formatNumber(expiredCount, 0)}</Num> بازار سررسیدشده
             </label>
           </footer>
         )}
@@ -250,78 +291,81 @@ export function MarketPicker({ open, onClose, markets, loading, selectedId, onSe
   );
 }
 
-function MarketRow({ m, selected, onPick }: { m: MarketListing; selected: boolean; onPick: () => void }) {
-  const gap = m.baseAPY === null ? null : m.impliedAPY - m.baseAPY;
+function ChipRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-xs text-muted shrink-0 w-10">{label}</span>
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 min-w-0" role="group" aria-label={label}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`tap shrink-0 inline-flex items-center gap-1 rounded-full px-3 min-h-8 text-sm border transition-colors ${
+        on ? 'border-accent bg-accent/15 text-primary' : 'border-default text-secondary hover:text-primary'
+      }`}
+    >
+      {on && <Check size={13} aria-hidden />}
+      {children}
+    </button>
+  );
+}
+
+function MarketRow({ m, selected, dup, showProtocol, onPick }: { m: Row; selected: boolean; dup: boolean; showProtocol: boolean; onPick: () => void }) {
   return (
     <button
       type="button"
       onClick={onPick}
       disabled={m.expired}
       aria-current={selected || undefined}
-      className={`w-full flex items-center gap-3 rounded-2xl p-3 text-right transition-colors ${
-        selected ? 'bg-accent/15 ring-1 ring-accent/50' : 'hover:bg-elevated/70'
-      } ${m.expired ? 'opacity-45 cursor-not-allowed' : ''}`}
+      className={`w-full flex items-center gap-3 rounded-lg p-3 min-h-[72px] text-right transition-colors ${
+        selected ? 'bg-accent/12 ring-1 ring-accent/60' : 'hover:bg-elevated'
+      } ${m.expired ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
-      <TokenLogo src={m.icon} name={m.name} size={42} />
-
-      <div className="min-w-0 flex-1">
+      <LogoWithNetwork icon={m.icon} name={m.name} chain={m.chain} size={32} />
+      <div className="min-w-0 flex-1 flex flex-col gap-1">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="font-bold text-primary truncate" dir="ltr">
+          <bdi dir="ltr" className="font-semibold text-primary truncate">
             {m.name}
-          </span>
-          {selected && <Check size={15} className="text-accent shrink-0" />}
+          </bdi>
+          {selected && <Check size={15} className="text-accent shrink-0" aria-label="انتخاب‌شده" />}
         </div>
-        <div className="text-xs text-muted truncate">
-          {m.platform ? `${m.platform} · ` : ''}
-          {m.chain}
+        <div className="text-xs text-secondary truncate">
+          {[showProtocol && m.protocol ? protocolIdentity(m.protocol).name : null, networkByName(m.chain).nameFa, m.platform].filter(Boolean).join(' · ')}
         </div>
-        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap text-xs">
           {m.expired ? (
-            <Tag cls="bg-danger/15 text-danger">منقضی</Tag>
+            <span className="text-danger">سررسیدشده</span>
           ) : (
-            <Tag cls="bg-elevated text-secondary">
-              <Clock size={11} /> <Num>{formatNumber(m.daysToMaturity, 0)}</Num> روز · {formatDate(m.maturity)}
-            </Tag>
+            <span className={`inline-flex items-center gap-1 ${dup ? 'text-primary font-semibold' : 'text-secondary'}`}>
+              <Clock size={12} aria-hidden /> {formatDate(m.maturity)} · <Num>{formatNumber(m.daysToMaturity, 0)}</Num> روز
+            </span>
           )}
           {m.hasPoints && (
-            <Tag cls="bg-st-yt/15 text-st-yt">
-              <Gift size={11} /> پوینت
-              {m.ytMultiplier !== null && (
-                <>
-                  {' '}
-                  <Num>×{formatNumber(m.ytMultiplier, 0)}</Num>
-                </>
-              )}
-            </Tag>
+            <span className="inline-flex items-center gap-1 text-st-yt">
+              <Gift size={12} aria-hidden /> پوینت
+              {m.ytMultiplier !== null && <Num>×{formatNumber(m.ytMultiplier, 0)}</Num>}
+            </span>
           )}
           {m.isNew && !m.expired && (
-            <Tag cls="bg-brand2/15 text-brand2">
-              <Sparkles size={11} /> جدید
-            </Tag>
+            <span className="inline-flex items-center gap-1 text-accent">
+              <Sparkles size={12} aria-hidden /> جدید
+            </span>
           )}
         </div>
       </div>
-
-      <div className="text-left shrink-0">
-        <div className="text-lg font-extrabold text-primary leading-tight">
-          <Num>{formatPercent(m.impliedAPY, 2)}</Num>
-        </div>
-        <div className="text-[11px] text-muted">نرخ ثابت</div>
-        {m.baseAPY !== null && (
-          <div className={`text-xs ${gap !== null && gap > 0 ? 'text-warning' : 'text-success'}`}>
-            پایه <Num>{formatPercent(m.baseAPY, 1)}</Num>
-          </div>
-        )}
-        {m.liquidity !== null && (
-          <div className="text-xs text-secondary">
-            <Num>{m.liquidity >= 1000 ? formatUSDCompact(m.liquidity) : formatCompact(m.liquidity)}</Num>
-          </div>
-        )}
+      <div className="text-left shrink-0 flex flex-col items-end gap-0.5">
+        <Num className="text-base font-semibold text-primary">{formatPercent(m.impliedAPY, 2)}</Num>
+        <span className="text-xs text-muted">نرخ ثابت</span>
+        <span className="text-xs text-secondary">{m.liquidity !== null ? <Num>{formatUSDCompact(m.liquidity)}</Num> : 'نقدینگی —'}</span>
       </div>
     </button>
   );
-}
-
-function Tag({ cls, children }: { cls: string; children: ReactNode }) {
-  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>;
 }

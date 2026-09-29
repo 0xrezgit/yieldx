@@ -1,4 +1,5 @@
 import thresholds from '../config/thresholds.json';
+import protocols from '../config/protocols.json';
 import type { ScenarioParams } from '../types/scenario';
 import { calculateImpliedMetrics, type ImpliedMetrics } from './calculators/implied-apy';
 import { ptFixedReturn, ytPosition, ytYield, type YTPosition } from './calculators/pt-yt';
@@ -18,11 +19,21 @@ export type StrategyId = 'pt' | 'loop' | 'yt' | 'clmm';
 export interface StrategySummary {
   id: StrategyId;
   name: string;
-  /** Expected USD PnL to maturity. */
+  /**
+   * Estimated cash USD PnL to maturity — WITHOUT any airdrop value. This is the
+   * headline and the ranking basis: an airdrop is a hypothetical scenario.
+   */
   pnl: number;
-  /** PnL / capital, %. */
+  /** Cash PnL / capital, %. */
   roi: number;
+  /** Hypothetical airdrop value from the user's assumptions (0 when none). */
+  airdropValue: number;
+  /** pnl + airdropValue — shown only in the separate «سناریوی فرضی» section. */
+  pnlWithAirdrop: number;
   risk: RiskLevel;
+  /** False when the strategy can't be evaluated for this market (not ranked, not recommended). */
+  available: boolean;
+  unavailableReason?: string;
 }
 
 export interface Analysis {
@@ -122,15 +133,35 @@ export function analyzeScenario(p: ScenarioParams, now = Date.now()): Analysis {
   const ytRisk: RiskLevel =
     valuation.recommendation === 'avoid' || trend?.risk === 'high' ? 'high' : 'medium';
 
-  const strategies: StrategySummary[] = [
-    { id: 'pt', name: 'نگهداری PT', pnl: ptFixedReturn(p.capital, p.ptPrice), risk: 'low' },
-    { id: 'loop', name: 'لوپینگ PT', pnl: loop.profitToMaturity, risk: liquidation.risk },
-    { id: 'yt', name: 'خرید مستقیم YT', pnl: ytNet, risk: ytRisk },
-    { id: 'clmm', name: 'نقدینگی CLMM', pnl: clmm.feeIncome + clmmDrop, risk: clmm.risk },
-  ].map((s) => ({ ...s, roi: (s.pnl / p.capital) * 100 }) as StrategySummary);
+  const clmmOffered = protocols[p.protocol]?.hasClmm ?? false;
+  const baseKnown = Number.isFinite(p.baseAPY);
+  const strategies: StrategySummary[] = (
+    [
+      { id: 'pt', name: 'نگهداری PT', pnl: ptFixedReturn(p.capital, p.ptPrice), airdropValue: 0, risk: 'low', available: true },
+      { id: 'loop', name: 'لوپینگ PT', pnl: loop.profitToMaturity, airdropValue: 0, risk: liquidation.risk, available: true },
+      {
+        id: 'yt',
+        name: 'خرید مستقیم YT',
+        pnl: yieldBase - p.capital,
+        airdropValue: ytDrop,
+        risk: ytRisk,
+        available: baseKnown,
+        unavailableReason: baseKnown ? undefined : 'بازده پایه‌ی این بازار معلوم نیست؛ نتیجه‌ی YT بدون آن قابل محاسبه نیست.',
+      },
+      {
+        id: 'clmm',
+        name: 'نقدینگی CLMM',
+        pnl: clmm.feeIncome,
+        airdropValue: clmmDrop,
+        risk: clmm.risk,
+        available: clmmOffered,
+        unavailableReason: clmmOffered ? undefined : `${protocols[p.protocol]?.name ?? p.protocol} نقدینگی CLMM ندارد؛ این محاسبه فقط برای مقایسه است.`,
+      },
+    ] as Omit<StrategySummary, 'roi' | 'pnlWithAirdrop'>[]
+  ).map((s) => ({ ...s, roi: (s.pnl / p.capital) * 100, pnlWithAirdrop: s.pnl + s.airdropValue }));
 
   const score = (s: StrategySummary) => (s.pnl > 0 ? s.pnl * riskPenalty[s.risk] : s.pnl);
-  const ranked = validation.valid ? [...strategies].sort((a, b) => score(b) - score(a)) : [];
+  const ranked = validation.valid ? strategies.filter((s) => s.available && Number.isFinite(s.pnl)).sort((a, b) => score(b) - score(a)) : [];
 
   const exit = validation.valid
     ? computeExitPlan({

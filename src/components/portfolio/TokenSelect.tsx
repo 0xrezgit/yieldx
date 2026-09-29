@@ -88,7 +88,7 @@ export function TokenSelect({ label, value, onChange, tokens }: { label: string;
                 >
                   <TokenLogo src={t.logo} name={t.symbol} size={22} />
                   <span className="font-medium text-sx-text text-sm" dir="ltr">{t.symbol}</span>
-                  <span className="text-[11px] text-sx-muted truncate">{t.native ? 'ارز اصلی شبکه' : t.name}</span>
+                  <span className="text-xs text-sx-muted truncate">{t.native ? 'ارز اصلی شبکه' : t.name}</span>
                 </button>
               </li>
             ))}

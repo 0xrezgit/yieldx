@@ -137,7 +137,8 @@ export function screenYt(markets: OpportunityListing[], s: ScreenSettings, point
 
 // ─── Fixed-rate PT ─────────────────────────────────────────────────────────────
 
-export type PtZone = 'strong' | 'fair' | 'weak';
+/** 'unknown': the floating (base) rate is missing, so no comparison is claimed. */
+export type PtZone = 'strong' | 'fair' | 'weak' | 'unknown';
 
 export interface PtOpportunity {
   m: OpportunityListing;
@@ -162,7 +163,7 @@ export function screenPt(markets: OpportunityListing[], s: ScreenSettings): PtOp
       const ptPrice = ptPriceFromAPY(m.impliedAPY, D);
       const spread = m.baseAPY === null || !Number.isFinite(m.baseAPY) ? null : m.impliedAPY - m.baseAPY;
       const zone: PtZone =
-        spread === null ? 'fair' : spread >= T.ptMarginPP ? 'strong' : spread <= -T.ptMarginPP ? 'weak' : 'fair';
+        spread === null ? 'unknown' : spread >= T.ptMarginPP ? 'strong' : spread <= -T.ptMarginPP ? 'weak' : 'fair';
       // Locking a fixed rate is worth it when it beats the floating rate by the margin.
       const limitAPY = spread === null ? m.impliedAPY : Math.max(m.impliedAPY, (m.baseAPY as number) + T.ptMarginPP);
       return {

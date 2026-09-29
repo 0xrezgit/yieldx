@@ -172,7 +172,7 @@ export interface Buckets {
  * smallest losses. The "smallest" lists skip rows already in the "biggest" ones,
  * so no market appears twice.
  */
-export function buckets(rows: LeaderRow[], by: RankBy = 'total', n = 6): Buckets {
+export function buckets(rows: LeaderRow[], by: RankBy = 'total', n = 15): Buckets {
   const key = (r: LeaderRow) => (by === 'total' ? r.pnl : r.perDay);
   const gains = rows.filter((r) => r.pnl >= 0).sort((a, b) => key(b) - key(a));
   const losses = rows.filter((r) => r.pnl < 0).sort((a, b) => key(a) - key(b));

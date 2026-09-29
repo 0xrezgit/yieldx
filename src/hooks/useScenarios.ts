@@ -15,6 +15,11 @@ export function normalizeScenarioData(data: unknown): ScenarioParams {
   // Protocols can be removed (e.g. Sense); fall back to the default one.
   if (!(merged.protocol in protocols)) merged.protocol = base.protocol;
   if (!Array.isArray(merged.apyHistory)) merged.apyHistory = [];
+  // JSON has no NaN: an unknown number was saved as null — read it back as unknown.
+  const raw = data as Record<string, unknown>;
+  for (const k of ['underlyingPrice', 'ptPrice', 'ytPrice', 'baseAPY', 'capital'] as const) {
+    if (raw[k] === null) (merged as unknown as Record<string, number>)[k] = NaN;
+  }
   return merged;
 }
 

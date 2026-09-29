@@ -17,7 +17,7 @@ import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../
 import protocols from '../../config/protocols.json';
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
-import { TokenLogo } from '../ui/token-logo';
+import { AssetIdentity } from '../ui/asset-identity';
 import { Pill, Segmented, signedPct } from './parts';
 import type { Tone } from '../ui/badge';
 
@@ -33,8 +33,9 @@ export interface RankSettings {
 export const defaultRankSettings: RankSettings = { capital: 1000, strategy: 'pt', by: 'total', hurdle: 8, pointsOnly: true };
 
 const VERDICT: Record<Verdict, { label: string; tone: Tone }> = {
-  worth: { label: 'ارزشمند', tone: 'success' },
-  thin: { label: 'کم‌ارزش', tone: 'warning' },
+  // Only a comparison with the user's hurdle — not an overall endorsement.
+  worth: { label: 'بالای حداقل بازده', tone: 'success' },
+  thin: { label: 'زیر حداقل بازده', tone: 'warning' },
   loss: { label: 'زیان', tone: 'danger' },
   free: { label: 'پوینت رایگان', tone: 'success' },
   cheap: { label: 'ضرر کم', tone: 'warning' },
@@ -49,7 +50,7 @@ const BASIS: Record<LeaderStrategy, string> = {
 
 const money = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
-/** Six markets each for the biggest / smallest dollar profit and loss, for the capital the user enters. */
+/** Fifteen markets each for the biggest / smallest dollar profit and loss, for the capital the user enters. */
 export function LeaderBoard({
   markets,
   s,
@@ -79,9 +80,9 @@ export function LeaderBoard({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-2xl border border-default bg-surface/80 p-4 flex flex-col gap-3">
+      <section className="sx-card p-4 flex flex-col gap-3">
         <div className="grid grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] gap-3 items-end">
-          <NumberField label="سرمایه" value={r.capital} onChange={(v) => setR({ capital: v })} suffix="دلار" />
+          <NumberField label="سرمایه" value={r.capital} onChange={(v) => setR({ capital: Number.isFinite(v) ? v : 0 })} suffix="دلار" />
           <Segmented
             value={r.strategy}
             onChange={(strategy) => setR({ strategy })}
@@ -127,10 +128,10 @@ export function LeaderBoard({
           </div>
         )}
 
-        <p className="text-xs text-muted">
-          مبنای محاسبه: {BASIS[r.strategy]} کارمزد <Num>{formatNumber(s.feePercent, 2)}</Num>٪ هر معامله. «سالانه» و «در روز» نشان می‌دهند سود
-          نسبت به زمانی که پول قفل می‌ماند ارزش دارد یا نه.
-        </p>
+        <div className="rounded-lg bg-elevated px-3 py-2.5 text-sm text-secondary leading-7">
+          <b className="text-primary">معیار رتبه:</b> {r.by === 'total' ? 'نتیجه‌ی نقدی دلاری کل' : 'نتیجه‌ی نقدی دلاری در هر روز نگه‌داری'} برای سرمایه‌ی <Num>{formatUSD(r.capital, 0)}</Num>، بدون ارزش پوینت یا ایردراپ.{' '}
+          <b className="text-primary">افق نگه‌داری:</b> {BASIS[r.strategy]} کارمزد <Num>{formatNumber(s.feePercent, 2)}</Num>٪ هر معامله. رتبه‌ی بالا یعنی عدد بزرگ‌تر با همین فرض‌ها، نه تأیید ریسک بازار.
+        </div>
       </section>
 
       {r.capital > 0 && (
@@ -172,8 +173,8 @@ function Bucket({
   onCalc: (row: LeaderRow, strategy: LeaderStrategy) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-default bg-surface/80 p-4 flex flex-col gap-2 min-w-0">
-      <h2 className={`font-bold flex items-center gap-2 ${cls}`}>
+    <section className="sx-card p-4 flex flex-col gap-2 min-w-0">
+      <h2 className={`font-semibold flex items-center gap-2 ${cls}`}>
         {icon} {title}
         <span className="text-xs text-muted font-normal">
           (<Num>{formatNumber(rows.length, 0)}</Num>)
@@ -200,15 +201,12 @@ function Row({ row, rank, strategy, onClick }: { row: LeaderRow; rank: number; s
   const good = row.pnl >= 0;
 
   return (
-    <button type="button" onClick={onClick} className="w-full flex items-center gap-3 py-2.5 text-right rounded-xl hover:bg-elevated/50 px-1 transition-colors">
+    <button type="button" onClick={onClick} aria-label={`محاسبه‌ی ${m.name} در ${protocols[m.protocol].name}`} className="w-full flex items-center gap-3 py-2.5 min-h-14 text-right rounded-lg hover:bg-elevated px-1 transition-colors">
       <span className="grid place-items-center size-6 rounded-full bg-elevated text-xs text-secondary shrink-0 num">{formatNumber(rank, 0)}</span>
-      <TokenLogo src={m.icon} name={m.name} size={34} />
-      <div className="min-w-0 flex-1">
-        <div className="font-bold text-primary truncate" dir="ltr">
-          {m.name}
-        </div>
-        <div className="text-[11px] text-muted truncate">
-          {protocols[m.protocol].name} · {m.chain} · <Num>{formatPercent(m.impliedAPY, 1)}</Num>
+      <div className="min-w-0 flex-1 flex flex-col gap-1">
+        <AssetIdentity symbol={m.name} icon={m.icon} chain={m.chain} protocol={m.protocol} maturity={m.maturity} size={24} />
+        <div className="text-xs text-secondary">
+          نرخ ثابت <Num>{formatPercent(m.impliedAPY, 1)}</Num>
         </div>
         <div className="flex flex-wrap items-center gap-1 mt-1">
           <Pill tone={v.tone}>{v.label}</Pill>
@@ -239,13 +237,14 @@ function Row({ row, rank, strategy, onClick }: { row: LeaderRow; rank: number; s
         </div>
       </div>
       <div className="text-left shrink-0">
-        <div className={`font-extrabold text-lg leading-tight ${good ? 'text-success' : 'text-danger'}`}>
+        <div className={`font-semibold text-lg leading-tight ${good ? 'text-success' : 'text-danger'}`}>
           <Num>{money(row.pnl)}</Num>
         </div>
-        <div className="text-[11px] text-secondary">
-          <Num>{signedPct(row.pnlPercent, 2)}</Num> · سالانه <Num>{row.annualized > 9999 ? '> ۹۹۹۹٪' : signedPct(row.annualized, 1)}</Num>
+        <div className="text-xs text-muted">نقدی</div>
+        <div className="text-xs text-secondary">
+          <Num>{signedPct(row.pnlPercent, 2)}</Num> · سالانه {row.annualized > 9999 ? <>بیش از <Num>{formatPercent(9999, 0)}</Num></> : <Num>{signedPct(row.annualized, 1)}</Num>}
         </div>
-        <div className="text-[11px] text-muted">
+        <div className="text-xs text-muted">
           <Num>{money(row.perDay)}</Num> در روز
         </div>
       </div>

@@ -2,71 +2,54 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Download, History, LayoutDashboard, Radar, Sparkles, Wallet } from 'lucide-react';
+import { Download, Sparkles } from 'lucide-react';
 import { useShell } from './AppShell';
-
-const links = [
-  { href: '/dashboard', label: 'داشبورد', icon: LayoutDashboard },
-  { href: '/opportunities', label: 'فرصت‌ها', icon: Radar },
-  { href: '/portfolio', label: 'پوزیشن‌ها', icon: Wallet },
-  { href: '/history', label: 'سناریوها', icon: History },
-  { href: '/guide', label: 'راهنما', icon: BookOpen },
-];
+import { isActive, NAV } from './nav';
 
 export function Logo() {
   return (
-    <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
-      <span className="grid place-items-center size-9 rounded-xl brand-gradient text-white shadow-lg shadow-accent/30">
-        <Sparkles size={18} />
+    <Link href="/opportunities" className="flex items-center gap-2 shrink-0 min-h-11" aria-label="YieldX — صفحه‌ی فرصت‌ها">
+      <span className="grid place-items-center size-8 rounded-lg bg-brand text-white">
+        <Sparkles size={16} aria-hidden />
       </span>
-      <span className="font-extrabold text-lg tracking-tight text-primary" dir="ltr">
+      <span className="font-bold text-lg tracking-tight text-primary" dir="ltr">
         YieldX
       </span>
     </Link>
   );
 }
 
-/** Web: full navigation. Mobile/PWA: logo + guide + install only (navigation lives in the bottom bar). */
+/** Fixed, low header. Desktop: all destinations with a clear active state. Mobile: logo only (navigation is in the bottom bar). */
 export function AppHeader() {
   const pathname = usePathname();
   const { install } = useShell();
 
   return (
-    <header className="sticky top-0 z-20 bg-base/80 backdrop-blur-lg border-b border-default">
-      <div className="max-w-matrix mx-auto px-4 md:px-6 h-14 lg:h-16 flex items-center justify-between gap-3">
+    <header className="sticky top-0 z-30 bg-canvas/95 backdrop-blur border-b border-default">
+      <div className="max-w-matrix mx-auto px-[var(--space-page-x)] h-14 flex items-center justify-between gap-3">
         <Logo />
-
-        <nav className="hidden lg:flex items-center gap-1">
-          {links.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + '/');
+        <nav className="hidden lg:flex items-stretch h-full gap-1" aria-label="ناوبری اصلی">
+          {NAV.map(({ href, label, icon: Icon }) => {
+            const active = isActive(pathname, href);
             return (
               <Link
                 key={href}
                 href={href}
                 aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2 transition-colors ${
-                  active ? 'bg-elevated text-primary' : 'text-secondary hover:text-primary'
-                }`}
+                className={`relative flex items-center gap-2 px-3.5 text-[15px] transition-colors ${active ? 'text-primary font-semibold' : 'text-secondary hover:text-primary'}`}
               >
-                <Icon size={16} /> {label}
+                <Icon size={16} aria-hidden /> {label}
+                {active && <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-accent" aria-hidden />}
               </Link>
             );
           })}
         </nav>
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-[5rem] justify-end">
           {install && (
-            <button
-              type="button"
-              onClick={install}
-              className="flex items-center gap-1.5 rounded-xl border border-accent/50 bg-accent/15 px-3 py-1.5 text-sm text-primary"
-            >
-              <Download size={15} /> نصب اپ
+            <button type="button" onClick={install} className="tap flex items-center gap-1.5 rounded-lg border border-accent/60 px-3 min-h-9 text-sm text-primary">
+              <Download size={15} aria-hidden /> نصب اپ
             </button>
           )}
-          <Link href="/guide" aria-label="راهنما" className="lg:hidden p-2 rounded-xl text-secondary hover:text-primary">
-            <BookOpen size={20} />
-          </Link>
         </div>
       </div>
     </header>
