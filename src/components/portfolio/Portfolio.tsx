@@ -199,14 +199,28 @@ function Out({ m, asset }: { m: MaturedSummary; asset: string }) {
 }
 
 /** P&L, or why it is unknown (no invented prices). */
-const MaturedPnl = ({ m, asset }: { m: MaturedSummary; asset: string }) =>
+const MaturedPnl = ({ m, asset, drop }: { m: MaturedSummary; asset: string; drop?: number | null }) =>
   Number.isFinite(m.pnlUsd) ? (
-    <Pnl usd={m.pnlUsd} pct={m.pnlPct} size="sm" />
+    <span className="flex flex-col gap-0.5">
+      <Pnl usd={m.pnlUsd} pct={m.pnlPct} size="sm" />
+      {drop !== undefined && (
+        <span className="text-xs text-sx-muted whitespace-nowrap">
+          ایردراپ {drop === null ? '—' : <Usd x={drop} />} · کل {drop === null ? '—' : <Usd x={m.pnlUsd + drop} />}
+        </span>
+      )}
+    </span>
   ) : (
     <span className="text-sx-faint text-sm">
       — <span className="text-xs">نامعلوم: قیمت دلاری <bdi dir="ltr">{asset || 'دارایی پایه'}</bdi> در دسترس نیست؛ بازخرید را ثبت کنید یا قیمت را دستی وارد کنید</span>
     </span>
   );
+
+/** This position's airdrop result (its share), undefined when it has none recorded. */
+const airdropOf = (x: PositionView): number | null | undefined => {
+  const got = x.airdrops.filter((a) => a.summary.received > 0 || a.summary.stage === 'none');
+  if (!got.length) return undefined;
+  return got.some((a) => a.summary.totalUsd === null) ? null : got.reduce((s, a) => s + (a.summary.totalUsd as number) * a.share, 0);
+};
 
 const exitDate = (m: MaturedSummary) =>
   m.exitedAt ? (
@@ -270,7 +284,7 @@ export function MaturedSection({ views }: { views: PositionView[] }) {
                   <Out m={m} asset={x.p.assetSymbol} />
                 </td>
                 <td className="px-4 py-3 max-w-[14rem]">
-                  <MaturedPnl m={m} asset={x.p.assetSymbol} />
+                  <MaturedPnl m={m} asset={x.p.assetSymbol} drop={airdropOf(x)} />
                 </td>
               </tr>
             ))}
@@ -309,7 +323,7 @@ export function MaturedSection({ views }: { views: PositionView[] }) {
               <div className="col-span-2">
                 <dt className="text-xs text-sx-muted">سود و زیان</dt>
                 <dd>
-                  <MaturedPnl m={m} asset={x.p.assetSymbol} />
+                  <MaturedPnl m={m} asset={x.p.assetSymbol} drop={airdropOf(x)} />
                 </dd>
               </div>
             </dl>
@@ -321,7 +335,7 @@ export function MaturedSection({ views }: { views: PositionView[] }) {
 }
 
 export default function Portfolio() {
-  const { positions, views, totals, history, refresh, refreshing, updatedAt, exportFile, importFile } = usePortfolioView();
+  const { positions, views, totals, airdropTotals, history, refresh, refreshing, updatedAt, exportFile, importFile } = usePortfolioView();
   const [f, setF] = useState<Filters>(ALL);
   const [message, setMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -486,6 +500,16 @@ export default function Portfolio() {
                 <Usd x={totals.debtUsd} />
               </Figure>
             </div>
+            {airdropTotals.programs > 0 && (
+              <div className="grid grid-cols-2 gap-x-6 border-t border-sx-border pt-4">
+                <Figure label="ایردراپ" hint={airdropTotals.unknown ? `${formatNumber(airdropTotals.unknown, 0)} برنامه بدون قیمت، حساب نشده` : 'فروخته‌شده + باقی‌مانده به قیمت روز'}>
+                  <Pnl usd={airdropTotals.usd} size="sm" word={false} />
+                </Figure>
+                <Figure label="کل با ایردراپ" hint={totals.unpriced ? `${formatNumber(totals.unpriced, 0)} پوزیشن بدون قیمت در این جمع نیست` : undefined}>
+                  <Pnl usd={totals.pnlUsd + airdropTotals.usd} size="sm" />
+                </Figure>
+              </div>
+            )}
           </section>
 
           {alerts.length > 0 && (

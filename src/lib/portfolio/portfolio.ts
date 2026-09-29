@@ -2,6 +2,8 @@ import type { Position, PortfolioFile, PortfolioSnapshot, PositionEvent, ValueSn
 import { emptyManual, emptyTargets } from '../../types/position';
 import protocols from '../../config/protocols.json';
 import type { Valuation } from './valuation';
+import type { AirdropProgram } from '../../types/airdrop';
+import { normalizeProgram } from './airdrop';
 
 /** Portfolio totals, allocation and the snapshot/backup plumbing. */
 
@@ -161,7 +163,16 @@ export function parseBackup(text: string): PortfolioFile | null {
   const positions = raw.positions.map(normalizePosition);
   if (positions.some((p) => p === null)) return null;
   const history = Array.isArray(raw.history) ? (raw.history.filter((s) => isObj(s) && isStr(s.at) && isNum(s.netValueUsd)) as PortfolioSnapshot[]) : [];
-  return { version: 1, exportedAt: isStr(raw.exportedAt) ? raw.exportedAt : '', positions: positions as Position[], history };
+  const airdrops = Array.isArray(raw.airdrops) ? raw.airdrops.map(normalizeProgram) : [];
+  if (airdrops.some((a) => a === null)) return null;
+  return { version: 1, exportedAt: isStr(raw.exportedAt) ? raw.exportedAt : '', positions: positions as Position[], history, airdrops: airdrops as AirdropProgram[] };
+}
+
+/** Merge imported airdrop records: same id → imported copy wins. */
+export function mergeAirdrops(current: AirdropProgram[], imported: AirdropProgram[] = []): AirdropProgram[] {
+  const byId = new Map(current.map((a) => [a.id, a]));
+  for (const a of imported) byId.set(a.id, a);
+  return [...byId.values()];
 }
 
 /** Merge an imported backup: positions with the same id are replaced by the imported copy. */

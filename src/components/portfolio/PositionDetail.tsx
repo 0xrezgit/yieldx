@@ -17,6 +17,7 @@ import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
 import { TokenLogo } from '../ui/token-logo';
 import { EventForm } from './EventForm';
+import { AirdropCard } from './AirdropCard';
 import { TokenBadge } from './TokenSelect';
 import { AlertList, btn, Chip, Disclosure, MarketIdentity, NoWalletNote, Panel, Pnl, QualityBadge, SnapshotChart, Stat, StatGrid, StatusBadge, SxPage, Usd, usd } from './parts';
 
@@ -246,7 +247,6 @@ export function KindPanel({ x, onSave }: { x: PositionView; onSave: (p: Position
     );
   }
   if (p.kind === 'yt') {
-    const scenario = v.points * p.points.valuePerPoint;
     return (
       <Panel title="محاسبات YT" icon={<Gift size={17} />}>
         <StatGrid>
@@ -270,21 +270,6 @@ export function KindPanel({ x, onSave }: { x: PositionView; onSave: (p: Position
               ? 'سود انباشته از عددی است که دستی وارد کرده‌اید.'
               : 'سابقه‌ی روزانه‌ی بازده در دسترس نیست؛ سود انباشته با نرخ فعلی تخمین زده شده. عدد دقیق را از پلتفرم بخوانید و دستی وارد کنید.'}
         </p>
-        <div className="rounded-lg border border-dashed border-sx-border bg-sx-raised/30 p-5 flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Chip tone="warning">سناریو</Chip>
-            <span className="text-sm font-medium">پوینت و ایردراپ — جدا از سود قطعی</span>
-          </div>
-          <div className="grid grid-cols-2 gap-4 items-end">
-            <Stat label="پوینت تخمینی تا امروز" q="estimate">
-              <Num>{formatNumber(v.points, 0)}</Num>
-            </Stat>
-            <NumberField persian label="ارزش فرضی هر پوینت" value={p.points.valuePerPoint} onChange={(valuePerPoint) => onSave({ ...p, points: { ...p.points, valuePerPoint } })} suffix="دلار" />
-          </div>
-          <p className="text-sm text-sx-muted leading-7">
-            اگر هر پوینت {formatDollar(p.points.valuePerPoint, 6)} بیارزد: <span className="text-sx-text">{formatDollar(scenario)}</span> — فرضی و خارج از سود و زیان.
-          </p>
-        </div>
       </Panel>
     );
   }
@@ -660,7 +645,7 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
 
 export default function PositionDetail({ id }: { id: string }) {
   const router = useRouter();
-  const { positions, views, save, remove, refresh, refreshing, updatedAt } = usePortfolioView();
+  const { positions, views, airdrops, saveAirdrop, removeAirdrop, save, remove, refresh, refreshing, updatedAt } = usePortfolioView();
   const x = views.find((y) => y.p.id === id);
 
   if (positions === null) {
@@ -741,6 +726,7 @@ export default function PositionDetail({ id }: { id: string }) {
           <Answers x={x} />
           <Numbers x={x} />
           <KindPanel x={x} onSave={onSave} />
+          {p.kind === 'yt' && <AirdropCard x={x} programs={airdrops} views={views} saveAirdrop={saveAirdrop} removeAirdrop={removeAirdrop} onSavePosition={onSave} />}
           {v.status !== 'closed' && <AnalysisPanel x={x} />}
         </div>
         <div className="lg:col-span-2 flex flex-col gap-6 min-w-0">

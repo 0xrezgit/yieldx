@@ -408,3 +408,21 @@ describe('fetched data → analysis', () => {
     expect(Math.abs(a.implied.impliedAPY - m.impliedAPY)).toBeLessThan(0.2);
   });
 });
+
+describe('GET /api/prices by contract address', () => {
+  it('prices a token by "<chain>:<address>" and keeps Solana mints exactly', async () => {
+    const { GET: getPrices } = await import('../../src/app/api/prices/route');
+    const MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    const fn = mockFetch({
+      'coins.llama.fi/prices/current': {
+        body: { coins: { [`solana:${MINT}`]: { price: 0.9999, timestamp: 1_790_000_000 }, 'base:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': { price: 1, timestamp: 1_790_000_000 } } },
+      },
+    });
+    const res = await getPrices(req(`/api/prices?coins=solana:${MINT},base:0x833589FCD6EDB6E08F4C7C32D4F71B54BDA02913,bad id`));
+    const { prices } = await res.json();
+    expect(String(fn.mock.calls[0][0])).toContain(`solana:${MINT}`);
+    expect(String(fn.mock.calls[0][0])).not.toContain('bad');
+    expect(prices[`solana:${MINT}`].usd).toBeCloseTo(0.9999, 6);
+    expect(prices['base:0x833589FCD6EDB6E08F4C7C32D4F71B54BDA02913'].usd).toBe(1);
+  });
+});

@@ -1,7 +1,10 @@
+'use client';
+
 import { Gift } from 'lucide-react';
 import type { Analysis } from '../../lib/analysis';
-import type { ScenarioParams } from '../../types/scenario';
-import { formatCompact, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
+import type { ScenarioParams, ScenarioSetter } from '../../types/scenario';
+import { usePastPointValues } from '../../hooks/usePastPointValues';
+import { formatCompact, formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Num } from '../ui/num';
@@ -13,8 +16,9 @@ const rec = {
 } as const;
 
 /** Cost of points vs what they may be worth, plus the airdrop outlook. */
-export function PointsPanel({ p, a }: { p: ScenarioParams; a: Analysis }) {
+export function PointsPanel({ p, a, set }: { p: ScenarioParams; a: Analysis; set?: ScenarioSetter }) {
   const v = a.yt.valuation;
+  const past = usePastPointValues(p.pointsName)[0];
   const free = v.burn <= 0;
   const finiteCost = Number.isFinite(v.costPerMillion);
   const max = Math.max(finiteCost ? v.costPerMillion : 0, v.valuePerMillion, 1e-9);
@@ -30,6 +34,16 @@ export function PointsPanel({ p, a }: { p: ScenarioParams; a: Analysis }) {
         این بخش با فرض‌های شما (FDV، سهم ایردراپ، کل پوینت‌ها) حساب می‌شود و در نتیجه‌ی نقدی اثری ندارد. پوینت تضمین ایردراپ نیست.
         {p.pointsPerDay === 0 && <span className="text-warning"> نرخ پوینت این بازار صفر یا نامعلوم است؛ اگر برنامه‌ی پوینت دارد، آن را در «تنظیمات پیشرفته» وارد کنید.</span>}
       </p>
+      {past && (
+        <p className="text-sm flex flex-wrap items-center gap-x-2">
+          ارزش واقعی هر ۱ میلیون پوینت {past.season !== null ? <>در فصل <Num>{formatNumber(past.season, 0)}</Num></> : 'در فصل قبل'}: <Num className="text-primary">{formatUSD(past.valuePerMillion)}</Num>
+          {set && p.totalPointsSupply > 0 && (
+            <button type="button" className="tap text-accent underline underline-offset-4" onClick={() => set('fdv', (past.valuePerMillion / 1e6) * p.totalPointsSupply / Math.max(1e-9, p.airdropAllocation / 100))}>
+              استفاده برای تخمین
+            </button>
+          )}
+        </p>
+      )}
       <p className="text-sm">
         ارزیابی قیمت پوینت با این فرض‌ها: <Badge tone={rec[v.recommendation].tone}>{rec[v.recommendation].label}</Badge>
       </p>
