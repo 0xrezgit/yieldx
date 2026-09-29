@@ -1,4 +1,4 @@
-import type { MerklAction, MerklCampaign, MerklHook, MerklOpportunity, MerklProtocol, MerklRateKind, MerklToken, MerklTokenType } from './types';
+import type { MerklAction, MerklCampaign, MerklHook, MerklOpportunity, MerklProgram, MerklProgramRef, MerklProtocol, MerklRateKind, MerklToken, MerklTokenType } from './types';
 
 /**
  * Raw Merkl API v4 shapes — only the fields YieldX reads. Everything is optional
@@ -14,6 +14,7 @@ export interface RawToken {
   icon?: string;
   price?: number | null;
   updatedAt?: number | string;
+  priceSource?: string | null;
   verified?: boolean;
   isTest?: boolean;
   type?: string;
@@ -26,6 +27,8 @@ interface RawDistribution {
 
 export interface RawCampaign {
   id?: string;
+  campaignId?: string;
+  distributionChainId?: number;
   startTimestamp?: number | string;
   endTimestamp?: number | string;
   distributionType?: string;
@@ -50,13 +53,18 @@ export interface RawOpportunity {
   action?: string;
   type?: string;
   identifier?: string;
+  explorerAddress?: string | null;
+  tags?: string[];
+  activePrograms?: { slug?: string; name?: string; icon?: string }[];
+  totalApr?: number | null;
+  tvlRecord?: { timestamp?: string | number } | null;
   chainId?: number;
   chain?: { id?: number; name?: string; icon?: string };
   protocol?: { id?: string; name?: string; icon?: string; url?: string; trustData?: { audits?: string | number | null; hacks?: unknown[] } | null } | null;
   tokens?: RawToken[];
   apr?: number;
   nativeApr?: number | null;
-  nativeAprRecord?: { value?: number } | null;
+  nativeAprRecord?: { value?: number; timestamp?: string | number; description?: string | null } | null;
   tvl?: number;
   dailyRewards?: number;
   aprRecord?: { timestamp?: string | number } | null;
@@ -93,6 +101,7 @@ export function normalizeToken(t: RawToken | undefined, fallbackChainId = 0): Me
     // Points never carry a dollar value, even if the API sends 0 or a number.
     price: type === 'POINT' || price === null || price <= 0 ? null : price,
     priceAt: finite(t?.updatedAt),
+    priceSource: text(t?.priceSource),
     verified: t?.verified === true,
     type,
   };
@@ -141,13 +150,15 @@ function normalizeHooks(raw: Record<string, unknown>[] | undefined): MerklHook[]
 export function normalizeCampaign(c: RawCampaign, chainId: number): MerklCampaign | null {
   const start = finite(c.startTimestamp);
   const end = finite(c.endTimestamp);
-  if (start === null || end === null || !c.id) return null;
+  // Test reward tokens are Merkl's own fixtures, never a real reward.
+  if (start === null || end === null || !c.id || c.rewardToken?.isTest) return null;
   const rewardToken = normalizeToken(c.rewardToken, chainId);
   const decimals = c.rewardToken?.decimals;
   const perDay = (c.dailyRewardsBreakdown ?? []).map((b) => units(b.amount, b.token?.decimals ?? decimals)).filter((x): x is number => x !== null);
   const params = c.params ?? {};
   return {
     id: String(c.id),
+    campaignId: text(c.campaignId) ?? String(c.id),
     start,
     end,
     distributionType: c.distributionType ?? '',
@@ -157,6 +168,7 @@ export function normalizeCampaign(c: RawCampaign, chainId: number): MerklCampaig
     dailyUnits: perDay.length ? perDay.reduce((a, b) => a + b, 0) : null,
     budget: units(c.amount, decimals),
     rewardToken,
+    distributionChainId: finite(c.distributionChainId) ?? rewardToken.chainId ?? chainId,
     hooks: normalizeHooks(params.hooks),
     whitelistCount: Array.isArray(params.whitelist) ? params.whitelist.length : 0,
     blacklistCount: Array.isArray(params.blacklist) ? params.blacklist.length : 0,
@@ -175,6 +187,31 @@ function normalizeProtocol(p: RawOpportunity['protocol']): MerklProtocol | null 
     audits,
     hacks: Array.isArray(p.trustData?.hacks) ? p.trustData.hacks.length : 0,
   };
+}
+
+function normalizePrograms(raw: RawOpportunity['activePrograms']): MerklProgramRef[] {
+  const seen = new Set<string>();
+  const out: MerklProgramRef[] = [];
+  for (const p of raw ?? []) {
+    const slug = text(p?.slug);
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    out.push({ slug, name: text(p.name) ?? slug, icon: text(p.icon) });
+  }
+  return out;
+}
+
+export interface RawProgram {
+  slug?: string;
+  name?: string;
+  icon?: string;
+  description?: string;
+}
+
+export function normalizeProgram(p: RawProgram): MerklProgram | null {
+  const slug = text(p.slug);
+  if (!slug) return null;
+  return { slug, name: text(p.name) ?? slug, icon: text(p.icon), description: text(p.description) };
 }
 
 /** One raw opportunity → the slim shape sent to the browser; campaigns outside [start, end) at `now` are dropped. */
@@ -199,14 +236,21 @@ export function normalizeOpportunity(o: RawOpportunity, nowSec = Date.now() / 10
     action,
     type: o.type ?? '',
     identifier: o.identifier ?? '',
+    explorerAddress: text(o.explorerAddress),
     chain: { id: chainId, name: text(o.chain?.name) ?? `Chain ${chainId}`, icon: text(o.chain?.icon) },
     protocol: normalizeProtocol(o.protocol),
+    programs: normalizePrograms(o.activePrograms),
+    tags: (o.tags ?? []).filter((t): t is string => typeof t === 'string'),
     tokens,
     apr: finite(o.apr) ?? 0,
+    totalApr: finite(o.totalApr),
     nativeApr: native,
+    nativeAt: finite(o.nativeAprRecord?.timestamp),
+    nativeSource: text(o.nativeAprRecord?.description),
     tvl: Math.max(0, finite(o.tvl) ?? 0),
     dailyUsd: Math.max(0, finite(o.dailyRewards) ?? 0),
     aprAt: finite(o.aprRecord?.timestamp),
+    tvlAt: finite(o.tvlRecord?.timestamp),
     depositUrl: text(o.depositUrl),
     howTo: (o.howToSteps ?? []).filter((s) => typeof s === 'string' && s.trim()),
     campaigns: (o.campaigns ?? [])

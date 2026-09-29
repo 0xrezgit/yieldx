@@ -2,14 +2,13 @@
 
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { ChevronDown, Layers, Search, X } from 'lucide-react';
-import { ACTION, TOKEN_TYPE, merklNetwork } from '../../lib/merkl/rules';
-import { defaultMerklFilters, type MerklFilters, type RewardFilter } from '../../lib/merkl/estimate';
-import type { MerklAction, MerklOpportunity, MerklTokenType } from '../../lib/merkl/types';
-import { formatNumber, formatUSDCompact } from '../../lib/utils/formatting';
-import { NumberField } from '../ui/field';
+import { ACTION, merklNetwork } from '../../lib/merkl/rules';
+import { defaultMerklFilters, type MerklFilters } from '../../lib/merkl/filters';
+import type { MerklAction, MerklOpportunity } from '../../lib/merkl/types';
+import { formatNumber } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
 import { LogoSelect, type LogoOption } from './LogoSelect';
-import { ActionIcon, ChainLogo, ProtocolLogo, TokenTypeIcon } from './parts';
+import { ActionIcon, ChainLogo, ProtocolLogo } from './parts';
 
 const ALL_ICON = (
   <span className="grid place-items-center size-[18px] rounded-md bg-elevated text-muted">
@@ -24,7 +23,7 @@ function count<K>(list: MerklOpportunity[], key: (o: MerklOpportunity) => K) {
 }
 
 /** Filters for both Merkl views; options and counts come from the live list itself, so new chains and protocols appear on their own. */
-export function MerklFilterBar({ list, f, setF, shown, total, extra }: { list: MerklOpportunity[]; f: MerklFilters; setF: (f: MerklFilters) => void; shown: number; total: number; extra?: ReactNode }) {
+export function MerklFilterBar({ list, f, setF, shown, total, memes }: { list: MerklOpportunity[]; f: MerklFilters; setF: (f: MerklFilters) => void; shown: number; total: number; memes: number }) {
   const [open, setOpen] = useState(false);
   const gridId = useId();
 
@@ -63,11 +62,6 @@ export function MerklFilterBar({ list, f, setF, shown, total, extra }: { list: M
     ];
   }, [list]);
 
-  const rewards: LogoOption<RewardFilter>[] = [
-    { value: 'all', label: 'همه‌ی پاداش‌ها', search: 'همه', icon: ALL_ICON },
-    ...(['TOKEN', 'POINT', 'PRETGE'] as MerklTokenType[]).map((t) => ({ value: t, label: TOKEN_TYPE[t], search: TOKEN_TYPE[t], icon: <TokenTypeIcon type={t} size={16} /> })),
-  ];
-
   const active: { label: ReactNode; clear: () => void }[] = [];
   if (f.q) active.push({ label: <>جست‌وجو: «{f.q}»</>, clear: () => setF({ ...f, q: '' }) });
   const chip = <V extends string | number>(opts: LogoOption<V>[], v: V, key: keyof MerklFilters, prefix: string) => {
@@ -85,9 +79,9 @@ export function MerklFilterBar({ list, f, setF, shown, total, extra }: { list: M
   chip(chains, f.chain, 'chain', 'شبکه');
   chip(protocols, f.protocol, 'protocol', 'پروتکل');
   chip(actions, f.action, 'action', 'فعالیت');
-  chip(rewards, f.reward, 'reward', 'پاداش');
   if (f.stable) active.push({ label: 'فقط استیبل‌کوین', clear: () => setF({ ...f, stable: false }) });
-  if (f.hideRestricted) active.push({ label: 'بدون شرط دسترسی', clear: () => setF({ ...f, hideRestricted: false }) });
+  if (f.watchOnly) active.push({ label: 'فقط واچ‌لیست', clear: () => setF({ ...f, watchOnly: false }) });
+  if (f.hideMeme) active.push({ label: 'بدون میم‌کوین', clear: () => setF({ ...f, hideMeme: false }) });
 
   return (
     <section className="sx-card p-4 flex flex-col gap-4" aria-label="فیلترها">
@@ -101,32 +95,30 @@ export function MerklFilterBar({ list, f, setF, shown, total, extra }: { list: M
         </span>
         <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
       </button>
-      <div id={gridId} className={`${open ? 'grid' : 'hidden'} md:grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 items-end`}>
+      <div id={gridId} className={`${open ? 'grid' : 'hidden'} md:grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 items-end`}>
         <LogoSelect label="شبکه" value={f.chain} onChange={(chain) => setF({ ...f, chain })} options={chains} />
         <LogoSelect label="پروتکل" value={f.protocol} onChange={(protocol) => setF({ ...f, protocol })} options={protocols} />
         <LogoSelect label="فعالیت" value={f.action} onChange={(action) => setF({ ...f, action })} options={actions} />
-        <LogoSelect label="نوع پاداش" value={f.reward} onChange={(reward) => setF({ ...f, reward })} options={rewards} />
-        <NumberField label="حداقل TVL" value={f.minTvl} onChange={(v) => setF({ ...f, minTvl: Number.isFinite(v) ? Math.max(0, v) : 0 })} suffix="دلار" />
-        <NumberField label="حداقل روز باقی‌مانده" value={f.minDays} onChange={(v) => setF({ ...f, minDays: Number.isFinite(v) ? Math.max(0, v) : 0 })} />
-        <div className="col-span-2 md:col-span-3 xl:col-span-6 flex flex-wrap gap-x-5 gap-y-1">
+        <div className="min-[420px]:col-span-3 flex flex-wrap gap-x-5 gap-y-1">
           <label className="flex items-center gap-2 text-sm min-h-10">
             <input type="checkbox" checked={f.stable} onChange={(e) => setF({ ...f, stable: e.target.checked })} /> فقط استیبل‌کوین
           </label>
           <label className="flex items-center gap-2 text-sm min-h-10">
-            <input type="checkbox" checked={f.hideRestricted} onChange={(e) => setF({ ...f, hideRestricted: e.target.checked })} /> پنهان‌کردن فرصت‌های دارای شرط دسترسی
+            <input type="checkbox" checked={f.watchOnly} onChange={(e) => setF({ ...f, watchOnly: e.target.checked })} /> فقط واچ‌لیست
+          </label>
+          <label className="flex items-center gap-2 text-sm min-h-10">
+            <input type="checkbox" checked={f.hideMeme} onChange={(e) => setF({ ...f, hideMeme: e.target.checked })} /> پنهان‌کردن میم‌کوین Robinhood Chain
+            {memes > 0 && (
+              <span className="text-xs text-danger">
+                (<Num>{formatNumber(memes, 0)}</Num> بازار · ریسک بسیار بالا)
+              </span>
+            )}
           </label>
         </div>
       </div>
-      {extra}
       <div className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
         <span className="text-secondary">
-          <Num>{formatNumber(shown, 0)}</Num> نتیجه از <Num>{formatNumber(total, 0)}</Num> فرصت زنده
-          {f.minTvl > 0 && (
-            <span className="text-muted">
-              {' '}
-              · TVL دست‌کم <Num>{formatUSDCompact(f.minTvl)}</Num>
-            </span>
-          )}
+          <Num>{formatNumber(shown, 0)}</Num> از <Num>{formatNumber(total, 0)}</Num> فرصت زنده بررسی می‌شود
         </span>
         {active.map((a, i) => (
           <button key={i} type="button" onClick={a.clear} className="tap inline-flex items-center gap-1 rounded-full border border-accent/60 bg-accent/10 px-3 min-h-8 text-primary" aria-label="حذف فیلتر">
@@ -134,7 +126,7 @@ export function MerklFilterBar({ list, f, setF, shown, total, extra }: { list: M
           </button>
         ))}
         {active.length > 0 && (
-          <button type="button" onClick={() => setF({ ...defaultMerklFilters, minTvl: f.minTvl, minDays: f.minDays })} className="tap text-accent underline underline-offset-4 px-1">
+          <button type="button" onClick={() => setF(defaultMerklFilters)} className="tap text-accent underline underline-offset-4 px-1">
             پاک‌کردن فیلترها
           </button>
         )}

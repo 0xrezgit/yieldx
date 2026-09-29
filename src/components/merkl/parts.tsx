@@ -1,10 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ArrowDownToLine, BadgeDollarSign, Coins, Droplets, Gift, Hourglass, Layers, Lock, Repeat, Sparkles, Star, Wallet } from 'lucide-react';
+import { ArrowDownToLine, BadgeDollarSign, Coins, Droplets, Gift, Hourglass, Layers, Lock, Repeat, ShieldAlert, ShieldCheck, ShieldQuestion, Sparkles, Star, Wallet } from 'lucide-react';
 import { PROTOCOLS, shortAddress } from '../../lib/registry/identity';
 import { ACTION, TOKEN_TYPE, merklNetwork } from '../../lib/merkl/rules';
-import { flags, leadToken, type Flag } from '../../lib/merkl/estimate';
+import { flags, leadToken, type Flag } from '../../lib/merkl/filters';
+import type { Confidence } from '../../lib/merkl/profit';
 import type { MerklAction, MerklChain, MerklOpportunity, MerklProtocol, MerklToken, MerklTokenType } from '../../lib/merkl/types';
 import type { ProtocolId } from '../../types/protocol';
 import { TokenLogo } from '../ui/token-logo';
@@ -189,5 +190,40 @@ export function FlagPills({ o, max = 4 }: { o: MerklOpportunity; max?: number })
       ))}
       {list.length > max && <Pill><Num>+{formatNumber(list.length - max, 0)}</Num></Pill>}
     </span>
+  );
+}
+
+const CONF: Record<Confidence, { label: string; tone: Tone; icon: typeof Coins }> = {
+  high: { label: 'اطمینان بالا', tone: 'success', icon: ShieldCheck },
+  medium: { label: 'اطمینان متوسط', tone: 'warning', icon: ShieldQuestion },
+  low: { label: 'اطمینان پایین', tone: 'danger', icon: ShieldAlert },
+};
+
+export function ConfidencePill({ level }: { level: Confidence }) {
+  const c = CONF[level];
+  const Icon = c.icon;
+  return (
+    <Pill tone={c.tone}>
+      <Icon size={12} aria-hidden /> {c.label}
+    </Pill>
+  );
+}
+
+/** Watch-list toggle; the list lives in this browser only. */
+export function WatchStar({ on, onToggle, name }: { on: boolean; onToggle: () => void; name: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      aria-pressed={on}
+      aria-label={on ? `حذف ${name} از واچ‌لیست` : `افزودن ${name} به واچ‌لیست`}
+      title={on ? 'در واچ‌لیست' : 'افزودن به واچ‌لیست'}
+      className={`tap grid place-items-center size-9 rounded-md shrink-0 hover:bg-elevated ${on ? 'text-warning' : 'text-muted'}`}
+    >
+      <Star size={16} fill={on ? 'currentColor' : 'none'} aria-hidden />
+    </button>
   );
 }
