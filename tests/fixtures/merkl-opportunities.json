@@ -1,0 +1,1372 @@
+[
+ {
+  "id": "9859803059162020148",
+  "name": "Hold YT Flagship WETH SuperVault 26NOV2026",
+  "action": "HOLD",
+  "type": "ERC20LOGPROCESSOR",
+  "identifier": "0x775f0F7690c2CeeD13d20f9A302d1E8069d56b3B",
+  "chainId": 1,
+  "apr": 326.8202728810778,
+  "nativeApr": 38746098.841893926,
+  "tvl": 1690.9517723039735,
+  "dailyRewards": 15.140748483647311,
+  "depositUrl": "https://app.pendle.finance/trade/markets",
+  "howToSteps": [
+   "Hold YT Flagship WETH SuperVault 26NOV2026",
+   "Rewards accumulate automatically."
+  ],
+  "chain": {
+   "id": 1,
+   "name": "Ethereum",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/1.svg"
+  },
+  "protocol": {
+   "id": "pendle",
+   "name": "Pendle",
+   "icon": "https://icons.llamao.fi/icons/protocols/pendle?w=64&h=64",
+   "url": "https://www.pendle.finance/",
+   "trustData": {
+    "audits": "2",
+    "hacks": []
+   }
+  },
+  "tokens": [
+   {
+    "name": "Wrapped Ether",
+    "symbol": "wETH",
+    "displaySymbol": "wETH",
+    "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "chainId": 1,
+    "decimals": 18,
+    "icon": "https://raw.githubusercontent.com/AngleProtocol/angle-token-list/main/src/assets/tokens/WETH.png",
+    "price": 2727.1558012545543,
+    "updatedAt": 1790689401,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   },
+   {
+    "name": "YT Flagship WETH SuperVault 26NOV2026",
+    "symbol": "YT-superWETH-26NOV2026",
+    "displaySymbol": "YT-superWETH-26NOV2026",
+    "address": "0x775f0F7690c2CeeD13d20f9A302d1E8069d56b3B",
+    "chainId": 1,
+    "decimals": 18,
+    "icon": "",
+    "price": 12.414095226602868,
+    "updatedAt": 1790689644,
+    "verified": false,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "10484120598660546609",
+    "startTimestamp": 1790607600,
+    "endTimestamp": 1793199600,
+    "distributionType": "DUTCH_AUCTION",
+    "apr": 326.8202728810778,
+    "dailyRewards": 15.140748483647311,
+    "amount": "5468027201151052635200",
+    "rewardToken": {
+     "name": "UP SuperVault",
+     "symbol": "sUP",
+     "displaySymbol": "sUP",
+     "address": "0x2c71f70e2Ec720AE061Ae7E0316fC9654d94f417",
+     "chainId": 8453,
+     "decimals": 18,
+     "icon": "https://assets.coingecko.com/coins/images/70945/standard/superform.png?1764747920",
+     "price": 0.08306879936767739,
+     "updatedAt": 1790689356,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "DUTCH_AUCTION",
+      "distributionSettings": {
+       "resolvedToken": "0x775f0F7690c2CeeD13d20f9A302d1E8069d56b3B"
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "182267573371701755904"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "11521673201667687989",
+  "name": "Lend USDe on Aave (looping required)",
+  "action": "LEND",
+  "type": "AAVE_SUPPLY",
+  "identifier": "0x4F5923Fc5FD4a93352581b38B7cD26943012DECFBORROW_BL",
+  "chainId": 1,
+  "apr": 5,
+  "nativeApr": 0.3296029615762517,
+  "tvl": 554445162.5610802,
+  "dailyRewards": 70944.63137516829,
+  "depositUrl": "https://app.aave.com/reserve-overview/?underlyingAsset=0x4c9EDD5852cd905f086C759E8383e09bff1E68B3&marketName=proto_mainnet_v3",
+  "howToSteps": [
+   "Go to Aave and supply aEthUSDe.",
+   "Keep the deposit active. Withdrawals reduce your accrual in real time.",
+   "Check each campaign's rules for minimum supply amounts or address restrictions."
+  ],
+  "chain": {
+   "id": 1,
+   "name": "Ethereum",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/1.svg"
+  },
+  "protocol": {
+   "id": "aave",
+   "name": "Aave",
+   "icon": "https://raw.githubusercontent.com/AngleProtocol/angle-token-list/main/src/assets/protocols/aave.svg",
+   "url": "https://app.aave.com/",
+   "trustData": {
+    "audits": "2",
+    "hacks": [
+     {
+      "date": 1773273600,
+      "name": "Aave V3",
+      "source": "",
+      "amountUSD": 862000,
+      "technique": "Oracle Misconfiguration"
+     },
+     {
+      "date": 1724803200,
+      "name": "Aave",
+      "source": "",
+      "amountUSD": 56000,
+      "technique": "Arbitrary External Call"
+     }
+    ]
+   }
+  },
+  "tokens": [
+   {
+    "name": "Aave Ethereum USDe",
+    "symbol": "aEthUSDe",
+    "address": "0x4F5923Fc5FD4a93352581b38B7cD26943012DECF",
+    "chainId": 1,
+    "decimals": 18,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDe.png",
+    "price": 0.9998770258319809,
+    "updatedAt": 1790690695,
+    "verified": false,
+    "isTest": false,
+    "type": "TOKEN"
+   },
+   {
+    "name": "USDe",
+    "symbol": "USDe",
+    "displaySymbol": "USDe",
+    "address": "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
+    "chainId": 1,
+    "decimals": 18,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDe.png",
+    "price": 0.9998770258319809,
+    "updatedAt": 1790690596,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "1826168273850496818",
+    "startTimestamp": 1790294400,
+    "endTimestamp": 1790899200,
+    "distributionType": "AAVE_NET_APR",
+    "apr": 5,
+    "dailyRewards": 70944.63137516829,
+    "amount": "512055000000000000000000",
+    "rewardToken": {
+     "name": "Aave Ethereum USDe (wrapped)",
+     "symbol": "aEthUSDe",
+     "displaySymbol": "aEthUSDe",
+     "address": "0x1D9402D76a2487b3fdB3c809241e2e9086869B24",
+     "chainId": 1,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDe.png",
+     "price": 0.9998770258319809,
+     "updatedAt": 1790690684,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [
+      {
+       "chainId": 1,
+       "hookType": 17,
+       "protocol": 0,
+       "targetBytesLike": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2",
+       "healthFactorThreshold": "2"
+      },
+      {
+       "hookType": 14,
+       "protocol": 2,
+       "computeChainId": 1,
+       "borrowBytesLike": [
+        "0x015396E1F286289aE23a762088E863b3ec465145"
+       ]
+      }
+     ],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "AAVE_NET_APR",
+      "distributionSettings": {
+       "mode": "MAX_APR",
+       "side": "supply",
+       "targetAPR": "0.05",
+       "targetToken": "0x4F5923Fc5FD4a93352581b38B7cD26943012DECF",
+       "resolvedToken": "0x4F5923Fc5FD4a93352581b38B7cD26943012DECF",
+       "rewardTokenPricing": true,
+       "targetTokenPricing": true
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "70951587294775015899136"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "11955964678328285026",
+  "name": "Lend USDT0 on Aave",
+  "action": "LEND",
+  "type": "AAVE_NET_LENDING",
+  "identifier": "e12ee247f6a60e33",
+  "chainId": 9745,
+  "apr": 0.8597211585689822,
+  "nativeApr": 4.408882457540023,
+  "tvl": 754778581.7991008,
+  "dailyRewards": 17778.057994722636,
+  "depositUrl": "https://app.aave.com/reserve-overview/?underlyingAsset=0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb&marketName=proto_plasma_v3",
+  "howToSteps": [
+   "Go to Aave and supply USDT0.",
+   "Your accrual is based on your net position: supply minus same-token borrows. Borrowing the same token reduces your rewards.",
+   "Check each campaign's rules for minimum supply amounts or address restrictions."
+  ],
+  "chain": {
+   "id": 9745,
+   "name": "Plasma",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/9745.svg"
+  },
+  "protocol": {
+   "id": "aave",
+   "name": "Aave",
+   "icon": "https://raw.githubusercontent.com/AngleProtocol/angle-token-list/main/src/assets/protocols/aave.svg",
+   "url": "https://app.aave.com/",
+   "trustData": {
+    "audits": "2",
+    "hacks": [
+     {
+      "date": 1773273600,
+      "name": "Aave V3",
+      "source": "",
+      "amountUSD": 862000,
+      "technique": "Oracle Misconfiguration"
+     },
+     {
+      "date": 1724803200,
+      "name": "Aave",
+      "source": "",
+      "amountUSD": 56000,
+      "technique": "Arbitrary External Call"
+     }
+    ]
+   }
+  },
+  "tokens": [
+   {
+    "name": "Aave Plasma USDT0",
+    "symbol": "aPlaUSDT0",
+    "address": "0x5D72a9d9A9510Cd8cBdBA12aC62593A58930a948",
+    "chainId": 9745,
+    "decimals": 6,
+    "icon": "",
+    "price": 0.9997839372455055,
+    "updatedAt": 1790690697,
+    "verified": false,
+    "isTest": false,
+    "type": "TOKEN"
+   },
+   {
+    "name": "USDT0",
+    "symbol": "USDT0",
+    "displaySymbol": "USDT0",
+    "address": "0xB8CE59FC3717ada4C02eaDF9682A9e934F625ebb",
+    "chainId": 9745,
+    "decimals": 6,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDT0.svg",
+    "price": 0.9997839372455055,
+    "updatedAt": 1790690686,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "5282864865143687478",
+    "startTimestamp": 1789480800,
+    "endTimestamp": 1792069200,
+    "distributionType": "MAX_REWARD_VALUE_PER_LIQUIDITY_VALUE",
+    "apr": 0.8597211585689822,
+    "dailyRewards": 17778.057994722636,
+    "amount": "5335000000000000000000000",
+    "rewardToken": {
+     "name": "Wrapped XPL (wrapped)",
+     "symbol": "WXPL",
+     "displaySymbol": "WXPL",
+     "address": "0x461B1d4ae26B4f4CB627c18aD85F223Ef8a0dd18",
+     "chainId": 9745,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/XPL.png",
+     "price": 0.10049679243108593,
+     "updatedAt": 1790690691,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "MAX_APR",
+      "distributionSettings": {
+       "apr": "0.0425",
+       "targetToken": "0x5D72a9d9A9510Cd8cBdBA12aC62593A58930a948",
+       "resolvedToken": "0x5D72a9d9A9510Cd8cBdBA12aC62593A58930a948",
+       "rewardTokenPricing": true,
+       "targetTokenPricing": true
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "178080667593880367005696"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "13207567167701080626",
+  "name": "Provide liquidity to UniswapV4 BOLD-USDC 0.05%",
+  "action": "POOL",
+  "type": "UNISWAP_V4",
+  "identifier": "0x5d0ed52610c76d7bf729130ce7ddc0488b2f4bd0a0db1f12adbe6a32deaff893",
+  "chainId": 1,
+  "apr": 4.654952781593172,
+  "nativeApr": null,
+  "tvl": 3002005.950551315,
+  "dailyRewards": 382.85468355830403,
+  "depositUrl": "https://app.uniswap.org/explore/pools/ethereum/0x5d0ed52610c76d7bf729130ce7ddc0488b2f4bd0a0db1f12adbe6a32deaff893",
+  "howToSteps": [
+   "Provide liquidity on Uniswap.",
+   "Earn rewards based on your liquidity position."
+  ],
+  "chain": {
+   "id": 1,
+   "name": "Ethereum",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/1.svg"
+  },
+  "protocol": {
+   "id": "uniswap",
+   "name": "Uniswap",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/protocols/uniswap.svg",
+   "url": "https://app.uniswap.org/",
+   "trustData": {
+    "audits": "2",
+    "hacks": [
+     {
+      "date": 1587168000,
+      "name": "Uniswap V1",
+      "source": "",
+      "amountUSD": 220000,
+      "technique": "Reentrancy"
+     }
+    ]
+   }
+  },
+  "tokens": [
+   {
+    "name": "BOLD Stablecoin",
+    "symbol": "BOLD",
+    "displaySymbol": "BOLD",
+    "address": "0x6440f144b7e50D6a8439336510312d2F54beB01D",
+    "chainId": 1,
+    "decimals": 18,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/BOLD.svg",
+    "price": 0.9966460208071012,
+    "updatedAt": 1790690598,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   },
+   {
+    "name": "USD Coin",
+    "symbol": "USDC",
+    "displaySymbol": "USDC",
+    "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "chainId": 1,
+    "decimals": 6,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDC.png",
+    "price": 1,
+    "updatedAt": 1790690592,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "12706335138937141293",
+    "startTimestamp": 1790208000,
+    "endTimestamp": 1790812800,
+    "distributionType": "DUTCH_AUCTION",
+    "apr": 4.654952781593172,
+    "dailyRewards": 382.85468355830403,
+    "amount": "2688414929436525715678",
+    "rewardToken": {
+     "name": "BOLD Stablecoin",
+     "symbol": "BOLD",
+     "displaySymbol": "BOLD",
+     "address": "0x6440f144b7e50D6a8439336510312d2F54beB01D",
+     "chainId": 1,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/BOLD.svg",
+     "price": 0.9966460208071012,
+     "updatedAt": 1790690598,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [
+      "0x"
+     ],
+     "weightFees": 7500,
+     "isOutOfRangeIncentivized": false
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "384059275633789435904"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "2416353277329385508",
+  "name": "Hold USDat",
+  "action": "HOLD",
+  "type": "ERC20LOGPROCESSOR",
+  "identifier": "0x23238f20b894f29041f48D88eE91131C395Aaa71",
+  "chainId": 1,
+  "apr": 0,
+  "nativeApr": null,
+  "tvl": 53233667.17607944,
+  "dailyRewards": 0,
+  "depositUrl": null,
+  "howToSteps": [
+   "Hold USDat.",
+   "Rewards accumulate automatically."
+  ],
+  "chain": {
+   "id": 1,
+   "name": "Ethereum",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/1.svg"
+  },
+  "protocol": null,
+  "tokens": [
+   {
+    "name": "USDat",
+    "symbol": "USDat",
+    "displaySymbol": "USDat",
+    "address": "0x23238f20b894f29041f48D88eE91131C395Aaa71",
+    "chainId": 1,
+    "decimals": 6,
+    "icon": "",
+    "price": 1.00002908856366,
+    "updatedAt": 1790690682,
+    "verified": false,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "13343620925195680482",
+    "startTimestamp": 1786248000,
+    "endTimestamp": 1796792340,
+    "distributionType": "FIX_REWARD_AMOUNT_PER_LIQUIDITY_VALUE",
+    "apr": 0,
+    "dailyRewards": 0,
+    "amount": "48500000000000000000000000000",
+    "rewardToken": {
+     "name": "Orbital Points",
+     "symbol": "Orbital Points",
+     "displaySymbol": "Orbital Points",
+     "address": "0x10710501778b7FAf9e478f36FaE0B286C028eDE8",
+     "chainId": 1,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/orbital-point.png",
+     "verified": true,
+     "isTest": false,
+     "type": "POINT"
+    },
+    "params": {
+     "hooks": [
+      {
+       "key": "gravity-saturn",
+       "chainId": 1,
+       "hookType": 9,
+       "defaultBoost": "score",
+       "contractState": "latest",
+       "boostForInvited": "flatBoostNonParticipating",
+       "contractAddress": "0x36Fed2CE0fBad6F913B90CEAa294B1a0F1534A27",
+       "cumulativeBoost": true,
+       "boostForReferrer": "flatBoostNonParticipating",
+       "maximumBoostInvited": 0,
+       "maximumBoostReferrer": 0,
+       "valueForBoostForInvited": 50000000,
+       "valueForBoostForReferrer": 100000000
+      },
+      {
+       "key": "saturn-gravity-s1-boosts",
+       "hookType": 32,
+       "defaultBoost": "zero_address",
+       "boostingFunction": "multiply"
+      }
+     ],
+     "whitelist": [],
+     "blacklist": [
+      "0x",
+      "0x",
+      "0x",
+      "0x"
+     ],
+     "distributionMethodParameters": {
+      "distributionMethod": "FIX_APR",
+      "distributionSettings": {
+       "apr": "1825",
+       "targetToken": "0x23238f20b894f29041f48D88eE91131C395Aaa71",
+       "resolvedToken": "0x23238f20b894f29041f48D88eE91131C395Aaa71",
+       "rewardTokenPricing": false,
+       "targetTokenPricing": true
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "266168335880396984478072832"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "17488350223115175634",
+  "name": "Supply to Saturn USDC V2 vault on Morpho on Monad",
+  "action": "LEND",
+  "type": "ERC20LOGPROCESSOR",
+  "identifier": "0x75753e494e5e374C52E1d84fc04EB14B10F2C079",
+  "chainId": 143,
+  "apr": 1.0293983832355795,
+  "nativeApr": 6.776694246278886,
+  "tvl": 1985173.1090346414,
+  "dailyRewards": 55.987228998390066,
+  "depositUrl": "https://app.morpho.org/monad/vault/0x75753e494e5e374C52E1d84fc04EB14B10F2C079",
+  "howToSteps": [
+   "Go to Morpho and supply satUSDC.",
+   "Keep the deposit active. Withdrawals reduce your accrual in real time.",
+   "Check each campaign's rules for minimum supply amounts or address restrictions."
+  ],
+  "chain": {
+   "id": 143,
+   "name": "Monad",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/143.svg"
+  },
+  "protocol": {
+   "id": "morpho",
+   "name": "Morpho",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/protocols/morpho.svg",
+   "url": "https://morpho.org/",
+   "trustData": {
+    "audits": "2",
+    "hacks": []
+   }
+  },
+  "tokens": [
+   {
+    "name": "Saturn USDC",
+    "symbol": "satUSDC",
+    "displaySymbol": "satUSDC",
+    "address": "0x75753e494e5e374C52E1d84fc04EB14B10F2C079",
+    "chainId": 143,
+    "decimals": 18,
+    "icon": "",
+    "price": 1.009013,
+    "updatedAt": 1790690651,
+    "verified": false,
+    "isTest": false,
+    "type": "TOKEN"
+   },
+   {
+    "name": "USDC",
+    "symbol": "USDC",
+    "address": "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
+    "chainId": 143,
+    "decimals": 6,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDC.svg",
+    "price": 1,
+    "updatedAt": 1790690594,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "10270210937137781210",
+    "startTimestamp": 1786248000,
+    "endTimestamp": 1796792340,
+    "distributionType": "FIX_REWARD_AMOUNT_PER_LIQUIDITY_VALUE",
+    "apr": 0,
+    "dailyRewards": 0,
+    "amount": "23522500000000000000000000000",
+    "rewardToken": {
+     "name": "Orbital Points",
+     "symbol": "Orbital Points",
+     "displaySymbol": "Orbital Points",
+     "address": "0x10710501778b7FAf9e478f36FaE0B286C028eDE8",
+     "chainId": 1,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/orbital-point.png",
+     "verified": true,
+     "isTest": false,
+     "type": "POINT"
+    },
+    "params": {
+     "hooks": [
+      {
+       "key": "saturn-gravity-s1-boosts",
+       "hookType": 32,
+       "defaultBoost": "zero_address",
+       "boostingFunction": "multiply"
+      }
+     ],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "FIX_APR",
+      "distributionSettings": {
+       "apr": "365",
+       "resolvedToken": "0x75753e494e5e374C52E1d84fc04EB14B10F2C079",
+       "rewardTokenPricing": false,
+       "targetTokenPricing": true
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "1985173109034000073097216"
+     }
+    ]
+   },
+   {
+    "id": "7338086880162693472",
+    "startTimestamp": 1788962400,
+    "endTimestamp": 1791554400,
+    "distributionType": "DUTCH_AUCTION",
+    "apr": 0.15592515405441415,
+    "dailyRewards": 8.480503746364525,
+    "amount": "8850229987629804570483",
+    "rewardToken": {
+     "name": "Wrapped MON",
+     "symbol": "WMON",
+     "address": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+     "chainId": 143,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/WMON.svg",
+     "price": 0.028667152801582454,
+     "updatedAt": 1790690596,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "DUTCH_AUCTION",
+      "distributionSettings": {
+       "resolvedToken": "0x75753e494e5e374C52E1d84fc04EB14B10F2C079"
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "296029712657715363840"
+     }
+    ]
+   },
+   {
+    "id": "5586355898689049550",
+    "startTimestamp": 1787839200,
+    "endTimestamp": 1791554400,
+    "distributionType": "DUTCH_AUCTION",
+    "apr": 0.8734732291811653,
+    "dailyRewards": 47.50672525202554,
+    "amount": "71307827198694680449451",
+    "rewardToken": {
+     "name": "Wrapped MON",
+     "symbol": "WMON",
+     "address": "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+     "chainId": 143,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/WMON.svg",
+     "price": 0.028667152801582454,
+     "updatedAt": 1790690596,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "DUTCH_AUCTION",
+      "distributionSettings": {
+       "resolvedToken": "0x75753e494e5e374C52E1d84fc04EB14B10F2C079"
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "1658321562760341618688"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "17216643690669966223",
+  "name": "Hold USP Yield Optimized Stablecoin (USP)",
+  "action": "HOLD",
+  "type": "ERC20LOGPROCESSOR",
+  "identifier": "0x098697bA3Fee4eA76294C5d6A466a4e3b3E95FE6",
+  "chainId": 1,
+  "apr": 28.03099869094887,
+  "nativeApr": null,
+  "tvl": 4278044.666839542,
+  "dailyRewards": 3285.420944,
+  "depositUrl": null,
+  "howToSteps": [
+   "Hold USP.",
+   "Rewards accumulate automatically."
+  ],
+  "chain": {
+   "id": 1,
+   "name": "Ethereum",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/1.svg"
+  },
+  "protocol": null,
+  "tokens": [
+   {
+    "name": "USP Yield Optimized Stablecoin",
+    "symbol": "USP",
+    "displaySymbol": "USP",
+    "address": "0x098697bA3Fee4eA76294C5d6A466a4e3b3E95FE6",
+    "chainId": 1,
+    "decimals": 18,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USP.svg",
+    "price": 1.032091,
+    "updatedAt": 1790690592,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "7746274859178530816",
+    "startTimestamp": 1790240400,
+    "endTimestamp": 1790845200,
+    "distributionType": "DUTCH_AUCTION",
+    "apr": 28.03099869094887,
+    "dailyRewards": 3285.420944,
+    "amount": "143737166300000000000000",
+    "rewardToken": {
+     "name": "Piku Utility Token",
+     "symbol": "PIKU",
+     "displaySymbol": "PIKU",
+     "address": "0x2E4039E8E31475d65DC00293C366FDBfBBC02DC3",
+     "chainId": 1,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/PIKU.svg",
+     "price": 0.16,
+     "updatedAt": 1790690592,
+     "verified": true,
+     "isTest": false,
+     "type": "PRETGE"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [
+      "0x",
+      "0x",
+      "0x",
+      "0x",
+      "0x"
+     ],
+     "distributionMethodParameters": {
+      "distributionMethod": "DUTCH_AUCTION",
+      "distributionSettings": {
+       "resolvedToken": "0x098697bA3Fee4eA76294C5d6A466a4e3b3E95FE6"
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "20533880899999998410752"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "15037229969371509598",
+  "name": "Earn up to 4% cashback on Base tokenized equities bought through Enso on Oku, Kyo or Nami",
+  "action": "SWAP",
+  "type": "ENCOMPASSING",
+  "identifier": "0x0A205E6d1C28f5ac2FFb8f5F5038309b344eE2A5",
+  "chainId": 8453,
+  "apr": 4,
+  "nativeApr": null,
+  "tvl": 0,
+  "dailyRewards": 886.6191271311068,
+  "depositUrl": "https://oku.trade/swap?inputChain=base",
+  "howToSteps": [
+   "Connect your wallet on Merkl to check if you qualify.",
+   "If eligible, claim your rewards directly from this page."
+  ],
+  "chain": {
+   "id": 8453,
+   "name": "Base",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/8453.svg"
+  },
+  "protocol": {
+   "id": "enso",
+   "name": "Enso",
+   "icon": "https://pbs.twimg.com/profile_images/1795443155015184384/EeDEvFuQ_400x400.jpg",
+   "url": "https://www.enso.build/",
+   "trustData": {
+    "audits": "0",
+    "hacks": []
+   }
+  },
+  "tokens": [
+   {
+    "name": "USD Coin",
+    "symbol": "USDC",
+    "displaySymbol": "USDC",
+    "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "chainId": 8453,
+    "decimals": 6,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDC.png",
+    "price": 1,
+    "updatedAt": 1790690592,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "4854081905304274557",
+    "startTimestamp": 1788786000,
+    "endTimestamp": 1791216000,
+    "distributionType": "DUTCH_AUCTION",
+    "apr": 4,
+    "dailyRewards": 886.6191271311068,
+    "amount": "24937500000",
+    "rewardToken": {
+     "name": "USD Coin",
+     "symbol": "USDC",
+     "displaySymbol": "USDC",
+     "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+     "chainId": 8453,
+     "decimals": 6,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDC.png",
+     "price": 1,
+     "updatedAt": 1790690592,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "AIRDROP",
+      "distributionSettings": {}
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "886666666"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "4081998136546123516",
+  "name": "Borrow USDC on any Morpho Market",
+  "action": "BORROW",
+  "type": "MORPHOBORROW_SINGLETOKEN",
+  "identifier": "0x3600000000000000000000000000000000000000",
+  "chainId": 5042,
+  "apr": 0.4592794244622918,
+  "nativeApr": null,
+  "tvl": 185029817.13170367,
+  "dailyRewards": 2328.229806044163,
+  "depositUrl": "https://app.morpho.org/arc/borrow",
+  "howToSteps": [
+   "Go to Morpho and borrow USDC.",
+   "Keep your borrow position active for the duration of the campaign.",
+   "Check each campaign's rules for minimum borrow amounts or eligible collateral types."
+  ],
+  "chain": {
+   "id": 5042,
+   "name": "Arc",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/arc.svg"
+  },
+  "protocol": {
+   "id": "morpho",
+   "name": "Morpho",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/protocols/morpho.svg",
+   "url": "https://morpho.org/",
+   "trustData": {
+    "audits": "2",
+    "hacks": []
+   }
+  },
+  "tokens": [
+   {
+    "name": "USDC",
+    "symbol": "USDC",
+    "displaySymbol": "USDC",
+    "address": "0x3600000000000000000000000000000000000000",
+    "chainId": 5042,
+    "decimals": 6,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDC.png",
+    "price": 0.9999320284303925,
+    "updatedAt": 1790689338,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "3013117295017139404",
+    "startTimestamp": 1790182800,
+    "endTimestamp": 1792170000,
+    "distributionType": "DUTCH_AUCTION",
+    "apr": 0.4592794244622918,
+    "dailyRewards": 2328.229806044163,
+    "amount": "20602275300000000000000",
+    "rewardToken": {
+     "name": "Morpho Token",
+     "symbol": "MORPHO",
+     "displaySymbol": "MORPHO",
+     "address": "0x58D97B57BB95320F9a05dC918Aef65434969c2B2",
+     "chainId": 1,
+     "decimals": 18,
+     "icon": "https://raw.githubusercontent.com/AngleProtocol/angle-token-list/main/src/assets/tokens/morpho.png",
+     "price": 2.5991927959052052,
+     "updatedAt": 1790689331,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [
+      "0x",
+      "0x",
+      "0x",
+      "0x",
+      "0x"
+     ],
+     "distributionMethodParameters": {
+      "distributionMethod": "DUTCH_AUCTION",
+      "distributionSettings": {
+       "resolvedToken": "0x3600000000000000000000000000000000000000"
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "895751100000000016384"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "5701731715065456649",
+  "name": "[Robinhood Users Only] Supply to Steakhouse USDG V2 vault on Morpho",
+  "action": "LEND",
+  "type": "ERC20LOGPROCESSOR",
+  "identifier": "0xBeEff033F34C046626B8D0A041844C5d1A5409ddWHITELIST_CAMPAIGN",
+  "chainId": 4663,
+  "apr": 3.106513642985353,
+  "nativeApr": 3.912399146108595,
+  "tvl": 490000362.6062447,
+  "dailyRewards": 41703.13819181393,
+  "depositUrl": "https://applink.robinhood.com/u/home",
+  "howToSteps": [
+   "Go to the Robinhood App and supply USDG on Morpho.",
+   "Keep the deposit active. Withdrawals reduce your accrual in real time.",
+   "Check each campaign's rules for minimum supply amounts or address restrictions."
+  ],
+  "chain": {
+   "id": 4663,
+   "name": "Robinhood Chain",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/4663.jpg"
+  },
+  "protocol": {
+   "id": "morpho",
+   "name": "Morpho",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/protocols/morpho.svg",
+   "url": "https://morpho.org/",
+   "trustData": {
+    "audits": "2",
+    "hacks": []
+   }
+  },
+  "tokens": [
+   {
+    "name": "Steakhouse USDG",
+    "symbol": "steakUSDG",
+    "displaySymbol": "steakUSDG",
+    "address": "0xBeEff033F34C046626B8D0A041844C5d1A5409dd",
+    "chainId": 4663,
+    "decimals": 18,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/usdg.svg",
+    "price": 1.008477,
+    "updatedAt": 1790690629,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   },
+   {
+    "name": "Global Dollar",
+    "symbol": "USDG",
+    "displaySymbol": "USDG",
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "chainId": 4663,
+    "decimals": 6,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/usdg.svg",
+    "price": 1.0001446341841997,
+    "updatedAt": 1790690596,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "17444897265936555067",
+    "startTimestamp": 1782910800,
+    "endTimestamp": 1814446800,
+    "distributionType": "SOFR_SPREAD_RATCHET",
+    "apr": 0.28000000000000114,
+    "dailyRewards": 3758.906891226002,
+    "amount": "15000000000000000000000000",
+    "rewardToken": {
+     "name": "Steakhouse USDG (wrapped)",
+     "symbol": "steakUSDG",
+     "displaySymbol": "steakUSDG",
+     "address": "0x4377416Ec0Ccc830664b78d741E9672B8aA00786",
+     "chainId": 4663,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/usdg.svg",
+     "price": 1.008477,
+     "updatedAt": 1790690688,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [
+      {
+       "hookType": 18,
+       "protocol": 2,
+       "bytesLike": [
+        "0xd4A91E5023406903afF83225186e1d1eD18CA587"
+       ],
+       "computeChainId": 4663
+      },
+      {
+       "keys": [
+        "robinhood-blacklist"
+       ],
+       "hookType": 27
+      }
+     ],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "SOFR_SPREAD_RATCHET",
+      "distributionSettings": {
+       "curve": "boostGap",
+       "targetToken": "0xBeEff033F34C046626B8D0A041844C5d1A5409dd",
+       "opportunityId": "5701731715065456649",
+       "anchorTimestamp": 1782900000,
+       "rewardTokenPricing": true,
+       "targetTokenPricing": true
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "3727317872258609840128"
+     }
+    ]
+   },
+   {
+    "id": "2096001692856068734",
+    "startTimestamp": 1782910800,
+    "endTimestamp": 1814446800,
+    "distributionType": "SOFR_SPREAD_RATCHET",
+    "apr": 2.826513642985352,
+    "dailyRewards": 37944.231300587926,
+    "amount": "100000000000000000000000000",
+    "rewardToken": {
+     "name": "Steakhouse USDG (wrapped)",
+     "symbol": "steakUSDG",
+     "displaySymbol": "steakUSDG",
+     "address": "0x4377416Ec0Ccc830664b78d741E9672B8aA00786",
+     "chainId": 4663,
+     "decimals": 18,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/usdg.svg",
+     "price": 1.008477,
+     "updatedAt": 1790690688,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [
+      {
+       "hookType": 18,
+       "protocol": 2,
+       "bytesLike": [
+        "0xd4A91E5023406903afF83225186e1d1eD18CA587"
+       ],
+       "computeChainId": 4663
+      },
+      {
+       "keys": [
+        "robinhood-blacklist"
+       ],
+       "hookType": 27
+      }
+     ],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "SOFR_SPREAD_RATCHET",
+      "distributionSettings": {
+       "curve": "baseline",
+       "targetToken": "0xBeEff033F34C046626B8D0A041844C5d1A5409dd",
+       "opportunityId": "5701731715065456649",
+       "anchorTimestamp": 1782900000,
+       "rewardTokenPricing": true,
+       "targetTokenPricing": true
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "37625356405055084822528"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": "12848640496271100237",
+  "name": "Supply USDC in Upshift earnUSDC curated by Gami Labs",
+  "action": "HOLD",
+  "type": "UPSHIFT_VAULT",
+  "identifier": "CCL3WITWFFXIHV2I52ECV5DPIEOFSTU3PBPR53ILPLF2IP5KHECXRUTY",
+  "chainId": 4,
+  "apr": 5.992628094773089,
+  "nativeApr": 4.008258464208912,
+  "tvl": 25731773.116763532,
+  "dailyRewards": 4224.683465968329,
+  "depositUrl": "https://app.upshift.finance/vaults/stellar/gami-earnusdc",
+  "howToSteps": [
+   "Acquire and hold earnUSDC in a self-custodied wallet.",
+   "Only on-chain wallet balances qualify. Do not deposit into third-party protocols or CEX accounts.",
+   "Check each campaign's rules for any address restrictions or minimum balance thresholds."
+  ],
+  "chain": {
+   "id": 4,
+   "name": "Stellar",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/chains/4.svg"
+  },
+  "protocol": {
+   "id": "upshift",
+   "name": "Upshift",
+   "icon": "https://storage.googleapis.com/merkl-static-assets/protocols/upshift.svg",
+   "url": "https://www.upshift.finance/",
+   "trustData": {
+    "audits": "2",
+    "hacks": []
+   }
+  },
+  "tokens": [
+   {
+    "name": "earnUSDC",
+    "symbol": "earnUSDC",
+    "displaySymbol": "earnUSDC",
+    "address": "CCL3WITWFFXIHV2I52ECV5DPIEOFSTU3PBPR53ILPLF2IP5KHECXRUTY",
+    "chainId": 4,
+    "decimals": 13,
+    "icon": "",
+    "verified": false,
+    "isTest": false,
+    "type": "TOKEN"
+   },
+   {
+    "name": "USDC",
+    "symbol": "USDC",
+    "displaySymbol": "USDC",
+    "address": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+    "chainId": 4,
+    "decimals": 7,
+    "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDC.svg",
+    "price": 1,
+    "updatedAt": 1790690592,
+    "verified": true,
+    "isTest": false,
+    "type": "TOKEN"
+   }
+  ],
+  "aprRecord": {
+   "timestamp": "1790640000"
+  },
+  "campaigns": [
+   {
+    "id": "2348166767095371343",
+    "startTimestamp": 1789639200,
+    "endTimestamp": 1792317600,
+    "distributionType": "COMPOSED",
+    "apr": 5.992628094773089,
+    "dailyRewards": 4224.683465968329,
+    "amount": "1400000000000",
+    "rewardToken": {
+     "name": "USDC",
+     "symbol": "USDC",
+     "displaySymbol": "USDC",
+     "address": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75",
+     "chainId": 4,
+     "decimals": 7,
+     "icon": "https://storage.googleapis.com/merkl-static-assets/tokens/USDC.svg",
+     "price": 1,
+     "updatedAt": 1790690592,
+     "verified": true,
+     "isTest": false,
+     "type": "TOKEN"
+    },
+    "params": {
+     "hooks": [],
+     "whitelist": [],
+     "blacklist": [],
+     "distributionMethodParameters": {
+      "distributionMethod": "COMPOSED",
+      "distributionSettings": {
+       "adapters": [
+        {
+         "key": "nativeApr",
+         "name": "sharePriceNativeAPR",
+         "params": {
+          "computeOnRateUpdate": true
+         }
+        }
+       ],
+       "resolvedToken": "CCL3WITWFFXIHV2I52ECV5DPIEOFSTU3PBPR53ILPLF2IP5KHECXRUTY",
+       "computeExpression": "Math.max(0.1 - nativeApr, 0)",
+       "rewardTokenPricing": true,
+       "targetTokenPricing": true,
+       "targetDistributionMethod": "FIX_APR"
+      }
+     }
+    },
+    "dailyRewardsBreakdown": [
+     {
+      "amount": "42246834660"
+     }
+    ]
+   }
+  ]
+ }
+]

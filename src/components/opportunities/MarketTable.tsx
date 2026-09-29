@@ -31,6 +31,10 @@ interface Props<R> {
   caption: string;
   defaultSort?: { id: string; dir: 1 | -1 } | null;
   pageSize?: number;
+  /** Icon of the action button (default: calculator). */
+  actionIcon?: ReactNode;
+  /** Header of the identity column. */
+  identityHeader?: string;
 }
 
 /**
@@ -38,7 +42,7 @@ interface Props<R> {
  * header — page scroll only, no inner scroll area — and expandable rows for details.
  * Below 1024px the same rows become summary cards that open on tap.
  */
-export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAction, actionLabel, mobile, caption, defaultSort = null, pageSize = 25 }: Props<R>) {
+export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAction, actionLabel, mobile, caption, defaultSort = null, pageSize = 25, actionIcon, identityHeader = 'دارایی و شبکه' }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
   const [open, setOpen] = useState<string | null>(null);
   const [shown, setShown] = useState(pageSize);
@@ -71,7 +75,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
         <thead>
           <tr>
             <th scope="col" className="sticky top-14 z-10 bg-elevated text-right font-normal text-secondary px-2 xl:px-3 py-2.5 border-y border-default first:rounded-tr-lg first:border-r">
-              دارایی و شبکه
+              {identityHeader}
             </th>
             {columns.map((c) => {
               const active = sort?.id === c.id;
@@ -111,7 +115,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
                   <td className="px-2 xl:px-3 py-3 border-b border-l border-default whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
                       <button type="button" onClick={() => onAction(r)} className="tap inline-flex items-center gap-1.5 rounded-lg bg-brand text-white px-3 min-h-9 text-sm font-semibold">
-                        <Calculator size={14} aria-hidden /> {actionLabel}
+                        {actionIcon ?? <Calculator size={14} aria-hidden />} {actionLabel}
                       </button>
                       <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} aria-controls={detailsId} aria-label="جزئیات" className="tap grid place-items-center size-9 rounded-lg text-secondary hover:text-primary hover:bg-elevated">
                         <ChevronDown size={18} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
@@ -153,7 +157,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
               {mb.warning && <div className="text-xs text-warning">{mb.warning}</div>}
               <div className="flex gap-2">
                 <button type="button" onClick={() => onAction(r)} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand text-white px-3 min-h-11 text-[15px] font-semibold">
-                  <Calculator size={15} aria-hidden /> {actionLabel}
+                  {actionIcon ?? <Calculator size={15} aria-hidden />} {actionLabel}
                 </button>
                 <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} className="tap inline-flex items-center justify-center gap-1 rounded-lg border border-control px-3 min-h-11 text-[15px] text-primary">
                   جزئیات <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
