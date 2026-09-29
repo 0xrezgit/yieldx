@@ -141,7 +141,7 @@ export default function NewPosition() {
         setDraft((d) => ({ ...d, cash: { ...d.cash, token: d.cash.token || sym } }));
         setPlanToken((t) => t || sym);
         setLoop((l) => ({ ...l, debtAsset: l.debtAsset || sym }));
-        if (m.points) setPoints((p) => ({ ...p, perDay: m.points!.pointsPerDay, multiplier: m.points!.ytMultiplier, basis: m.points!.basis }));
+        if (m.points) setPoints((p) => ({ ...p, perDay: m.points!.pointsPerDay, multiplier: m.points!.ytMultiplier, basis: m.points!.basis, name: m.points!.name, season: m.points!.season }));
       })
       .catch(() => {});
     return () => ctrl.abort();

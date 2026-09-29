@@ -296,7 +296,7 @@ export function ResultSections({ d }: { d: ReadyDashboard }) {
         {tab === 'exit' && (a.exit ? <ExitPlanCard p={p} a={a} set={d.set} /> : <p className="text-sm text-secondary">برای برنامه‌ی خروج، ورودی‌های قرمز را اصلاح کنید.</p>)}
         {tab === 'points' && (
           <>
-            <PointsPanel p={p} a={a} />
+            <PointsPanel p={p} a={a} set={d.set} />
             <ApyOutlook p={p} a={a} />
             <SensitivityPanel p={p} days={a.days} />
           </>

@@ -5,10 +5,23 @@ import type { Position } from '../types/position';
 import { analyzePosition, positionAlerts, type Alert, type Analysis } from '../lib/portfolio/analysis';
 import { appendSnapshot, portfolioSnapshot, portfolioTotals, positionSnapshot } from '../lib/portfolio/portfolio';
 import { defaultExitSettings, valuePosition, type MarketQuote, type Valuation } from '../lib/portfolio/valuation';
-import { fetchPrices } from '../lib/data/market-data';
+import { fetchCoinPrices, fetchPrices, type TokenPrice } from '../lib/data/market-data';
+import { shares, summarize, type AirdropSummary } from '../lib/portfolio/airdrop';
+import type { AirdropProgram } from '../types/airdrop';
+import { coinId } from './useCoinPrice';
 import { tokenInfo } from '../lib/portfolio/tokens';
 import { usePortfolio } from './usePortfolio';
 import { quoteKey, useQuotes, type QuoteState } from './useQuotes';
+
+/** One airdrop program as seen from one linked position. */
+export interface PositionAirdrop {
+  program: AirdropProgram;
+  summary: AirdropSummary;
+  /** Current USD price of the token (automatic or manual) and where it came from. */
+  price: { usd: number; source: 'market' | 'manual'; at: string } | null;
+  /** This position's share of the program (0–1). */
+  share: number;
+}
 
 export interface PositionView {
   p: Position;
@@ -17,6 +30,15 @@ export interface PositionView {
   alerts: Alert[];
   quote: MarketQuote | null;
   q: QuoteState | undefined;
+  airdrops: PositionAirdrop[];
+}
+
+export interface AirdropTotals {
+  /** Sum of known program results (each program once). */
+  usd: number;
+  /** Programs with tokens whose result is unknown (no price). */
+  unknown: number;
+  programs: number;
 }
 
 /**
@@ -47,7 +69,19 @@ export function usePortfolioView() {
     return () => ctrl.abort();
   }, [debtSymbols, updatedAt]);
 
-  const views = useMemo<PositionView[]>(
+  // Current prices of airdrop tokens, by contract address, in one request.
+  const [coinPrices, setCoinPrices] = useState<Record<string, TokenPrice>>({});
+  const coinIds = [...new Set(store.airdrops.map((a) => (a.token ? coinId(a.token.chain, a.token.address) : null)).filter((x): x is string => !!x))].sort().join(',');
+  useEffect(() => {
+    if (!coinIds) return;
+    const ctrl = new AbortController();
+    fetchCoinPrices(coinIds.split(','), undefined, ctrl.signal)
+      .then(setCoinPrices)
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [coinIds, updatedAt]);
+
+  const base = useMemo(
     () =>
       (store.positions ?? []).map((p) => {
         const q = quotes[quoteKey(p)];
@@ -59,7 +93,34 @@ export function usePortfolioView() {
     [store.positions, quotes, now, debtPrices],
   );
 
+  const programs = useMemo(() => {
+    const estimated = Object.fromEntries(base.map((x) => [x.p.id, x.v.points]));
+    return store.airdrops.map((program) => {
+      const id = program.token ? coinId(program.token.chain, program.token.address) : null;
+      const auto = id ? coinPrices[id] : undefined;
+      const price = auto ? { usd: auto.usd, source: 'market' as const, at: auto.at } : program.manualPrice ? { usd: program.manualPrice.usd, source: 'manual' as const, at: program.manualPrice.at } : null;
+      return { program, price, summary: summarize(program, price?.usd ?? null, now), shares: shares(program, estimated) };
+    });
+  }, [store.airdrops, base, coinPrices, now]);
+
+  const views = useMemo<PositionView[]>(
+    () =>
+      base.map((x) => ({
+        ...x,
+        airdrops: programs.filter((g) => g.program.positionIds.includes(x.p.id)).map((g) => ({ program: g.program, summary: g.summary, price: g.price, share: g.shares[x.p.id] ?? 0 })),
+      })),
+    [base, programs],
+  );
+
   const totals = useMemo(() => portfolioTotals(views), [views]);
+  const airdropTotals = useMemo<AirdropTotals>(() => {
+    const received = programs.filter((g) => g.summary.received > 0 || g.summary.stage === 'none');
+    return {
+      usd: received.reduce((s, g) => s + (g.summary.totalUsd ?? 0), 0),
+      unknown: received.filter((g) => g.summary.totalUsd === null).length,
+      programs: received.length,
+    };
+  }, [programs]);
 
   // Record snapshots from fresh data only.
   const { save, setHistory, history } = store;
@@ -79,5 +140,5 @@ export function usePortfolioView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only after a refresh completes
   }, [updatedAt]);
 
-  return { ...store, views, totals, quotes, refresh, refreshing, updatedAt, now };
+  return { ...store, views, totals, airdropTotals, quotes, refresh, refreshing, updatedAt, now };
 }

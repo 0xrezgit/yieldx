@@ -1,4 +1,5 @@
 import type { ProtocolId } from './protocol';
+import type { AirdropProgram } from './airdrop';
 
 /**
  * Real positions the user has actually entered (or plans to enter), recorded as
@@ -138,7 +139,7 @@ export interface Position {
   manual: ManualMarks;
   targets: PositionTargets;
   /** Points program assumptions (YT) — only for the separate points scenario, never P&L. */
-  points: { perDay: number; multiplier: number; basis: 'unit' | 'usd'; valuePerPoint: number };
+  points: { perDay: number; multiplier: number; basis: 'unit' | 'usd'; valuePerPoint: number; name?: string; season?: number | null };
   snapshots: ValueSnapshot[];
   note: string;
 }
@@ -155,6 +156,8 @@ export interface PortfolioFile {
   exportedAt: string;
   positions: Position[];
   history: PortfolioSnapshot[];
+  /** Points → airdrop records (absent in files from older versions). */
+  airdrops?: AirdropProgram[];
 }
 
 export const emptyManual = (): ManualMarks => ({ tokenPrice: null, assetUsd: null, unclaimedYield: null });

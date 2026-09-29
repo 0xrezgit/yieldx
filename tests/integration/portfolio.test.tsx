@@ -12,6 +12,9 @@ import { PositionTable } from '../../src/components/portfolio/Portfolio';
 import { AnalysisPanel, Answers, KindPanel, Numbers } from '../../src/components/portfolio/PositionDetail';
 import NewPosition from '../../src/components/portfolio/NewPosition';
 import { Pnl } from '../../src/components/portfolio/parts';
+import { AirdropCard } from '../../src/components/portfolio/AirdropCard';
+import type { AirdropProgram } from '../../src/types/airdrop';
+import { summarize } from '../../src/lib/portfolio/airdrop';
 import { EventFields, emptyDraft } from '../../src/components/portfolio/EventForm';
 
 const now = Date.now();
@@ -56,7 +59,7 @@ const quote: MarketQuote = { ptPrice: 0.97, ytPrice: 0.03, assetUsd: 1, impliedA
 
 const view = (p: Position, q: MarketQuote | null = quote): PositionView => {
   const v = valuePosition(p, q, now);
-  return { p, v, a: analyzePosition(p, v, q), alerts: positionAlerts(p, v), quote: q, q: undefined };
+  return { p, v, a: analyzePosition(p, v, q), alerts: positionAlerts(p, v), quote: q, q: undefined, airdrops: [] };
 };
 
 describe('portfolio render', () => {
@@ -68,12 +71,16 @@ describe('portfolio render', () => {
       renderToString(<Numbers x={x} />),
       renderToString(<KindPanel x={x} onSave={() => {}} />),
       renderToString(<AnalysisPanel x={x} />),
+      kind === 'yt' ? renderToString(<AirdropCard x={x} programs={[]} views={[x]} saveAirdrop={() => {}} removeAirdrop={() => {}} onSavePosition={() => {}} />) : '',
     ].join('');
     expect(html).toContain('چه خریده‌ام؟');
     expect(html).toContain('اگر اکنون خارج شوم؟');
     expect(html).toContain('تخمینی');
     if (kind === 'loop') expect(html).toContain('شاخص سلامت');
-    if (kind === 'yt') expect(html).toContain('خارج از سود و زیان');
+    if (kind === 'yt') {
+      expect(html).toContain('سربه‌سر هر ۱ میلیون پوینت');
+      expect(html).toContain('شروع ثبت ایردراپ');
+    }
     if (kind === 'pt') expect(html).toContain('PT معادل یک دلار فرض نشده');
   });
 
@@ -134,11 +141,33 @@ describe('matured section render', () => {
       loop: null, manual: emptyManual(), targets: emptyTargets(), points: { perDay: 0, multiplier: 1, basis: 'unit' as const, valuePerPoint: 0 }, snapshots: [], note: '',
     };
     const v = valuePosition(p, null, now);
-    const html = renderToString(<MaturedSection views={[{ p, v, a: {} as never, alerts: [], quote: null, q: undefined }]} />);
+    const html = renderToString(<MaturedSection views={[{ p, v, a: {} as never, alerts: [], quote: null, q: undefined, airdrops: [] }]} />);
     expect(html).toContain('پوزیشن‌های سررسیدشده');
     expect(html).toContain('تاریخ ورود');
     expect(html).toContain('USDC');
     expect(html).toContain('تخمینی');
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, ''));
+  });
+});
+
+describe('airdrop card stages render in Persian', () => {
+  const program = (over: Partial<AirdropProgram>): AirdropProgram => ({
+    id: 'a', name: 'Hylo XP', season: 1, positionIds: ['p-yt'], shares: null, finalPoints: { amount: 12_400_000, at: '2026-07-01T00:00:00.000Z' },
+    token: { symbol: 'HYLO', chain: 'Solana', address: null }, claims: [], sales: [], noAirdrop: false, manualPrice: null, createdAt: '2026-07-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z', ...over,
+  });
+  const cases: [string, Partial<AirdropProgram>, string][] = [
+    ['pending', {}, 'ثبت توکن دریافتی'],
+    ['selling', { claims: [{ id: 'c', at: '2026-08-01T00:00:00.000Z', amount: 8200, usdRate: 0.77, feeUsd: 1, lockedAmount: 2000, unlockAt: '2099-01-01T00:00:00.000Z' }], sales: [{ id: 's', at: '2026-08-05T00:00:00.000Z', amount: 5000, received: { amount: 3900, token: 'USDC', usdRate: 1, rateSource: 'manual' }, feeUsd: 0 }], manualPrice: { usd: 0.76, at: '2026-09-01T00:00:00.000Z' } }, 'نتیجه‌ی کل'],
+    ['none', { noAirdrop: true }, 'ایردراپی داده نشد'],
+  ];
+  it.each(cases)('%s', (_name, over, text) => {
+    const x = view({ ...base('yt'), id: 'p-yt' });
+    const pr = program(over);
+    const withDrop = { ...x, airdrops: [{ program: pr, summary: summarize(pr, pr.manualPrice?.usd ?? null), price: pr.manualPrice ? { usd: pr.manualPrice.usd, source: 'manual' as const, at: pr.manualPrice.at } : null, share: 1 }] };
+    const html = renderToString(<AirdropCard x={withDrop} programs={[pr]} views={[withDrop]} saveAirdrop={() => {}} removeAirdrop={() => {}} onSavePosition={() => {}} />);
+    expect(html).toContain(text);
+    const visible = html.replace(/<!--.*?-->/g, '').replace(/<[^>]+>/g, ' ');
+    expect(/.{0,30}[0-9].{0,30}/.exec(visible)?.[0] ?? null).toBeNull();
+    expect(visible).not.toContain('$');
   });
 });

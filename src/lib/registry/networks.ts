@@ -25,9 +25,14 @@ export interface Network {
   logo: string | null;
   /** Other spellings used by the APIs. */
   aliases: string[];
+  /**
+   * DefiLlama coins-API chain slug, for pricing a token by contract address
+   * (verified 2026-09-29 with a live price); null → price must be entered by hand.
+   */
+  llama: string | null;
 }
 
-const evm = (chainId: number, name: string, nameFa: string, logo: string | null, aliases: string[] = []): Network => ({
+const evm = (chainId: number, name: string, nameFa: string, logo: string | null, aliases: string[] = [], llama: string | null = null): Network => ({
   key: `eip155:${chainId}`,
   namespace: 'eip155',
   chainId,
@@ -35,26 +40,27 @@ const evm = (chainId: number, name: string, nameFa: string, logo: string | null,
   nameFa,
   logo: logo ? `/logos/networks/${logo}.webp` : null,
   aliases,
+  llama,
 });
 
 export const NETWORKS: Network[] = [
-  evm(1, 'Ethereum', 'اتریوم', 'ethereum', ['mainnet', 'eth']),
-  evm(10, 'Optimism', 'آپتیمیزم', 'optimism', ['op']),
-  evm(14, 'Flare', 'فلر', 'flare'),
-  evm(56, 'BNB Chain', 'بی‌ان‌بی چین', 'bnb', ['bsc', 'bnb']),
-  evm(143, 'Monad', 'موناد', 'monad'),
-  evm(146, 'Sonic', 'سونیک', 'sonic'),
+  evm(1, 'Ethereum', 'اتریوم', 'ethereum', ['mainnet', 'eth'], 'ethereum'),
+  evm(10, 'Optimism', 'آپتیمیزم', 'optimism', ['op'], 'optimism'),
+  evm(14, 'Flare', 'فلر', 'flare', [], 'flare'),
+  evm(56, 'BNB Chain', 'بی‌ان‌بی چین', 'bnb', ['bsc', 'bnb'], 'bsc'),
+  evm(143, 'Monad', 'موناد', 'monad', [], 'monad'),
+  evm(146, 'Sonic', 'سونیک', 'sonic', [], 'sonic'),
   evm(196, 'X Layer', 'ایکس‌لیر', 'xlayer', ['xlayer']),
-  evm(999, 'HyperEVM', 'هایپر‌ای‌وی‌ام', 'hyperevm', ['hyperliquid']),
-  evm(4663, 'Robinhood Chain', 'رابین‌هود چین', 'robinhood', ['robinhood']),
-  evm(5000, 'Mantle', 'منتل', 'mantle'),
-  evm(8453, 'Base', 'بیس', 'base'),
-  evm(9745, 'Plasma', 'پلاسما', 'plasma'),
-  evm(42161, 'Arbitrum', 'آربیتروم', 'arbitrum', ['arbitrum one']),
-  evm(43111, 'Hemi', 'همی', 'hemi'),
-  evm(43114, 'Avalanche', 'اولانچ', 'avalanche', ['avax']),
-  evm(80094, 'Berachain', 'براچین', 'berachain'),
-  evm(747474, 'Katana', 'کاتانا', 'katana'),
+  evm(999, 'HyperEVM', 'هایپر‌ای‌وی‌ام', 'hyperevm', ['hyperliquid'], 'hyperliquid'),
+  evm(4663, 'Robinhood Chain', 'رابین‌هود چین', 'robinhood', ['robinhood'], 'robinhood'),
+  evm(5000, 'Mantle', 'منتل', 'mantle', [], 'mantle'),
+  evm(8453, 'Base', 'بیس', 'base', [], 'base'),
+  evm(9745, 'Plasma', 'پلاسما', 'plasma', [], 'plasma'),
+  evm(42161, 'Arbitrum', 'آربیتروم', 'arbitrum', ['arbitrum one'], 'arbitrum'),
+  evm(43111, 'Hemi', 'همی', 'hemi', [], 'hemi'),
+  evm(43114, 'Avalanche', 'اولانچ', 'avalanche', ['avax'], 'avax'),
+  evm(80094, 'Berachain', 'براچین', 'berachain', [], 'berachain'),
+  evm(747474, 'Katana', 'کاتانا', 'katana', [], 'katana'),
   {
     key: 'solana:mainnet',
     namespace: 'solana',
@@ -63,6 +69,7 @@ export const NETWORKS: Network[] = [
     nameFa: 'سولانا',
     logo: '/logos/networks/solana.webp',
     aliases: ['sol'],
+    llama: 'solana',
   },
 ];
 
@@ -81,6 +88,7 @@ function unknownNetwork(name: string): Network {
     nameFa: id ? `شبکه‌ی ${Number(id).toLocaleString('fa-IR', { useGrouping: false })}` : name,
     logo: null,
     aliases: [],
+    llama: null,
   };
 }
 

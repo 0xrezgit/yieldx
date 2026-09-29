@@ -85,6 +85,13 @@ export interface TokenPrice {
   at: string;
 }
 
+/** USD prices by DefiLlama coin id ("base:0x…", "solana:<mint>"), now or at `atMs`. */
+export function fetchCoinPrices(coins: string[], atMs?: number, signal?: AbortSignal) {
+  const q = new URLSearchParams({ coins: coins.join(',') });
+  if (atMs !== undefined) q.set('at', String(Math.floor(atMs / 1000)));
+  return getJson<{ prices: Record<string, TokenPrice> }>(`/api/prices?${q}`, signal).then((r) => r.prices);
+}
+
 /** USD prices of listed tokens now, or at `atMs` when given. */
 export function fetchPrices(symbols: string[], atMs?: number, signal?: AbortSignal) {
   const q = new URLSearchParams({ symbols: symbols.join(',') });
