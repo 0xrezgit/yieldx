@@ -20,6 +20,7 @@ import { LoopBoard } from './LoopBoard';
 import { LeaderBoard, defaultRankSettings, type RankSettings } from './LeaderBoard';
 import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from './Calculator';
 import { applyFilters, defaultFilters, FilterBar, type Filters } from './filters';
+import { SectionSwitch } from './SectionSwitch';
 
 type Tab = 'rank' | 'yt' | 'pt' | 'loop' | 'calc';
 const TABS: Tab[] = ['rank', 'yt', 'pt', 'loop', 'calc'];
@@ -167,6 +168,8 @@ export default function Opportunities() {
           <RefreshCw size={14} aria-hidden /> به‌روزرسانی
         </button>
       </header>
+
+      <SectionSwitch current="markets" />
 
       <div className="sticky top-14 z-20 -mx-[var(--space-page-x)] px-[var(--space-page-x)] py-2 bg-canvas/95 backdrop-blur">
         <Segmented
