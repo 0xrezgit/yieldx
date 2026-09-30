@@ -5,6 +5,8 @@ import { protocolIdentity } from '../registry/identity';
 import { networkByName } from '../registry/networks';
 import { listingLink } from '../market/links';
 import { BASE_RATE_KIND, YT_YIELD_FEE_PCT } from '../calculators/trade';
+import { tokenClass } from '../merkl/vetting';
+import { isStable, stableTagged } from '../risk/opportunities';
 
 /** PT/YT list data older than this is stale. */
 const PT_MAX_AGE_MS = 6 * 3_600_000;
@@ -54,9 +56,26 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     sources: [{ name: identity.name, url: null, fetchedAt, sourceUpdatedAt: updated }],
     url: listingLink(protocol, m, 'pt').url,
     ptToken: m.ptToken ?? null,
+    ptClass: ptClassOf(m),
     poolLiquidityUsd: m.liquidity !== null && Number.isFinite(m.liquidity) && m.liquidity > 0 ? m.liquidity : null,
     icon: m.icon ?? null,
   };
+}
+
+/**
+ * What a PT redeems into, as a class for pairing with a debt. Yield-bearing dollars
+ * (sUSDS, reUSD, USD3…) are not in the plain-stablecoin list, so the underlying, then
+ * the protocol's accounting asset (USDC for reUSD and USD3), then the protocol's own
+ * stablecoin tag decide; a dollar name alone (sUSDat, apxUSD) counts, but unverified.
+ */
+export function ptClassOf(m: Pick<MarketListing, 'asset' | 'accountingSymbol' | 'categories' | 'name'>): Opportunity['ptClass'] {
+  const a = tokenClass({ symbol: m.asset?.symbol ?? '' });
+  const c = tokenClass({ symbol: m.accountingSymbol ?? '' });
+  if (a === 'usd' || c === 'usd' || stableTagged(m)) return { class: 'usd', pegVerified: true };
+  if (a === 'eth' || a === 'btc') return { class: a, pegVerified: true };
+  if (c === 'eth' || c === 'btc') return { class: c, pegVerified: true };
+  if (isStable(m)) return { class: 'usd', pegVerified: false };
+  return null;
 }
 
 /**

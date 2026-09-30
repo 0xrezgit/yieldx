@@ -240,7 +240,7 @@ describe('adapters', () => {
 
   it('Morpho: dates the rate by the fetch, keeps the on-chain update apart (a quiet market is not stale)', () => {
     const m: RawMorphoMarket = {
-      uniqueKey: '0xab',
+      marketId: '0xab',
       lltv: '860000000000000000',
       loanAsset: { address: '0xusdc', symbol: 'USDC', chain: { id: 1 } },
       collateralAsset: { address: '0xwbtc', symbol: 'WBTC', chain: { id: 1 } },
@@ -262,7 +262,7 @@ describe('adapters', () => {
       const { variables } = JSON.parse(String(init?.body));
       skips.push(variables.skip);
       const n = variables.skip === 0 ? variables.first : 3;
-      const items = Array.from({ length: n }, (_, i) => ({ uniqueKey: `0x${variables.skip + i}` }));
+      const items = Array.from({ length: n }, (_, i) => ({ marketId: `0x${variables.skip + i}` }));
       return new Response(JSON.stringify({ data: { markets: { items }, vaults: { items: [] }, vaultV2s: { items: [] } } }), { status: 200 });
     }));
     const d = await fetchMorpho();

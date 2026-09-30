@@ -39,8 +39,10 @@ export const defaultScreenSettings: ScreenSettings = {
 const STABLE_TAGS = new Set(['stables', 'stablecoins', 'stable', 'usd']);
 const STABLE_NAME = /usd|dai|gho|frax|eur|lusd|crvusd|usde|usdc|usdt/i;
 
-export const isStable = (m: Pick<MarketListing, 'categories' | 'name'>) =>
-  m.categories.some((c) => STABLE_TAGS.has(c)) || STABLE_NAME.test(m.name);
+/** The protocol itself tags the market as a stablecoin market. */
+export const stableTagged = (m: Pick<MarketListing, 'categories'>) => m.categories.some((c) => STABLE_TAGS.has(c));
+
+export const isStable = (m: Pick<MarketListing, 'categories' | 'name'>) => stableTagged(m) || STABLE_NAME.test(m.name);
 
 /** Pendle lists these markets on its PT-looping page (money market accepts the PT). */
 export const isLoopable = (m: Pick<MarketListing, 'categories'>) => m.categories.includes('pt-looping');

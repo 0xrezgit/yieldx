@@ -227,6 +227,11 @@ export interface Opportunity {
   icon?: string | null;
   /** PT family: the PT token itself (chain + address), for exact collateral matching. */
   ptToken?: TokenRef | null;
+  /**
+   * PT family: the class of what the PT redeems into, to pair it with a debt of the same
+   * class. `pegVerified` is false when only the market's name marks it as a dollar asset.
+   */
+  ptClass?: { class: 'usd' | 'eth' | 'btc'; pegVerified: boolean } | null;
   /** AMM depth behind a PT, USD; without an executable quote the amount must stay a small share of it. */
   poolLiquidityUsd?: number | null;
   /** The source's field meanings come from a third-party client, not the protocol's own documentation. */

@@ -10,6 +10,7 @@ import { ptOpportunity, ytOpportunity } from '../lib/opportunity/from-market';
 import { protocolIdentity } from '../lib/registry/identity';
 import { evaluate, type Analysis, type AnalysisInput } from '../lib/market/analysis';
 import type { SourceStatus } from '../lib/lending/types';
+import type { Opportunity } from '../types/opportunity';
 
 export interface MarketAnalysisState {
   /** Estimates for the capital at every horizon; null until some data arrived. */
@@ -26,6 +27,8 @@ export interface MarketAnalysisState {
   refreshing: boolean;
   /** Live PT/YT market lists of Pendle, Spectra and Exponent (for the YT dollar ranking). */
   markets: ReturnType<typeof useAllMarkets>['markets'];
+  /** The lending feed (for the Loop PT dollar ranking's real lending markets). */
+  lending: { opportunities: Opportunity[] | null; loading: boolean; failed: boolean };
   /** Newest data time across sources (ms). */
   updatedAt: number | null;
   refresh: () => void;
@@ -87,6 +90,7 @@ export function useMarketAnalysis(capital: number): MarketAnalysisState {
     failed: lending.failed && !pt.markets.length && merkl.failed,
     refreshing: lending.refreshing || merkl.refreshing,
     markets: pt.markets,
+    lending: { opportunities: lending.feed?.opportunities ?? null, loading: lending.loading, failed: lending.failed },
     updatedAt: times.length ? Math.max(...times) : null,
     refresh: () => {
       lending.refresh();

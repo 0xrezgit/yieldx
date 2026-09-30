@@ -3,9 +3,9 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, TrendingUp } from 'lucide-react';
-import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
-import { defaultLoopSettings, defaultScreenSettings, type LoopSettings, type OpportunityListing } from '../../lib/risk/opportunities';
-import { maxLoopLeverage } from '../../lib/calculators/trade';
+import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
+import type { Opportunity } from '../../types/opportunity';
+import { defaultLoopSettings, defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
 import thresholds from '../../config/thresholds.json';
 import { isStable } from '../../lib/risk/opportunities';
 import { listingLink, marketAddress } from '../../lib/market/links';
@@ -85,6 +85,11 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
             </Pill>
           )}
           {row.tooBig && <Pill tone="danger">بزرگ نسبت به نقدینگی</Pill>}
+          {row.lender && (
+            <Pill tone="info">
+              وام <bdi dir="ltr">{row.lender.debtSymbol}</bdi> از <bdi dir="ltr">{row.lender.protocol}</bdi> · بهره <Num>{formatPercent(row.lender.borrowPct, 2)}</Num> · LLTV <Num>{formatPercent(row.lender.lltvPct, 1)}</Num>
+            </Pill>
+          )}
           {strategy === 'loop' && row.health != null && (
             <Pill tone={row.health < MIN_HEALTH ? 'warning' : 'muted'}>
               سلامت <Num>{formatNumber(row.health, 2)}</Num>
@@ -98,9 +103,15 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
           )}
           {strategy === 'yt' && temporaryBase(m) && <Pill tone="warning">بازده پایه احتمالاً موقت</Pill>}
           {!isStable(m) && <Pill>وابسته به قیمت دارایی</Pill>}
+          {row.pegVerified === false && <Pill tone="warning">برابری با دلار تأیید نشده</Pill>}
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-1">
           <EntryLink m={m} strategy={strategy} />
+          {row.lender?.url && (
+            <a href={row.lender.url} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1 rounded-md border border-accent/60 px-2 min-h-8 text-xs text-primary hover:bg-elevated">
+              <ExternalLink size={12} aria-hidden /> بازار وام <bdi dir="ltr">{row.lender.protocol}</bdi>
+            </a>
+          )}
           <Link href={calcHref(m)} className="tap inline-flex items-center gap-1 rounded-md border border-control px-2 min-h-8 text-xs text-secondary hover:text-primary">
             <Calculator size={12} aria-hidden /> محاسبه‌گر
           </Link>
@@ -144,7 +155,7 @@ function Bucket({ title, icon, cls, rows, strategy }: { title: string; icon: Rea
       ) : (
         <ol className="flex flex-col divide-y divide-default">
           {rows.map((row, i) => (
-            <li key={`${row.m.protocol}-${row.m.id}`}>
+            <li key={row.id ?? `${row.m.protocol}-${row.m.id}`}>
               <Row row={row} rank={i + 1} strategy={strategy} />
             </li>
           ))}
@@ -196,26 +207,38 @@ function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStr
  * Fifteen each for the biggest and smallest profit and loss, and a suggestion.
  * Separate views with their own assumptions, never mixed into the market analysis.
  */
-export function LeaderRanking({ markets, capital, strategy }: { markets: OpportunityListing[]; capital: number; strategy: LeaderStrategy }) {
+export interface LendingState {
+  opportunities: Opportunity[] | null;
+  loading: boolean;
+  failed: boolean;
+}
+
+export function LeaderRanking({ markets, capital, strategy, lending }: { markets: OpportunityListing[]; capital: number; strategy: LeaderStrategy; lending?: LendingState }) {
   const [fee, setFee] = useState(defaultScreenSettings.feePercent);
   const [by, setBy] = useState<RankBy>('total');
   const [pointsOnly, setPointsOnly] = useState(false);
-  const [loop, setLoop] = useState<LoopSettings>(defaultLoopSettings);
+  const [leverage, setLeverage] = useState(defaultLoopSettings.leverage);
   const [hurdle, setHurdle] = useState(8);
   const s = useMemo(() => ({ ...defaultScreenSettings, feePercent: Number.isFinite(fee) ? Math.max(0, fee) : 0 }), [fee]);
+  const lendingOpps = lending?.opportunities ?? null;
+  const board: LoopBoard | null = useMemo(() => {
+    if (strategy !== 'loop' || !(capital > 0) || !lendingOpps) return null;
+    return leaderLoop(markets, s, lendingOpps, { leverage: Number.isFinite(leverage) ? leverage : 1 }, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
+  }, [strategy, markets, s, lendingOpps, capital, leverage, hurdle]);
   const rows = useMemo(() => {
     if (!(capital > 0)) return [];
-    if (strategy === 'loop') return leaderLoop(markets, s, loop, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
+    if (strategy === 'loop') return board?.rows ?? [];
     return leaderYt(markets, s, { capital }, pointsOnly);
-  }, [markets, s, capital, pointsOnly, strategy, loop, hurdle]);
+  }, [markets, s, capital, pointsOnly, strategy, board]);
   const b = useMemo(() => buckets(rows, by), [rows, by]);
   const gains = rows.filter((x) => x.pnl >= 0).length;
   const count = (p: string) => rows.filter((r) => r.m.protocol === p).length;
-  // Leverage at which the loop is liquidatable at entry, after the entry fee.
-  const safe = maxLoopLeverage(loop.lltv, 1, s.feePercent);
-  const num = (v: number, d: number) => (Number.isFinite(v) ? v : d);
 
   if (!(capital > 0)) return <Empty>سرمایه‌ی اولیه را وارد کنید.</Empty>;
+  if (strategy === 'loop' && !lendingOpps) {
+    if (lending?.loading) return <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" aria-label="در حال دریافت بازارهای وام" />;
+    return <Empty>داده‌ی بازارهای وام در دسترس نیست؛ بدون بازار وامی که PT را وثیقه بگیرد، سود دلاری لوپ ساخته نمی‌شود.</Empty>;
+  }
   return (
     <div className="flex flex-col gap-4">
       <section className="sx-card p-4 flex flex-col gap-3">
@@ -230,16 +253,28 @@ export function LeaderRanking({ markets, capital, strategy }: { markets: Opportu
           )}
         </div>
         {strategy === 'loop' && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <NumberField label="اهرم" value={loop.leverage} onChange={(v) => setLoop({ ...loop, leverage: num(v, 1) })} suffix="×" warning={loop.leverage >= safe ? 'در این LLTV از همان ورود لیکویید می‌شود؛ هیچ لوپی نمایش داده نمی‌شود.' : undefined} />
-            <NumberField label="بهره‌ی وام" value={loop.borrowAPY} onChange={(v) => setLoop({ ...loop, borrowAPY: num(v, 0) })} suffix="%" />
-            <NumberField label="LLTV" value={loop.lltv} onChange={(v) => setLoop({ ...loop, lltv: num(v, 0) })} suffix="%" />
+          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
+            <NumberField label="اهرم" value={leverage} onChange={setLeverage} suffix="×" />
             <NumberField label="حداقل بازده سالانه" value={hurdle} onChange={setHurdle} suffix="%" />
           </div>
         )}
+        {board && (board.liquidated > 0 || board.shortLiquidity > 0) && (
+          <p className="text-xs text-warning leading-6">
+            {board.liquidated > 0 && (
+              <>
+                <Num>{formatNumber(board.liquidated, 0)}</Num> لوپ با این اهرم در LLTV بازار وام خودش از همان ورود لیکویید می‌شود و نیامده است.{' '}
+              </>
+            )}
+            {board.shortLiquidity > 0 && (
+              <>
+                <Num>{formatNumber(board.shortLiquidity, 0)}</Num> بازار وام نقدینگی کافی برای این وام ندارد و نیامده است.
+              </>
+            )}
+          </p>
+        )}
       </section>
       <p className="text-xs text-secondary leading-6">
-        {strategy === 'yt' ? 'خرید YT و فروش در بهترین روز با Implied APY امروز (فرض ثابت ماندن نرخ بازار)، بدون ارزش پوینت.' : 'لوپ PT تا سررسید با اهرم، بهره‌ی وام و LLTV بالا (فرض شما، ثابت تا سررسید).'}{' '}
+        {strategy === 'yt' ? 'خرید YT و فروش در بهترین روز با Implied APY امروز (فرض ثابت ماندن نرخ بازار)، بدون ارزش پوینت.' : 'لوپ PT تا سررسید با اهرم شما، روی بازار وامی که همین PT را وثیقه می‌گیرد: بهره‌ی وام پس از وام شما، LLTV و نقدینگی همان بازار (نرخ‌ها تا سررسید ثابت فرض شده‌اند).'}{' '}
         <Num>{formatNumber(rows.length, 0)}</Num> بازار: <bdi dir="ltr">Pendle</bdi> <Num>{formatNumber(count('pendle'), 0)}</Num> · <bdi dir="ltr">Spectra</bdi> <Num>{formatNumber(count('spectra'), 0)}</Num> · <bdi dir="ltr">Exponent</bdi>{' '}
         <Num>{formatNumber(count('exponent'), 0)}</Num> ·{' '}
         <span className="text-success">
@@ -257,6 +292,38 @@ export function LeaderRanking({ markets, capital, strategy }: { markets: Opportu
         <Bucket title="کمترین ضرر" icon={<ArrowDownRight size={18} aria-hidden />} cls="text-warning" rows={b.leastLoss} strategy={strategy} />
         <Bucket title="بیشترین ضرر" icon={<TrendingDown size={18} aria-hidden />} cls="text-danger" rows={b.topLoss} strategy={strategy} />
       </div>
+      {board && board.noLender.length > 0 && <NoLender list={board.noLender} />}
     </div>
+  );
+}
+
+/** Loop candidates whose PT no lending market in YieldX's sources accepts: listed without any dollar figure. */
+function NoLender({ list }: { list: LoopBoard['noLender'] }) {
+  return (
+    <section className="sx-card p-4 flex flex-col gap-2" aria-labelledby="no-lender">
+      <h2 id="no-lender" className="font-semibold text-secondary">
+        بدون بازار وام در منابع یلدایکس{' '}
+        <span className="text-xs text-muted font-normal">
+          (<Num>{formatNumber(list.length, 0)}</Num>)
+        </span>
+      </h2>
+      <p className="text-xs text-secondary leading-6">
+        هیچ بازار وامی در داده‌ی یلدایکس (<bdi dir="ltr">Morpho</bdi> و <bdi dir="ltr">Aave V4</bdi>) این PTها را وثیقه نمی‌گیرد؛ بدون جای وثیقه لوپی ساخته نمی‌شود، پس سود دلاری نشان داده نمی‌شود. ممکن است بازار وام در پروتکلی باشد که یلدایکس نمی‌خواند.
+      </p>
+      <ul className="flex flex-col divide-y divide-default">
+        {list.map(({ m, pendleLoop }) => (
+          <li key={`${m.protocol}-${m.id}`} className="flex flex-wrap items-center gap-2 py-2.5">
+            <div className="min-w-0 flex-1">
+              <AssetIdentity symbol={m.name} icon={m.icon} chain={m.chain} protocol={m.protocol} maturity={m.maturity} size={24} compact />
+            </div>
+            <span className="text-xs text-muted">
+              Implied <Num>{formatPercent(m.impliedAPY, 1)}</Num>
+            </span>
+            {pendleLoop && <Pill tone="info">لوپ داخلی پندل دارد</Pill>}
+            <EntryLink m={m} strategy="loop" />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

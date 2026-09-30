@@ -19,7 +19,7 @@ const AT = new Date(NOW).toISOString();
 const unix = (ms: number) => String(Math.floor(ms / 1000));
 
 const market = (over: Partial<RawMorphoMarket> = {}): RawMorphoMarket => ({
-  uniqueKey: '0xAAAA',
+  marketId: '0xAAAA',
   lltv: '860000000000000000',
   loanAsset: { address: '0xUSDC', symbol: 'USDC', logoURI: null, chain: { id: 1 } },
   collateralAsset: { address: '0xWBTC', symbol: 'WBTC', logoURI: null, chain: { id: 1 } },
@@ -50,7 +50,7 @@ const vault = (over: Partial<RawMorphoVault> = {}): RawMorphoVault => ({
   chain: { id: 8453 },
   warnings: [],
   liquidity: { usd: 5_000_000 },
-  state: { netApyWithoutRewards: 0.06, fee: 0.1, totalAssetsUsd: 50_000_000, timestamp: unix(NOW), rewards: [] },
+  state: { netApyExcludingRewards: 0.06, fee: 0.1, totalAssetsUsd: 50_000_000, timestamp: unix(NOW), allRewards: [] },
   ...over,
 });
 
@@ -154,7 +154,7 @@ describe('Morpho', () => {
     expect(estimate(o, input).placement).toBe('insufficient');
   });
 
-  it('reads a V1 vault from netApyWithoutRewards and never deducts its performance fee again', () => {
+  it('reads a V1 vault from netApyExcludingRewards and never deducts its performance fee again', () => {
     const o = morphoVault(vault(), AT)!;
     expect(o.family).toBe('vault');
     expect(o.chain).toBe('eip155:8453');

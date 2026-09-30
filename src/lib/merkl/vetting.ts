@@ -47,8 +47,8 @@ const r = (code: string, label: string): Reason => ({ code, label });
 const ROBINHOOD_CHAIN = 4663;
 export const isRobinhoodChain = (chainId: number) => chainId === ROBINHOOD_CHAIN;
 
-/** USD stablecoins: priced near one dollar. */
-const USD_STABLE = /^(w|s|a|c|st|x)?(usdc(\.e)?|usdt0?|usde|usds|dai|gho|frxusd|pyusd|rlusd|usdg|ausd|usd0|usd1|usdh|bold|lusd|crvusd|fdusd|tusd|usdb|usdx|dola|mim|susd|avusd|usdai|usdtb|eusd|feusd|usdm)$/i;
+/** USD stablecoins: priced near one dollar. apyUSD (Apyx) is not a + PYUSD. */
+const USD_STABLE = /^(?!apyusd$)(w|s|a|c|st|x)?(usdc(\.e)?|usdt0?|usde|usds|dai|gho|frxusd|pyusd|rlusd|usdg|ausd|usd0|usd1|usdh|bold|lusd|crvusd|fdusd|tusd|usdb|usdx|dola|mim|susd|avusd|usdai|usdtb|eusd|feusd|usdm)$/i;
 const ETH_LIKE = /^(eth|weth|steth|wsteth|weeth|reth|cbeth|ezeth|rseth|meth|oeth|woeth|frxeth|sfrxeth|pufeth|ethx)$/i;
 const BTC_LIKE = /^(btc|wbtc|cbbtc|tbtc|lbtc|btcb|solvbtc|fbtc|ubtc|kbtc)$/i;
 

@@ -7,7 +7,7 @@ import { networkByName } from '../registry/networks';
  *
  * Verified formats (from live Merkl `depositUrl` values, which the protocols supply):
  * - Pendle:  https://app.pendle.finance/trade/markets/{market}/swap?view=yt&chain=ethereum
- * - Morpho:  https://app.morpho.org/{chain}/vault/{address}, …/{chain}/market/{uniqueKey}
+ * - Morpho:  https://app.morpho.org/{chain}/vault/{address}, …/{chain}/market/{marketId}
  * Chain names are each app's own: Pendle's `nameId` and Morpho's `chainIdentifier` from
  * the chain tables in their app bundles (read 2026-10-01), cross-checked against Merkl.
  * Spectra and Exponent publish no market URL format we could verify: their links open the
