@@ -235,7 +235,7 @@ export interface Opportunity {
    * YT family: the market's implied APY (sets the YT price) and the underlying's own
    * yield that the YT receives until maturity (`rate` repeats the latter).
    */
-  yt?: { impliedPct: number; hasPoints: boolean } | null;
+  yt?: { impliedPct: number; hasPoints: boolean; /** Share of the yield the protocol keeps, %; null → not known. */ yieldFeePct: number | null } | null;
 }
 
 /** One cost line. measured: from live data; assumed: the user's setting; model: computed from live data with a stated model. */

@@ -23,6 +23,13 @@ export function ytPriceFromAPY(apy: number, days: number): number {
   return days > 0 ? 1 - ptPriceFromAPY(apy, days) : 0;
 }
 
+/**
+ * Share of a YT's accrued yield the protocol keeps. Pendle deducts `interestFeeRate`
+ * from YT interest (PendleYieldContractFactory, capped at 20% on-chain); its docs give
+ * 5%. Spectra and Exponent: not verified — no fee is assumed and the result says so.
+ */
+export const YT_YIELD_FEE_PCT: Record<string, number | null> = { pendle: 5, spectra: null, exponent: null };
+
 // ─── YT ────────────────────────────────────────────────────────────────────────
 
 export interface YtTradeInput {
@@ -44,6 +51,8 @@ export interface YtTradeInput {
   pointsBasis: PointsBasis;
   /** USD value of one point. */
   valuePerPoint: number;
+  /** Share of the accrued yield the protocol keeps, % (Pendle: 5). Default 0. */
+  yieldFeePercent?: number;
 }
 
 export interface YtTrade {
@@ -79,7 +88,7 @@ export function simulateYt(i: YtTradeInput): YtTrade {
   const entryPrice = ytPriceFromAPY(i.entryAPY, D);
   const units = (i.capital * (1 - fee)) / (entryPrice * i.underlyingPrice);
   const notional = units * i.underlyingPrice;
-  const yieldEarned = notional * growth(i.baseAPY, h);
+  const yieldEarned = notional * growth(i.baseAPY, h) * (1 - (i.yieldFeePercent ?? 0) / 100);
   const exitPrice = toMaturity ? 0 : ytPriceFromAPY(i.exitAPY, D - h);
   const saleValue = notional * exitPrice * (1 - fee);
   const cash = yieldEarned + saleValue - i.capital;

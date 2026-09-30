@@ -340,18 +340,22 @@ function ytToMaturity(o: Opportunity, input: EstimateInput, ctx: { base: Estimat
   const entry = input.entryCosts ?? [];
   const S = Math.max(0, input.capital - sum(entry));
   const N = S / p;
-  const income = N * baseGrowth;
+  const fee = o.yt!.yieldFeePct;
+  const income = N * baseGrowth * (1 - (fee ?? 0) / 100);
   const costs: CostItem[] = [...entry, { key: 'yt-principal', label: 'بهای YT (در سررسید صفر می‌شود)', usd: S, basis: 'model' }, ...(input.exitCosts ?? [])];
   const net = income - sum(costs);
   // Sensitivity and break-even of the one input that decides the result.
   const up = periodGrowth({ ...o.rate, value: o.rate.value + 1 }, D) ?? baseGrowth;
-  const breakEven = o.rate.kind === 'apr' ? (p / (D / 365)) * 100 : (Math.pow(1 + p, 365 / D) - 1) * 100;
+  const keep = 1 - (fee ?? 0) / 100;
+  const breakEven = o.rate.kind === 'apr' ? (p / keep / (D / 365)) * 100 : (Math.pow(1 + p / keep, 365 / D) - 1) * 100;
   assumptions.push(
     `بازده پایه‌ی امروز (${formatPercent(o.rate.value, 2)}) تا سررسید ثابت فرض شد؛ متغیر است.`,
-    `هر یک واحد درصد تغییر بازده پایه حدود ${formatNumber(N * (up - baseGrowth), 2)} دلار نتیجه را جابه‌جا می‌کند؛ سربه‌سر در بازده پایه‌ی ${formatPercent(breakEven, 2)}.`,
+    `هر یک واحد درصد تغییر بازده پایه حدود ${formatNumber(N * (up - baseGrowth) * (1 - (fee ?? 0) / 100), 2)} دلار نتیجه را جابه‌جا می‌کند؛ سربه‌سر در بازده پایه‌ی ${formatPercent(breakEven, 2)}.`,
     'YT در سررسید صفر می‌شود؛ فقط بازده جمع‌شده برمی‌گردد.',
   );
   if (o.yt!.hasPoints) assumptions.push('پوینت و ایردراپ این بازار در سود دلاری نیامده است.');
+  if (fee !== null) assumptions.push(`کارمزد پروتکل از بازده YT (${formatPercent(fee, 0)}) کم شد.`);
+  else unknown.push('کارمزد پروتکل از بازده YT تأیید نشده؛ کم نشد.');
   unknown.push('کارمزد سواپ و اثر قیمت خرید YT (بدون quote)');
   const placement = placeOf(ctx.quality, net, S, input.capital);
   return {

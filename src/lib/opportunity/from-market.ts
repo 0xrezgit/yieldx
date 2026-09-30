@@ -3,6 +3,8 @@ import type { DataQuality, Opportunity } from '../../types/opportunity';
 import type { ProtocolId } from '../../types/protocol';
 import { protocolIdentity } from '../registry/identity';
 import { networkByName } from '../registry/networks';
+import { listingLink } from '../market/links';
+import { YT_YIELD_FEE_PCT } from '../calculators/trade';
 
 /** PT/YT list data older than this is stale. */
 const PT_MAX_AGE_MS = 6 * 3_600_000;
@@ -50,6 +52,7 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     rewards: [],
     quality: m.expired ? 'insufficient' : quality,
     sources: [{ name: identity.name, url: null, fetchedAt, sourceUpdatedAt: updated }],
+    url: listingLink(protocol, m, 'pt').url,
     ptToken: m.ptToken ?? null,
     poolLiquidityUsd: m.liquidity !== null && Number.isFinite(m.liquidity) && m.liquidity > 0 ? m.liquidity : null,
     icon: m.icon ?? null,
@@ -73,7 +76,8 @@ export function ytOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     rate: { value: m.baseAPY, kind: protocol === 'spectra' ? 'apr' : 'apy', feesIncluded: true, rewardsIncluded: false, at: pt.rate.at },
     exit: { type: 'maturity', note: 'در سررسید YT صفر می‌شود و بازده جمع‌شده دریافت می‌شود؛ فروش زودتر در استخر ممکن است.' },
     ptToken: null,
-    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints },
+    url: listingLink(protocol, m, 'yt').url,
+    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints, yieldFeePct: YT_YIELD_FEE_PCT[protocol] ?? null },
   };
 }
 

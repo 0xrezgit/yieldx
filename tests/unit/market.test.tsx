@@ -351,7 +351,8 @@ describe('YT held to maturity', () => {
     const e = h[60];
     const S = 1000 - e.costs.find((c) => c.key === 'gas-entry')!.usd;
     const p = 1 - Math.pow(1.1, -45 / 365);
-    const income = (S / p) * (Math.pow(1.14, 45 / 365) - 1);
+    // Pendle keeps 5% of the YT's yield.
+    const income = (S / p) * (Math.pow(1.14, 45 / 365) - 1) * 0.95;
     expect(e.baseIncome).toBeCloseTo(income, 6);
     expect(e.costs.find((c) => c.key === 'yt-principal')!.usd).toBeCloseTo(S, 9);
     expect(e.net).toBeCloseTo(income - 1000 - e.costs.find((c) => c.key === 'gas-exit')!.usd, 6);
@@ -396,7 +397,7 @@ describe('render', () => {
     const { OpportunityDetails } = await import('../../src/components/market/OpportunityDetails');
     const { formatMoneyNumber } = await import('../../src/lib/utils/formatting');
     const { assertPersianMoney } = await import('../helpers/text');
-    const ytRow = lend('y', { family: 'yt', rate: { value: 14, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT }, maturity: inDays(45), exit: { type: 'maturity' }, poolLiquidityUsd: 5e8, yt: { impliedPct: 10, hasPoints: true } });
+    const ytRow = lend('y', { family: 'yt', rate: { value: 14, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT }, maturity: inDays(45), exit: { type: 'maturity' }, poolLiquidityUsd: 5e8, yt: { impliedPct: 10, hasPoints: true, yieldFeePct: 5 } });
     const a = run([pt('p', 45), lend('l'), ytRow]);
     expect(a.rows.find((r) => r.o.family === 'yt')!.byHorizon[60].placement).toBe('ranked');
     for (const row of a.rows) {

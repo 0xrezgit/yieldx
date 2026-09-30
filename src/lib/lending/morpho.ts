@@ -3,6 +3,7 @@ import type { DataQuality, Opportunity, RewardStream } from '../../types/opportu
 import { networkByChainId } from '../registry/networks';
 import { isObject, postGraphql } from '../protocols/base';
 import { formatPercent } from '../utils/formatting';
+import { morphoLink } from '../market/links';
 
 /**
  * Morpho — variable-rate supply to Morpho Blue markets and deposits into vaults
@@ -237,7 +238,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
     quality: w.quality ?? (pct(s.supplyApy) === null ? 'insufficient' : 'current'),
     sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: onchainAt }],
     notes: w.notes,
-    url: CFG.app,
+    url: morphoLink(chainId, 'market', m.uniqueKey)?.url ?? CFG.app,
     icon: m.loanAsset.logoURI ?? null,
   };
 }
@@ -267,7 +268,7 @@ export function morphoVault(v: RawMorphoVault, fetchedAt: string): Opportunity |
     quality: w.quality ?? (pct(s.netApyWithoutRewards) === null ? 'insufficient' : 'current'),
     sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: onchainAt }],
     notes: ['بازده خزانه پس از کسر کارمزد عملکرد و بدون پاداش (netApyWithoutRewards)، نرخ لحظه‌ای.', ...w.notes],
-    url: CFG.app,
+    url: morphoLink(v.chain.id, 'vault', v.address)?.url ?? CFG.app,
     icon: v.asset?.logoURI ?? null,
   };
 }
@@ -299,7 +300,7 @@ export function morphoVaultV2(v: RawMorphoVaultV2, fetchedAt: string): Opportuni
       'بازده خزانه‌ی V2: میانگین تحقق‌یافته‌ی ۷ روز گذشته از قیمت سهم (پس از کارمزد)، منهای APR پاداش‌های گزارش‌شده؛ داده‌ی تاریخی است، نه نرخ لحظه‌ای.',
       ...w.notes,
     ],
-    url: CFG.app,
+    url: morphoLink(v.chain.id, 'vault', v.address)?.url ?? CFG.app,
     icon: v.asset?.logoURI ?? null,
   };
 }

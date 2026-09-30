@@ -2,10 +2,13 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowDownRight, ArrowUpRight, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, TrendingUp } from 'lucide-react';
 import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import { defaultLoopSettings, defaultScreenSettings, type LoopSettings, type OpportunityListing } from '../../lib/risk/opportunities';
 import { maxLoopLeverage } from '../../lib/calculators/trade';
+import { isStable } from '../../lib/risk/opportunities';
+import { listingLink, marketAddress } from '../../lib/market/links';
+import protocols from '../../config/protocols.json';
 import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
@@ -25,13 +28,33 @@ const VERDICT: Record<Verdict, { label: string; tone: Tone }> = {
 
 const money = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
+/** Base yield far above the implied rate usually means a temporary boost. */
+const temporaryBase = (m: OpportunityListing) => m.baseAPY !== null && m.baseAPY - m.impliedAPY > 5 && m.baseAPY > 2 * m.impliedAPY;
+
+/** «ورود به بازار»: the market's own page when its format is known, else the protocol's app and the address to search. */
+export function EntryLink({ m, strategy }: { m: OpportunityListing; strategy: LeaderStrategy }) {
+  const link = listingLink(m.protocol, m, strategy === 'yt' ? 'yt' : 'pt');
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-xs">
+      <a href={link.url} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1 rounded-md border border-accent/60 px-2 min-h-8 text-primary hover:bg-elevated">
+        <ExternalLink size={12} aria-hidden /> {link.exact ? 'ورود به بازار' : <>اپ <bdi dir="ltr">{protocols[m.protocol].name}</bdi></>}
+      </a>
+      {!link.exact && (
+        <span className="text-muted">
+          نشانی بازار: <bdi dir="ltr" className="select-all">{marketAddress(m)}</bdi>
+        </span>
+      )}
+    </span>
+  );
+}
+
 const calcHref = (m: OpportunityListing) => `/dashboard?${new URLSearchParams({ protocol: m.protocol, market: m.id, name: m.name, maturity: m.maturity })}`;
 
 function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: LeaderStrategy }) {
   const { m } = row;
   const v = VERDICT[row.verdict];
   return (
-    <Link href={calcHref(m)} className="w-full flex items-center gap-3 py-2.5 min-h-14 text-right rounded-lg hover:bg-elevated px-1 transition-colors">
+    <div className="w-full flex items-center gap-3 py-2.5 min-h-14 text-right rounded-lg px-1">
       <span className="grid place-items-center size-6 rounded-full bg-elevated text-xs text-secondary shrink-0 num">{formatNumber(rank, 0)}</span>
       <div className="min-w-0 flex-1 flex flex-col gap-1">
         <AssetIdentity symbol={m.name} icon={m.icon} chain={m.chain} protocol={m.protocol} maturity={m.maturity} size={24} />
@@ -58,7 +81,19 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
             </Pill>
           )}
           {row.tooBig && <Pill tone="danger">بزرگ نسبت به نقدینگی</Pill>}
-          {strategy === 'yt' && m.baseAPY !== null && m.baseAPY - m.impliedAPY > 5 && m.baseAPY > 2 * m.impliedAPY && <Pill tone="warning">بازده پایه احتمالاً موقت</Pill>}
+          {strategy === 'yt' && row.perBasePoint != null && Number.isFinite(row.perBasePoint) && (
+            <Pill tone="info">
+              هر ۱٪ بازده پایه ≈ <Num>{formatUSD(Math.abs(row.perBasePoint), 0)}</Num>
+            </Pill>
+          )}
+          {strategy === 'yt' && temporaryBase(m) && <Pill tone="warning">بازده پایه احتمالاً موقت</Pill>}
+          {!isStable(m) && <Pill>وابسته به قیمت دارایی</Pill>}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+          <EntryLink m={m} strategy={strategy} />
+          <Link href={calcHref(m)} className="tap inline-flex items-center gap-1 rounded-md border border-control px-2 min-h-8 text-xs text-secondary hover:text-primary">
+            <Calculator size={12} aria-hidden /> محاسبه‌گر
+          </Link>
         </div>
       </div>
       <div className="text-left shrink-0">
@@ -70,12 +105,18 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
         </div>
         <div className="text-xs text-muted">
           Implied <Num>{formatPercent(m.impliedAPY, 1)}</Num>
+          {strategy === 'yt' && m.baseAPY !== null && (
+            <>
+              {' '}
+              · پایه <Num>{formatPercent(m.baseAPY, 1)}</Num>
+            </>
+          )}
         </div>
         <div className="text-xs text-muted">
           <Num>{money(row.perDay)}</Num> در روز
         </div>
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -104,7 +145,8 @@ function Bucket({ title, icon, cls, rows, strategy }: { title: string; icon: Rea
 }
 
 function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStrategy }) {
-  const good = rows.filter((r) => (strategy === 'yt' ? r.verdict === 'free' : r.verdict === 'worth') && !r.tooBig);
+  // A temporary base-yield boost would make the suggestion rest on a number that will not last.
+  const good = rows.filter((r) => (strategy === 'yt' ? r.verdict === 'free' && !temporaryBase(r.m) : r.verdict === 'worth') && !r.tooBig);
   const total = [...good].sort((a, b) => b.pnl - a.pnl)[0];
   const daily = [...good].sort((a, b) => b.perDay - a.perDay)[0];
   const line = (label: string, r: LeaderRow | undefined) =>
@@ -118,6 +160,7 @@ function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStr
         <span className="text-xs text-muted">
           (<Num>{money(r.perDay)}</Num> در روز)
         </span>
+        <EntryLink m={r.m} strategy={strategy} />
       </li>
     );
   return (
@@ -131,7 +174,7 @@ function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStr
       ) : (
         <p className="text-secondary">{strategy === 'yt' ? 'با این فرض‌ها هیچ YTی بی‌ضرر نیست.' : 'با این نرخ وام و اهرم هیچ لوپی از حداقل بازده بالاتر نیست.'}</p>
       )}
-      <p className="text-xs text-muted">فقط بر پایه‌ی همین فرض‌ها؛ نقدینگی، ریسک لیکوییدشدن و بازار وام واقعی را پیش از ورود بررسی کنید.</p>
+      <p className="text-xs text-muted">بازارهای با بازده پایه‌ی احتمالاً موقت پیشنهاد نمی‌شوند. فقط بر پایه‌ی همین فرض‌ها؛ نقدینگی، ریسک لیکوییدشدن و بازار وام واقعی را پیش از ورود بررسی کنید.</p>
     </section>
   );
 }

@@ -36,7 +36,7 @@ describe('leaderYt', () => {
     for (let h = 1; h <= 60; h++) {
       const cash = simulateYt({
         capital: 10_000, underlyingPrice: 1, daysToMaturity: 60, entryAPY: 12, baseAPY: 6, holdDays: h, exitAPY: 12,
-        feePercent: s.feePercent, pointsPerDay: 0, ytMultiplier: 1, pointsBasis: 'usd', valuePerPoint: 0,
+        feePercent: s.feePercent, pointsPerDay: 0, ytMultiplier: 1, pointsBasis: 'usd', valuePerPoint: 0, yieldFeePercent: 5,
       }).cash;
       expect(r.pnl).toBeGreaterThanOrEqual(cash - 1e-9);
     }
@@ -122,5 +122,37 @@ describe('YT dollar ranking view', () => {
     for (const t of ['پیشنهاد', 'بهره‌ی وام', 'بیشترین سود', 'کمترین سود', 'کمترین ضرر', 'بیشترین ضرر', 'sUSDe', 'stUSR', 'ONyc', 'Pendle', 'Spectra', 'Exponent']) expect(html).toContain(t);
     expect(html).not.toContain('NaN');
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, '').replace(/<bdi dir="ltr"[^>]*>[^<]*<\/bdi>/g, '').replace(/alt="[^"]*"/g, ''));
+  });
+});
+
+describe('entry links', () => {
+  it('opens the exact market where the format is known, the app and its address elsewhere', async () => {
+    const { listingLink, morphoLink, isAppRoot } = await import('../../src/lib/market/links');
+    // Format taken from a live Merkl depositUrl for a Pendle market.
+    expect(listingLink('pendle', { id: '1-0x3FFDF143CBE1E594FBA183E2B9035EB027A732EC', chain: 'Ethereum' }, 'yt')).toEqual({ url: 'https://app.pendle.finance/trade/markets/0x3ffdf143cbe1e594fba183e2b9035eb027a732ec/swap?view=yt&chain=ethereum', exact: true });
+    expect(listingLink('pendle', { id: '42161-0x3ffdf143cbe1e594fba183e2b9035eb027a732ec', chain: 'Arbitrum' }, 'pt').url).toContain('view=pt&chain=arbitrum');
+    expect(listingLink('spectra', { id: 'base-0xabc', chain: 'Base' }, 'yt').exact).toBe(false);
+    expect(morphoLink(8453, 'vault', '0xbeef')!.url).toBe('https://app.morpho.org/base/vault/0xbeef');
+    expect(isAppRoot('https://app.spectra.finance')).toBe(true);
+    expect(isAppRoot('https://app.morpho.org/ethereum/market/0xabc')).toBe(false);
+  });
+
+  it('each ranked row and suggestion carries its entry link', async () => {
+    const { renderToString } = await import('react-dom/server');
+    const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
+    const markets = [listing({ id: '1-0x3ffdf143cbe1e594fba183e2b9035eb027a732ec', impliedAPY: 5, baseAPY: 9 }), listing({ id: 'base-0x0000000000000000000000000000000000000abc', protocol: 'spectra', name: 'stUSR', impliedAPY: 5, baseAPY: 9 })];
+    const html = renderToString(<LeaderRanking markets={markets} capital={1000} strategy="yt" />);
+    expect(html).toContain('href="https://app.pendle.finance/trade/markets/0x3ffdf143cbe1e594fba183e2b9035eb027a732ec/swap?view=yt&amp;chain=ethereum"');
+    expect(html).toContain('ورود به بازار');
+    expect(html).toContain('href="https://app.spectra.finance"');
+    expect(html).toContain('0x0000000000000000000000000000000000000abc');
+  });
+
+  it('never suggests a market whose base yield looks like a temporary boost', async () => {
+    const { renderToString } = await import('react-dom/server');
+    const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
+    const html = renderToString(<LeaderRanking markets={[listing({ name: 'superWETH', impliedAPY: 4, baseAPY: 40 })]} capital={10_000} strategy="yt" />);
+    expect(html).toContain('با این فرض‌ها هیچ YTی بی‌ضرر نیست');
+    expect(html).toContain('بازده پایه احتمالاً موقت');
   });
 });

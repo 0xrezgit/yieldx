@@ -1,5 +1,5 @@
 import thresholds from '../../config/thresholds.json';
-import { simulateLoop, simulateYt } from '../calculators/trade';
+import { simulateLoop, simulateYt, YT_YIELD_FEE_PCT } from '../calculators/trade';
 import type { LoopSettings, OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
 
@@ -37,6 +37,8 @@ export interface LeaderRow {
   freeUntil: number | null;
   /** YT only: multiplier-weighted exposure in USD earning points. */
   pointsExposure: number | null;
+  /** YT only: USD change of the result per 1 percentage point of base yield (the one input that decides it). */
+  perBasePoint?: number | null;
 }
 
 export interface LeaderInput {
@@ -89,13 +91,13 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
     if (pointsOnly && !m.hasPoints) continue;
     const D = m.daysToMaturity;
     const multiplier = m.points?.ytMultiplier ?? m.ytMultiplier ?? 1;
-    const at = (h: number) =>
+    const at = (h: number, shift = 0) =>
       simulateYt({
         capital: i.capital,
         underlyingPrice: 1,
         daysToMaturity: D,
         entryAPY: m.impliedAPY,
-        baseAPY: m.baseAPY as number,
+        baseAPY: (m.baseAPY as number) + shift,
         holdDays: h,
         exitAPY: m.impliedAPY,
         feePercent: s.feePercent,
@@ -103,6 +105,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
         ytMultiplier: multiplier,
         pointsBasis: 'usd',
         valuePerPoint: 0,
+        yieldFeePercent: YT_YIELD_FEE_PCT[m.protocol] ?? 0,
       });
 
     // Best exit day at today's implied APY; ties go to the longer hold (more points).
@@ -129,6 +132,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       tooBig: tooBig(m, i.capital),
       freeUntil,
       pointsExposure: best.notional * multiplier,
+      perBasePoint: at(bestDay, 1).cash - best.cash,
     });
   }
   return out;
