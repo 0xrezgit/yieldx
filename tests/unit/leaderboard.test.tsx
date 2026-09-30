@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buckets, leaderLoop, leaderYt, type LeaderRow } from '../../src/lib/risk/leaderboard';
 import { simulateLoop } from '../../src/lib/calculators/trade';
-import { defaultLoopSettings } from '../../src/lib/risk/opportunities';
 import { defaultScreenSettings, type OpportunityListing } from '../../src/lib/risk/opportunities';
+import type { Opportunity } from '../../src/types/opportunity';
 import { simulateYt } from '../../src/lib/calculators/trade';
 
 const listing = (over: Partial<OpportunityListing>): OpportunityListing => ({
@@ -112,32 +112,104 @@ describe('bucket size', () => {
   });
 });
 
+const PT = `0x${'ab'.repeat(20)}`;
+const ptListing = (over: Partial<OpportunityListing> = {}) =>
+  listing({ ptToken: { symbol: 'PT-USDx', address: PT }, asset: { symbol: 'USDx', address: `0x${'11'.repeat(20)}` }, ...over });
+/** A Morpho-like market lending USDC against the PT above. */
+const lender = (borrow: Partial<NonNullable<Opportunity['borrow']>> = {}, over: Partial<Opportunity> = {}) =>
+  ({
+    key: 'morpho:eip155:1:0xm:supply',
+    family: 'lend',
+    protocol: { id: 'morpho', version: 'blue', name: 'Morpho' },
+    chain: 'eip155:1',
+    market: { id: '0xm', address: null, name: 'USDC · وثیقه PT-USDx' },
+    assets: { deposit: [{ symbol: 'USDC', address: `0x${'22'.repeat(20)}` }] },
+    rate: { value: 4, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: null },
+    url: 'https://app.morpho.org/ethereum/market/0xm',
+    borrow: { ratePct: 5, curve: null, availableUsd: 10_000_000, collateral: [{ token: { symbol: 'PT-USDx', address: PT }, maxLtv: 0.915 }], metric: 'ltv', ...borrow },
+    quality: 'current',
+    sources: [],
+    ...over,
+  }) as unknown as Opportunity;
+const lev = { leverage: 3 };
+
 describe('leaderLoop', () => {
-  it('matches the loop simulator at maturity and judges against the minimum return', () => {
-    const m = listing({ impliedAPY: 12, daysToMaturity: 90 });
-    const [r] = leaderLoop([m], s, defaultLoopSettings, { capital: 10_000, hurdle: 8 });
-    const sim = simulateLoop({ capital: 10_000, daysToMaturity: 90, entryAPY: 12, leverage: defaultLoopSettings.leverage, borrowAPY: defaultLoopSettings.borrowAPY, lltv: defaultLoopSettings.lltv, feePercent: s.feePercent });
+  it('builds the loop on the lending market that takes this PT: its rate and LLTV, not a guess', () => {
+    const [r] = leaderLoop([ptListing({ impliedAPY: 12 })], s, [lender()], lev, { capital: 10_000, hurdle: 8 }).rows;
+    const sim = simulateLoop({ capital: 10_000, daysToMaturity: 90, entryAPY: 12, leverage: 3, borrowAPY: 5, lltv: 91.5, feePercent: s.feePercent });
     expect(r.pnl).toBeCloseTo(sim.profit, 9);
-    expect(r.days).toBe(90);
+    expect(r.health).toBeCloseTo(sim.healthFactor, 9);
     expect(r.verdict).toBe('worth');
-    const [loss] = leaderLoop([listing({ impliedAPY: 3 })], s, { ...defaultLoopSettings, borrowAPY: 12 }, { capital: 10_000 });
+    expect(r.lender).toMatchObject({ protocol: 'Morpho', debtSymbol: 'USDC', borrowPct: 5, lltvPct: 91.5, url: 'https://app.morpho.org/ethereum/market/0xm', rateModelled: false });
+    const [loss] = leaderLoop([ptListing({ impliedAPY: 3 })], s, [lender({ ratePct: 12 })], lev, { capital: 10_000 }).rows;
     expect(loss.verdict).toBe('loss');
   });
 
-  it('leaves out loops liquidatable at entry and reports health on the rest', () => {
-    const m = listing({ impliedAPY: 12, daysToMaturity: 90 });
-    // LLTV 86%: 8× puts LTV at 7 ÷ (8 × 0.995) ≈ 88% — liquidated on entry.
-    expect(leaderLoop([m], s, { ...defaultLoopSettings, leverage: 8, lltv: 86 }, { capital: 10_000 })).toHaveLength(0);
-    const [r] = leaderLoop([m], s, { ...defaultLoopSettings, leverage: 3, lltv: 86 }, { capital: 10_000 });
-    expect(r.health).toBeCloseTo((0.86 * 3 * (1 - s.feePercent / 100)) / 2, 9);
+  it('gives no dollar figure without a lending market for the PT', () => {
+    const b = leaderLoop([ptListing()], s, [], lev, { capital: 10_000 });
+    expect(b.rows).toHaveLength(0);
+    expect(b.noLender.map((x) => x.pendleLoop)).toEqual([true]);
+    // Another network, another address or another asset class is not this PT's market.
+    expect(leaderLoop([ptListing()], s, [lender({}, { chain: 'eip155:8453' })], lev, { capital: 10_000 }).rows).toHaveLength(0);
+    expect(leaderLoop([ptListing()], s, [lender({ collateral: [{ token: { symbol: 'PT-X', address: `0x${'cd'.repeat(20)}` }, maxLtv: 0.9 }] })], lev, { capital: 10_000 }).rows).toHaveLength(0);
+    expect(leaderLoop([ptListing()], s, [lender({}, { assets: { deposit: [{ symbol: 'WETH', address: `0x${'33'.repeat(20)}` }] } })], lev, { capital: 10_000 }).rows).toHaveLength(0);
+    // Not a loop candidate at all: neither a row nor in the no-lender list.
+    expect(leaderLoop([ptListing({ categories: [], name: 'ETHx', liquidity: 200_000 })], s, [], lev, { capital: 1000 }).noLender).toHaveLength(0);
   });
 
-  it('keeps loops to markets listed for looping or deep stablecoin markets', () => {
-    expect(leaderLoop([listing({ categories: [], name: 'ETHx' })], s, defaultLoopSettings, { capital: 1000 })).toHaveLength(0);
+  it('one row per lending market, even for a PT outside the old candidate rule', () => {
+    const second = lender({ ratePct: 3 }, { key: 'morpho:eip155:1:0xn:supply', url: 'https://app.morpho.org/ethereum/market/0xn' });
+    const rows = leaderLoop([ptListing({ categories: [], name: 'ETHx', liquidity: 200_000 })], s, [lender(), second], lev, { capital: 1000 }).rows;
+    expect(rows.map((r) => r.lender!.borrowPct).sort()).toEqual([3, 5]);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(2);
+  });
+
+  it('leaves out and counts loops liquidated at entry or larger than the market can lend', () => {
+    // LLTV 60%: 3× puts LTV near 67% — liquidated on entry.
+    const liq = leaderLoop([ptListing()], s, [lender({ collateral: [{ token: { symbol: 'PT-USDx', address: PT }, maxLtv: 0.6 }] })], lev, { capital: 10_000 });
+    expect(liq).toMatchObject({ rows: [], liquidated: 1 });
+    // 3× on $10,000 borrows $20,000; the market has $15,000.
+    const short = leaderLoop([ptListing()], s, [lender({ availableUsd: 15_000 })], lev, { capital: 10_000 });
+    expect(short).toMatchObject({ rows: [], shortLiquidity: 1 });
+  });
+
+  it('pairs yield-bearing dollars by accounting asset or stablecoin tag, and marks a dollar name alone as unverified', async () => {
+    const { ptClassOf } = await import('../../src/lib/opportunity/from-market');
+    const { tokenClass } = await import('../../src/lib/merkl/vetting');
+    const tok = (symbol: string) => ({ symbol, address: `0x${'44'.repeat(20)}` });
+    // reUSD: not in the plain-stablecoin list, but Pendle accounts it in USDC.
+    expect(ptClassOf({ asset: tok('reUSD'), accountingSymbol: 'USDC', categories: [], name: 'reUSD' })).toEqual({ class: 'usd', pegVerified: true });
+    // sUSDD: tagged stables by the protocol.
+    expect(ptClassOf({ asset: tok('sUSDD'), accountingSymbol: 'USDD', categories: ['stables'], name: 'sUSDD' })).toEqual({ class: 'usd', pegVerified: true });
+    // sUSDat: only its name says dollar.
+    expect(ptClassOf({ asset: tok('sUSDat'), accountingSymbol: 'USDat', categories: ['rwa', 'strc'], name: 'sUSDat' })).toEqual({ class: 'usd', pegVerified: false });
+    expect(ptClassOf({ asset: tok('weETH'), accountingSymbol: 'ETH', categories: [], name: 'weETH' })).toEqual({ class: 'eth', pegVerified: true });
+    expect(ptClassOf({ asset: tok('HYPE'), accountingSymbol: 'HYPE', categories: [], name: 'kHYPE' })).toBeNull();
+    expect(tokenClass({ symbol: 'apyUSD' })).toBe('other');
+    expect(tokenClass({ symbol: 'aPYUSD' })).toBe('other');
+    expect(tokenClass({ symbol: 'PYUSD' })).toBe('usd');
+    const unverified = leaderLoop([ptListing({ name: 'sUSDat', asset: tok('sUSDat'), accountingSymbol: 'USDat', categories: ['rwa'] })], s, [lender()], lev, { capital: 1000 }).rows[0];
+    expect(unverified.pegVerified).toBe(false);
+  });
+
+  it('uses the borrow rate after the user\'s own borrow when the market publishes its curve', () => {
+    const curve = { suppliedUsd: 100_000, borrowedUsd: 50_000, points: [{ u: 0, rate: 0.02 }, { u: 0.5, rate: 0.05 }, { u: 1, rate: 0.5 }], source: 'test' };
+    const [r] = leaderLoop([ptListing()], s, [lender({ curve })], lev, { capital: 10_000 }).rows;
+    expect(r.lender!.rateModelled).toBe(true);
+    expect(r.lender!.borrowNowPct).toBe(5);
+    expect(r.lender!.borrowPct).toBeGreaterThan(5);
   });
 });
 
 describe('YT dollar ranking view', () => {
+  it('shows no loop dollar figure while the lending data is missing', async () => {
+    const { renderToString } = await import('react-dom/server');
+    const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
+    const html = renderToString(<LeaderRanking markets={[ptListing()]} capital={1000} strategy="loop" lending={{ opportunities: null, loading: false, failed: true }} />);
+    expect(html).toContain('داده‌ی بازارهای وام در دسترس نیست');
+    expect(html).not.toContain('بیشترین سود');
+  });
+
   it('lists all three protocols with symbol and protocol, four buckets, in Persian', async () => {
     const { renderToString } = await import('react-dom/server');
     const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
@@ -147,8 +219,10 @@ describe('YT dollar ranking view', () => {
       listing({ id: 's1', protocol: 'spectra', name: 'stUSR', impliedAPY: 12, baseAPY: 6, hasPoints: false }),
       listing({ id: 'e1', protocol: 'exponent', name: 'ONyc', chain: 'Solana', impliedAPY: 14, baseAPY: 9 }),
     ];
-    const html = renderToString(<LeaderRanking markets={markets} capital={1000} strategy="yt" />) + renderToString(<LeaderRanking markets={markets} capital={1000} strategy="loop" />);
-    for (const t of ['پیشنهاد', 'بهره‌ی وام', 'بیشترین سود', 'کمترین سود', 'کمترین ضرر', 'بیشترین ضرر', 'sUSDe', 'stUSR', 'ONyc', 'Pendle', 'Spectra', 'Exponent']) expect(html).toContain(t);
+    const lending = { opportunities: [lender()], loading: false, failed: false };
+    const loopMarkets = [...markets, ptListing({ id: 'p2', name: 'USDx' })];
+    const html = renderToString(<LeaderRanking markets={markets} capital={1000} strategy="yt" />) + renderToString(<LeaderRanking markets={loopMarkets} capital={1000} strategy="loop" lending={lending} />);
+    for (const t of ['پیشنهاد', 'بازار وام', 'بدون بازار وام در منابع یلدایکس', 'بیشترین سود', 'کمترین سود', 'کمترین ضرر', 'بیشترین ضرر', 'sUSDe', 'stUSR', 'ONyc', 'Pendle', 'Spectra', 'Exponent']) expect(html).toContain(t);
     expect(html).not.toContain('NaN');
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, '').replace(/<bdi dir="ltr"[^>]*>[^<]*<\/bdi>/g, '').replace(/alt="[^"]*"/g, ''));
   });

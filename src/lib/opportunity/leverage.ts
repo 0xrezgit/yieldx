@@ -79,29 +79,40 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
 }
 
 /**
+ * The lending markets that take this PT as collateral: same network, the PT's exact
+ * token address (never a symbol), a published borrow rate, and a debt of the same
+ * class as the PT's underlying (USD/ETH/BTC, see `ptClassOf`) so a constant price is a fair assumption.
+ * Shared by the market analysis and the Loop PT dollar ranking.
+ */
+export function ptLenders(pt: Pick<Opportunity, 'chain' | 'ptToken' | 'assets' | 'ptClass'>, lending: Opportunity[]) {
+  const key = addrKey(pt.chain, pt.ptToken?.address);
+  const unitClass = pt.ptClass?.class ?? tokenClass({ symbol: pt.assets.deposit[0]?.symbol ?? '' });
+  const out: { lender: Opportunity; collateral: NonNullable<Opportunity['borrow']>['collateral'][number]; debt: NonNullable<Opportunity['assets']['deposit'][number]> }[] = [];
+  if (!key || !CLASSES.has(unitClass)) return out;
+  for (const o of lending) {
+    const side = o.borrow;
+    const debt = o.assets.deposit[0];
+    if (!side || !debt?.symbol || !debt.address || side.ratePct === null) continue;
+    if (tokenClass({ symbol: debt.symbol }) !== unitClass) continue;
+    for (const c of side.collateral) if (addrKey(o.chain, c.token.address) === key) out.push({ lender: o, collateral: c, debt });
+  }
+  return out;
+}
+
+/**
  * PT loops: a lending market that accepts this exact PT as collateral (same network,
  * same token address — never a symbol), borrowing an asset of the same class. The
  * collateral earns the PT's implied APY until maturity; the loop closes at maturity.
  */
 export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
-  const byPt = new Map<string, Opportunity>();
-  for (const p of opps) {
-    const k = p.family === 'pt' && p.rate.value !== null ? addrKey(p.chain, p.ptToken?.address) : null;
-    if (k) byPt.set(k, p);
-  }
-  if (!byPt.size) return [];
   const out: Opportunity[] = [];
-  for (const o of opps) {
-    const side = o.borrow;
-    const debt = o.assets.deposit[0];
-    if (!side || !debt?.symbol || !debt.address || side.ratePct === null) continue;
-    const debtClass = tokenClass({ symbol: debt.symbol });
-    if (!CLASSES.has(debtClass)) continue;
-    for (const c of side.collateral) {
-      const p = byPt.get(addrKey(o.chain, c.token.address) ?? '');
-      if (!p || !p.ptToken) continue;
-      const unit = p.assets.deposit[0];
-      if (tokenClass({ symbol: unit?.symbol ?? '' }) !== debtClass) continue;
+  for (const p of opps) {
+    if (p.family !== 'pt' || p.rate.value === null || !p.ptToken) continue;
+    const unit = p.assets.deposit[0];
+    for (const { lender: o, collateral: c, debt } of ptLenders(p, opps)) {
+      const side = o.borrow!;
+      const debtClass = tokenClass({ symbol: debt.symbol ?? '' });
+      const unverified = p.ptClass?.pegVerified === false;
       const token = { symbol: p.ptToken.symbol ?? `PT-${unit?.symbol ?? ''}`, address: p.ptToken.address };
       const worst = worseQuality(o.quality, p.quality);
       out.push({
@@ -123,6 +134,7 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
         quality: worst,
         sources: [...o.sources, ...p.sources],
         notes: [
+          ...(unverified ? [`برابری ${unit?.symbol ?? 'دارایی پایه'} با دلار فقط از نامش برداشته شده؛ پروتکل آن را استیبل‌کوین علامت نزده است.`] : []),
           ...(debt.symbol !== unit?.symbol ? [`PT به ${unit?.symbol ?? '—'} بازخرید می‌شود و وام ${debt.symbol} است؛ برابری این دو فرض شده.`] : []),
           'اوراکل وام ممکن است قیمت بازار PT را بخواند؛ بالا رفتن نرخ بازار پیش از سررسید سلامت را کم می‌کند.',
         ],
