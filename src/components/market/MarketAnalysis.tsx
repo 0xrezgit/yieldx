@@ -18,17 +18,22 @@ import { Collapsible } from '../ui/card';
 import { Empty, Pill, Segmented } from '../opportunities/parts';
 import { OpportunityDetails, usd } from './OpportunityDetails';
 import { Coverage } from './Coverage';
+import { LeaderRanking } from './LeaderRanking';
+
+type View = 'all' | 'yt' | 'loop';
 
 interface Stored {
   capital: number | null;
   horizon: HorizonDays;
+  /** The unified ranking, or the separate YT dollar ranking beside it. */
+  view: View;
 }
 
 /** Only the capital the user typed is kept — never a sample value presented as theirs. */
 function restore(): Stored {
   const s = readLocal<Partial<Stored>>(STORAGE_KEYS.market, {});
   const capital = typeof s.capital === 'number' && Number.isFinite(s.capital) && s.capital > 0 ? s.capital : null;
-  return { capital, horizon: isHorizon(s.horizon) ? s.horizon : DEFAULT_HORIZON };
+  return { capital, horizon: isHorizon(s.horizon) ? s.horizon : DEFAULT_HORIZON, view: s.view === 'yt' || s.view === 'loop' ? s.view : 'all' };
 }
 
 function Identity({ row }: { row: Evaluated }) {
@@ -137,15 +142,32 @@ export default function MarketAnalysis() {
         </button>
       </header>
 
+      <Segmented<View>
+        value={st.view}
+        onChange={(view) => setSt({ ...st, view })}
+        label="بخش"
+        options={[
+          { id: 'all', label: 'رتبه‌بندی یکپارچه' },
+          { id: 'yt', label: 'رتبه‌بندی دلاری YT' },
+          { id: 'loop', label: 'رتبه‌بندی دلاری Loop PT' },
+        ]}
+      />
+
       <section className="sx-card p-4 flex flex-col gap-3" aria-label="سرمایه و افق">
         <NumberField label="سرمایه‌ی اولیه" value={st.capital ?? NaN} onChange={(v) => setSt({ ...st, capital: Number.isFinite(v) && v > 0 ? v : null })} suffix="دلار" placeholder="مثلاً ۱۰۰۰" />
-        <Segmented<`${HorizonDays}`>
-          value={`${days}`}
-          onChange={(v) => setSt({ ...st, horizon: Number(v) as HorizonDays })}
-          label="افق"
-          options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))}
-        />
+        {st.view === 'all' && (
+          <Segmented<`${HorizonDays}`>
+            value={`${days}`}
+            onChange={(v) => setSt({ ...st, horizon: Number(v) as HorizonDays })}
+            label="افق"
+            options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))}
+          />
+        )}
       </section>
+
+      {st.view !== 'all' && (m.loading && !m.markets.length ? <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" /> : <LeaderRanking key={st.view} markets={m.markets} capital={capital} strategy={st.view} />)}
+      {st.view === 'all' && (
+        <>
 
       <p className="text-xs text-secondary">برآورد با نرخ‌های فعلی و هزینه‌های محاسبه‌شده؛ سرمایه در شبکه‌ی مقصد فرض شده است. سود ردیف‌ها قابل جمع نیست.</p>
 
@@ -203,6 +225,8 @@ export default function MarketAnalysis() {
       <Collapsible title="پوشش داده‌ها" icon={<Database size={18} aria-hidden />}>
         <Coverage sources={m.sources} counts={view?.counts ?? null} total={view?.total ?? 0} />
       </Collapsible>
+        </>
+      )}
 
       <Link href="/tools" className="tap self-start inline-flex items-center gap-1.5 text-sm text-secondary hover:text-primary">
         <Wrench size={14} aria-hidden /> ابزارهای تخصصی: YT، LP، هزینه‌ی وام

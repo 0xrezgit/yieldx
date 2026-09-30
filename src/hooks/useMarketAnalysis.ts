@@ -24,6 +24,8 @@ export interface MarketAnalysisState {
   /** Every source failed. */
   failed: boolean;
   refreshing: boolean;
+  /** Live PT/YT market lists of Pendle, Spectra and Exponent (for the YT dollar ranking). */
+  markets: ReturnType<typeof useAllMarkets>['markets'];
   /** Newest data time across sources (ms). */
   updatedAt: number | null;
   refresh: () => void;
@@ -84,6 +86,7 @@ export function useMarketAnalysis(capital: number): MarketAnalysisState {
     loading: lending.loading && pt.loading && merkl.loading,
     failed: lending.failed && !pt.markets.length && merkl.failed,
     refreshing: lending.refreshing || merkl.refreshing,
+    markets: pt.markets,
     updatedAt: times.length ? Math.max(...times) : null,
     refresh: () => {
       lending.refresh();
