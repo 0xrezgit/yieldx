@@ -312,6 +312,24 @@ describe('adapters', () => {
     expect(loopscaleVault({ ...v, pause: { depositsPaused: true } }, AT, 'USDC')!.risk!.paused).toBe(true);
   });
 
+  it('Loopscale: deposit cap in native units, reward end times as strings, ended schedules dropped', () => {
+    const v: LoopscaleVaultInfo = {
+      vault: { address: 'V', principalMint: 'USDC', depositsEnabled: true },
+      vaultMetadata: { name: 'USDC Prime', depositCap: '1500000000000' },
+      vaultStrategy: { strategy: { tokenBalance: '200000000000', currentDeployedAmount: '800000000000', externalYieldAmount: '0', interestPerSecond: 2536.53, interestFee: '100000' }, externalYieldInfo: null },
+      strategySummary: { totalSupplyUsd: 1_000_000 },
+      vaultRewardsSchedules: [
+        { rewardMint: 'ENDED', rewardEndTime: String(Date.parse(AT) / 1000 - 86_400) },
+        { rewardMint: 'LIVE', rewardEndTime: String(Date.parse(AT) / 1000 + 86_400) },
+      ],
+    };
+    const o = loopscaleVault(v, AT, 'USDC')!;
+    expect(o.capacity.depositRemainingUsd).toBeCloseTo(500_000, 6);
+    expect(o.rewards.map((r) => r.token.address)).toEqual(['LIVE']);
+    expect(o.rewards[0].endsAt).toBe(new Date(Date.parse(AT) + 86_400_000).toISOString());
+    expect(loopscaleVault({ ...v, vaultMetadata: { name: 'x', depositCap: null } }, AT, 'USDC')!.capacity.depositRemainingUsd).toBeNull();
+  });
+
   it('retries a transient failure with backoff, never a client error', async () => {
     let n = 0;
     await expect(withRetry(async () => (++n < 3 ? Promise.reject(new UpstreamError('X', 503)) : 'ok'), 3, 1, async () => {})).resolves.toBe('ok');
@@ -351,7 +369,8 @@ describe('YT held to maturity', () => {
     const e = h[60];
     const S = 1000 - e.costs.find((c) => c.key === 'gas-entry')!.usd;
     const p = 1 - Math.pow(1.1, -45 / 365);
-    const income = (S / p) * (Math.pow(1.14, 45 / 365) - 1);
+    // Pendle keeps 5% of the YT's yield.
+    const income = (S / p) * (Math.pow(1.14, 45 / 365) - 1) * 0.95;
     expect(e.baseIncome).toBeCloseTo(income, 6);
     expect(e.costs.find((c) => c.key === 'yt-principal')!.usd).toBeCloseTo(S, 9);
     expect(e.net).toBeCloseTo(income - 1000 - e.costs.find((c) => c.key === 'gas-exit')!.usd, 6);
@@ -396,7 +415,7 @@ describe('render', () => {
     const { OpportunityDetails } = await import('../../src/components/market/OpportunityDetails');
     const { formatMoneyNumber } = await import('../../src/lib/utils/formatting');
     const { assertPersianMoney } = await import('../helpers/text');
-    const ytRow = lend('y', { family: 'yt', rate: { value: 14, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT }, maturity: inDays(45), exit: { type: 'maturity' }, poolLiquidityUsd: 5e8, yt: { impliedPct: 10, hasPoints: true } });
+    const ytRow = lend('y', { family: 'yt', rate: { value: 14, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT }, maturity: inDays(45), exit: { type: 'maturity' }, poolLiquidityUsd: 5e8, yt: { impliedPct: 10, hasPoints: true, yieldFeePct: 5 } });
     const a = run([pt('p', 45), lend('l'), ytRow]);
     expect(a.rows.find((r) => r.o.family === 'yt')!.byHorizon[60].placement).toBe('ranked');
     for (const row of a.rows) {

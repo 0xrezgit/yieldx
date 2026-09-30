@@ -8,6 +8,7 @@ import type { Evaluated } from '../../lib/market/analysis';
 import { HORIZONS, type HorizonDays } from '../../lib/opportunity/policy';
 import { PLACEMENT_LABEL } from '../../lib/market/labels';
 import { earnFromOpportunity } from '../../lib/portfolio/earn';
+import { isAppRoot } from '../../lib/market/links';
 import { formatAgo, formatDate, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
 
@@ -190,7 +191,7 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
         )}
         {o.url && (
           <a href={o.url} target="_blank" rel="noopener noreferrer" className={action}>
-            <ExternalLink size={14} aria-hidden /> <bdi dir="ltr">{o.protocol.name}</bdi>
+            <ExternalLink size={14} aria-hidden /> {isAppRoot(o.url) ? <>اپ <bdi dir="ltr">{o.protocol.name}</bdi></> : <>ورود به بازار در <bdi dir="ltr">{o.protocol.name}</bdi></>}
           </a>
         )}
       </div>

@@ -23,6 +23,21 @@ export function ytPriceFromAPY(apy: number, days: number): number {
   return days > 0 ? 1 - ptPriceFromAPY(apy, days) : 0;
 }
 
+/**
+ * Share of a YT's accrued yield the protocol keeps. Pendle deducts `interestFeeRate`
+ * from YT interest (PendleYieldContractFactory, capped at 20% on-chain); its docs give
+ * 5%. Spectra and Exponent: not verified — no fee is assumed and the result says so.
+ */
+export const YT_YIELD_FEE_PCT: Record<string, number | null> = { pendle: 5, spectra: null, exponent: null };
+
+/**
+ * How each API publishes a market's base yield: Pendle and Exponent as APY, Spectra's
+ * IBT figure (`ibt.apr.total`) as APR, read as simple interest — the same rule as the
+ * market analysis, so both views earn the same yield from the same number.
+ */
+export const BASE_RATE_KIND: Record<string, 'apy' | 'apr'> = { pendle: 'apy', spectra: 'apr', exponent: 'apy' };
+const baseGrowth = (rate: number, days: number, kind: 'apy' | 'apr' = 'apy') => (kind === 'apr' ? (rate / 100) * (days / 365) : growth(rate, days));
+
 // ─── YT ────────────────────────────────────────────────────────────────────────
 
 export interface YtTradeInput {
@@ -44,6 +59,10 @@ export interface YtTradeInput {
   pointsBasis: PointsBasis;
   /** USD value of one point. */
   valuePerPoint: number;
+  /** Share of the accrued yield the protocol keeps, % (Pendle: 5). Default 0. */
+  yieldFeePercent?: number;
+  /** How `baseAPY` compounds: 'apy' (default) or 'apr' — simple, as Spectra publishes it. */
+  baseRateKind?: 'apy' | 'apr';
 }
 
 export interface YtTrade {
@@ -79,7 +98,7 @@ export function simulateYt(i: YtTradeInput): YtTrade {
   const entryPrice = ytPriceFromAPY(i.entryAPY, D);
   const units = (i.capital * (1 - fee)) / (entryPrice * i.underlyingPrice);
   const notional = units * i.underlyingPrice;
-  const yieldEarned = notional * growth(i.baseAPY, h);
+  const yieldEarned = notional * baseGrowth(i.baseAPY, h, i.baseRateKind) * (1 - (i.yieldFeePercent ?? 0) / 100);
   const exitPrice = toMaturity ? 0 : ytPriceFromAPY(i.exitAPY, D - h);
   const saleValue = notional * exitPrice * (1 - fee);
   const cash = yieldEarned + saleValue - i.capital;

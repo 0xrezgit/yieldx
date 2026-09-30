@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, Database, Loader2, RefreshCw, Search, Wrench } from 'lucide-react';
+import { ChevronDown, Database, ExternalLink, Loader2, RefreshCw, Search, Wrench } from 'lucide-react';
 import { useMarketAnalysis } from '../../hooks/useMarketAnalysis';
 import { FAMILY_FILTERS, selectHorizon, type Evaluated, type FamilyFilter } from '../../lib/market/analysis';
 import { badgesOf, exitShort, FAMILY_LABEL } from '../../lib/market/labels';
+import { isAppRoot } from '../../lib/market/links';
 import { flags } from '../../lib/merkl/filters';
 import { DEFAULT_HORIZON, HORIZONS, isHorizon, PAGE_SIZE, TOP_LIMIT, type HorizonDays } from '../../lib/opportunity/policy';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
@@ -92,6 +93,11 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
           <ChevronDown size={16} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
         </span>
       </button>
+      {row.o.url && (
+        <a href={row.o.url} target="_blank" rel="noopener noreferrer" className="tap self-start ms-11 -mt-1 mb-2 inline-flex items-center gap-1 rounded-md border border-accent/60 px-2 min-h-8 text-xs text-primary hover:bg-elevated">
+          <ExternalLink size={12} aria-hidden /> {isAppRoot(row.o.url) ? <>اپ <bdi dir="ltr">{row.o.protocol.name}</bdi></> : 'ورود به بازار'}
+        </a>
+      )}
       {open && (
         <div className="px-1 pb-4 pt-3 border-t border-default">
           <OpportunityDetails row={row} days={days} modelVersion={modelVersion} />
