@@ -56,5 +56,26 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
   };
 }
 
+/**
+ * The YT of the same market: buying it pays today's YT price for the underlying's
+ * yield until maturity. The base yield is read the way each API publishes it —
+ * Pendle and Exponent as APY, Spectra's IBT figure as APR (simple, the lower reading).
+ * Null when the market gives no base yield: without it there is no estimate.
+ */
+export function ytOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt: string, now = Date.now()): Opportunity | null {
+  if (m.baseAPY === null || !Number.isFinite(m.baseAPY) || !(m.impliedAPY > 0)) return null;
+  const pt = ptOpportunity(protocol, m, fetchedAt, now);
+  return {
+    ...pt,
+    key: pt.key.replace(/:pt$/, ':yt'),
+    family: 'yt',
+    market: { ...pt.market, name: `YT ${m.name}` },
+    rate: { value: m.baseAPY, kind: protocol === 'spectra' ? 'apr' : 'apy', feesIncluded: true, rewardsIncluded: false, at: pt.rate.at },
+    exit: { type: 'maturity', note: 'در سررسید YT صفر می‌شود و بازده جمع‌شده دریافت می‌شود؛ فروش زودتر در استخر ممکن است.' },
+    ptToken: null,
+    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints },
+  };
+}
+
 /** Unknown costs every PT entry has today (the list gives no executable quote). */
 export const PT_UNKNOWN_COSTS = ['کارمزد سواپ و اثر قیمت خرید PT (بدون quote)'];

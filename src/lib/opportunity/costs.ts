@@ -39,6 +39,8 @@ const STEPS: Record<string, { entry: Step[]; exit: Step[] }> = {
   vault: { entry: ['approve', 'deposit'], exit: ['withdraw'] },
   'fixed-lend': { entry: ['approve', 'deposit'], exit: ['withdraw'] },
   pt: { entry: ['approve', 'swap'], exit: ['withdraw'] },
+  // Buy YT; at maturity claim the accrued yield.
+  yt: { entry: ['approve', 'swap'], exit: ['claim'] },
   // Supply collateral, borrow, swap back (one flash-loan route or several rounds: the lower count is used).
   leverage: { entry: ['approve', 'deposit', 'deposit', 'swap'], exit: ['swap', 'deposit', 'withdraw'] },
 };

@@ -70,7 +70,7 @@ export const FAMILY_FILTERS: { id: FamilyFilter; label: string }[] = [
 
 const inFamily = (f: FamilyFilter, o: Opportunity, e: Estimate) =>
   f === 'all' ||
-  (f === 'fixed' && (o.family === 'fixed-lend' || o.family === 'pt' || (o.family === 'leverage' && o.maturity !== null))) ||
+  (f === 'fixed' && (o.family === 'fixed-lend' || o.family === 'pt' || o.family === 'yt' || (o.family === 'leverage' && o.maturity !== null))) ||
   (f === 'lend' && o.family === 'lend') ||
   (f === 'vault' && o.family === 'vault') ||
   (f === 'rewards' && e.rewards > 0) ||
@@ -105,7 +105,7 @@ export function evaluate(input: AnalysisInput, capital: number, now = Date.now()
         days,
         entryCosts: g.entry,
         exitCosts: g.exit,
-        unknownCosts: o.family === 'pt' ? [...PT_UNKNOWN_COSTS] : o.rewards.length ? ['گس دریافت پاداش (claim)'] : [],
+        unknownCosts: o.family === 'pt' ? [...PT_UNKNOWN_COSTS] : o.family === 'yt' ? [] : o.rewards.length ? ['گس دریافت پاداش (claim)'] : [],
         now,
         leverage: defaultLeverageInput,
       });

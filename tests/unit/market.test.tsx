@@ -5,6 +5,8 @@ import { evaluate, selectHorizon } from '../../src/lib/market/analysis';
 import { HORIZONS, LEVERAGE_POLICY, MAX_POOL_SHARE_WITHOUT_QUOTE, TOP_LIMIT } from '../../src/lib/opportunity/policy';
 import { buildPtLoops } from '../../src/lib/opportunity/leverage';
 import { estimate } from '../../src/lib/opportunity/estimate';
+import { ytOpportunity } from '../../src/lib/opportunity/from-market';
+import type { MarketListing } from '../../src/types/market';
 import { kaminoReserve, fetchKamino } from '../../src/lib/lending/kamino';
 import { loopscaleVault, type LoopscaleVaultInfo } from '../../src/lib/lending/loopscale';
 import { morphoMarket, fetchMorpho, type RawMorphoMarket } from '../../src/lib/lending/morpho';
@@ -319,6 +321,67 @@ describe('adapters', () => {
   });
 });
 
+describe('YT held to maturity', () => {
+  const listing = (over: Partial<MarketListing> = {}): MarketListing => ({
+    id: '1-0xpool',
+    name: 'sUSDe',
+    platform: 'Ethena',
+    icon: null,
+    chain: 'Ethereum',
+    maturity: inDays(45),
+    impliedAPY: 10,
+    baseAPY: 14,
+    liquidity: 5e8,
+    hasPoints: true,
+    ytMultiplier: null,
+    points: null,
+    categories: [],
+    isNew: false,
+    asset: { symbol: 'sUSDe', address: '0xsusde' },
+    sourceUpdatedAt: AT,
+    expired: false,
+    daysToMaturity: 45,
+    ...over,
+  });
+  const yt = (over: Partial<MarketListing> = {}, protocol: 'pendle' | 'spectra' = 'pendle') => ytOpportunity(protocol, listing(over), AT, NOW)!;
+
+  it('pays the YT price for the yield until maturity; the YT itself ends at zero', () => {
+    const h = run([yt()]).rows[0].byHorizon;
+    expect(h[30].placement).toBe('needs-model');
+    const e = h[60];
+    const S = 1000 - e.costs.find((c) => c.key === 'gas-entry')!.usd;
+    const p = 1 - Math.pow(1.1, -45 / 365);
+    const income = (S / p) * (Math.pow(1.14, 45 / 365) - 1);
+    expect(e.baseIncome).toBeCloseTo(income, 6);
+    expect(e.costs.find((c) => c.key === 'yt-principal')!.usd).toBeCloseTo(S, 9);
+    expect(e.net).toBeCloseTo(income - 1000 - e.costs.find((c) => c.key === 'gas-exit')!.usd, 6);
+    expect(e.placement).toBe('ranked');
+    expect(e.quality).toBe('partial');
+    expect(h[125].net).toBeCloseTo(e.net!, 9);
+  });
+
+  it('loses money when the base yield is below the implied rate — unprofitable, not in the top list', () => {
+    const e = run([yt({ baseAPY: 6 })]).rows[0].byHorizon[60];
+    expect(e.net!).toBeLessThan(0);
+    expect(e.placement).toBe('unprofitable');
+  });
+
+  it('never prices points, and reads Spectra’s base yield as simple APR', () => {
+    const e = run([yt()]).rows[0].byHorizon[60];
+    expect(e.rewards).toBe(0);
+    expect(e.assumptions.some((a) => a.includes('پوینت'))).toBe(true);
+    expect(yt({}, 'spectra').rate.kind).toBe('apr');
+    expect(ytOpportunity('pendle', listing({ baseAPY: null }), AT, NOW)).toBeNull();
+  });
+
+  it('checks the pool against the notional bought, not the capital', () => {
+    const p = 1 - Math.pow(1.1, -45 / 365);
+    const needed = 1000 / p / MAX_POOL_SHARE_WITHOUT_QUOTE;
+    expect(run([yt({ liquidity: needed * 0.9 })]).rows[0].byHorizon[60].placement).toBe('needs-model');
+    expect(run([yt({ liquidity: needed * 1.1 })]).rows[0].byHorizon[60].placement).not.toBe('needs-model');
+  });
+});
+
 describe('coverage matrix', () => {
   it('lists every requested protocol by product, and never ranks a product without a model', () => {
     for (const p of ['Pendle', 'Exponent', 'Spectra', 'Morpho', 'Kamino', 'Loopscale', 'Aave', 'Raydium', 'Orca', 'Jupiter', 'Merkl']) expect(COVERAGE.some((r) => r.protocol.includes(p))).toBe(true);
@@ -333,7 +396,9 @@ describe('render', () => {
     const { OpportunityDetails } = await import('../../src/components/market/OpportunityDetails');
     const { formatMoneyNumber } = await import('../../src/lib/utils/formatting');
     const { assertPersianMoney } = await import('../helpers/text');
-    const a = run([pt('p', 45), lend('l')]);
+    const ytRow = lend('y', { family: 'yt', rate: { value: 14, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT }, maturity: inDays(45), exit: { type: 'maturity' }, poolLiquidityUsd: 5e8, yt: { impliedPct: 10, hasPoints: true } });
+    const a = run([pt('p', 45), lend('l'), ytRow]);
+    expect(a.rows.find((r) => r.o.family === 'yt')!.byHorizon[60].placement).toBe('ranked');
     for (const row of a.rows) {
       const e = row.byHorizon[60];
       const html = renderToString(<RankingRow row={row} rank={1} days={60} open onToggle={() => {}} modelVersion={a.modelVersion} />) + renderToString(<OpportunityDetails row={row} days={60} modelVersion={a.modelVersion} />);

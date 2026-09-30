@@ -45,7 +45,7 @@ export interface EstimateInput {
 }
 
 /** Families whose value depends on more than a rate (price paths, points, debt) — no dollar estimate without their own model. */
-export const SPECIALIST_FAMILIES = new Set<OpportunityFamily>(['yt', 'lp', 'leverage', 'borrow']);
+export const SPECIALIST_FAMILIES = new Set<OpportunityFamily>(['lp', 'leverage', 'borrow']);
 
 export const DEFAULT_MAX_AGE_HOURS = MAX_RATE_AGE_HOURS;
 
@@ -144,7 +144,8 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (o.quality === 'insufficient') return stop('insufficient', 'داده‌ی منبع برای برآورد کافی نیست.');
   if (o.risk?.paused) return stop('inactive', 'بازار متوقف یا منجمد است.');
   if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, input.leverage, base, now);
-  if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : o.family === 'yt' ? 'YT: ارزش خروج مدل قابل اتکا ندارد.' : 'به مدل جدا نیاز دارد.');
+  if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
+  if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
 
   // Horizon: a maturity inside it ends the earning there (cash earns nothing after, no
   // reinvestment); one after it would need an exit price at the horizon, which is not modelled.
@@ -159,12 +160,15 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   }
 
   // An AMM entry without an executable quote: only for amounts small against the pool.
-  if (o.family === 'pt') {
+  if (o.family === 'pt' || o.family === 'yt') {
     const liq = o.poolLiquidityUsd ?? null;
     if (liq === null || !(liq > 0)) return stop('needs-model', 'نقدینگی استخر گزارش نشده؛ بدون quote برآورد نمی‌شود.');
-    if (capital > liq * MAX_POOL_SHARE_WITHOUT_QUOTE) return stop('needs-model', 'مبلغ نسبت به نقدینگی استخر بزرگ است؛ quote لازم است.');
+    // A YT buy moves the pool by its notional (the PT sold against it), not by the capital.
+    const traded = o.family === 'yt' && o.yt ? capital / ytUnitPrice(o.yt.impliedPct, exactDays(o.maturity, now)) : capital;
+    if (!(traded <= liq * MAX_POOL_SHARE_WITHOUT_QUOTE)) return stop('needs-model', 'مبلغ نسبت به نقدینگی استخر بزرگ است؛ quote لازم است.');
     quality = worseQuality(quality, 'partial');
   }
+  if (o.family === 'yt') return ytToMaturity(o, input, { base, assumptions, unknown, quality, now });
 
   // Capital that fits.
   const entry = input.entryCosts ?? [];
@@ -310,6 +314,64 @@ export const placeOf = (quality: DataQuality, net: number, allocatable: number, 
 /** A short default reason for a placement that has no specific one. */
 export const reasonOf = (p: Placement): string | null =>
   p === 'ranked' ? null : p === 'unprofitable' ? 'هزینه‌ها از درآمد این دوره بیشترند.' : p === 'stale' ? 'داده‌ی منبع قدیمی است.' : p === 'no-capacity' ? 'ظرفیت ندارد.' : p === 'insufficient' ? 'داده‌ی کافی نیست.' : null;
+
+const exactDays = (maturity: string | null, now: number) => (maturity ? (new Date(maturity).getTime() - now) / DAY_MS : NaN);
+/** YT price in underlying units: 1 − PT, PT = (1 + implied)^(−days/365). */
+const ytUnitPrice = (impliedPct: number, days: number) => (days > 0 ? 1 - Math.pow(1 + impliedPct / 100, -days / 365) : NaN);
+
+/**
+ * YT held to maturity (only reached when the maturity is inside the horizon).
+ *
+ *   spendable S = capital − entry costs;  YT price p = 1 − (1 + implied)^(−D/365)
+ *   notional N = S ÷ p (units of the underlying whose yield the YT receives)
+ *   income   = N × growth(base yield, D)   — the base yield read as published (APY or APR)
+ *   at maturity the YT is worth 0, so S itself is spent:  net = income − S − other costs
+ *
+ * The base yield is today's and held for the whole term (it is variable); points and
+ * airdrops are never in dollars. The underlying's USD price is held constant.
+ */
+function ytToMaturity(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; assumptions: string[]; unknown: string[]; quality: DataQuality; now: number }): Estimate {
+  const { assumptions, unknown, now } = ctx;
+  const D = exactDays(o.maturity, now);
+  const implied = o.yt!.impliedPct;
+  const p = ytUnitPrice(implied, D);
+  const baseGrowth = periodGrowth(o.rate, D);
+  if (!(p > 0 && p < 1) || baseGrowth === null || o.rate.value === null) return { ...ctx.base, quality: 'insufficient', placement: 'insufficient', reason: 'قیمت YT یا بازده پایه معلوم نیست.', assumptions: [...assumptions, 'قیمت YT یا بازده پایه معلوم نیست.'] };
+  const entry = input.entryCosts ?? [];
+  const S = Math.max(0, input.capital - sum(entry));
+  const N = S / p;
+  const income = N * baseGrowth;
+  const costs: CostItem[] = [...entry, { key: 'yt-principal', label: 'بهای YT (در سررسید صفر می‌شود)', usd: S, basis: 'model' }, ...(input.exitCosts ?? [])];
+  const net = income - sum(costs);
+  // Sensitivity and break-even of the one input that decides the result.
+  const up = periodGrowth({ ...o.rate, value: o.rate.value + 1 }, D) ?? baseGrowth;
+  const breakEven = o.rate.kind === 'apr' ? (p / (D / 365)) * 100 : (Math.pow(1 + p, 365 / D) - 1) * 100;
+  assumptions.push(
+    `بازده پایه‌ی امروز (${formatPercent(o.rate.value, 2)}) تا سررسید ثابت فرض شد؛ متغیر است.`,
+    `هر یک واحد درصد تغییر بازده پایه حدود ${formatNumber(N * (up - baseGrowth), 2)} دلار نتیجه را جابه‌جا می‌کند؛ سربه‌سر در بازده پایه‌ی ${formatPercent(breakEven, 2)}.`,
+    'YT در سررسید صفر می‌شود؛ فقط بازده جمع‌شده برمی‌گردد.',
+  );
+  if (o.yt!.hasPoints) assumptions.push('پوینت و ایردراپ این بازار در سود دلاری نیامده است.');
+  unknown.push('کارمزد سواپ و اثر قیمت خرید YT (بدون quote)');
+  const placement = placeOf(ctx.quality, net, S, input.capital);
+  return {
+    ...ctx.base,
+    earningDays: D,
+    allocatable: S,
+    unallocated: 0,
+    rateNow: o.rate.value,
+    rateAfterEntry: null,
+    baseIncome: income,
+    costs,
+    unknown,
+    net,
+    netPct: (net / input.capital) * 100,
+    assumptions,
+    quality: ctx.quality,
+    placement,
+    reason: reasonOf(placement),
+  };
+}
 
 /**
  * Fixed rate held to maturity, priced from the order book for the user's own

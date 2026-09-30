@@ -6,7 +6,7 @@ import { useAllMarkets } from './useAllMarkets';
 import { useMerkl } from './useMerkl';
 import { liveAt } from '../lib/merkl/filters';
 import { buildContext } from '../lib/merkl/vetting';
-import { ptOpportunity } from '../lib/opportunity/from-market';
+import { ptOpportunity, ytOpportunity } from '../lib/opportunity/from-market';
 import { protocolIdentity } from '../lib/registry/identity';
 import { evaluate, type Analysis, type AnalysisInput } from '../lib/market/analysis';
 import type { SourceStatus } from '../lib/lending/types';
@@ -44,7 +44,9 @@ export function useMarketAnalysis(capital: number): MarketAnalysisState {
 
   const input: AnalysisInput | null = useMemo(() => {
     if (!lending.feed && !pt.markets.length && !merkl.feed) return null;
-    const ptOpps = pt.markets.filter((m) => !m.expired).map((m) => ptOpportunity(m.protocol, m, new Date(pt.feeds[m.protocol]?.at ?? Date.now()).toISOString()));
+    const live = pt.markets.filter((m) => !m.expired);
+    const at = (m: (typeof live)[number]) => new Date(pt.feeds[m.protocol]?.at ?? Date.now()).toISOString();
+    const ptOpps = [...live.map((m) => ptOpportunity(m.protocol, m, at(m))), ...live.map((m) => ytOpportunity(m.protocol, m, at(m))).filter((o) => o !== null)];
     const f = merkl.feed;
     const list = f ? f.opportunities.map((o) => liveAt(o, minute)).filter((o) => o.campaigns.length > 0) : [];
     return {

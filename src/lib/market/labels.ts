@@ -55,6 +55,7 @@ export function badgesOf(e: Estimate, o: Opportunity): string[] {
   if (e.leverage) out.push(`اهرم ${formatNumber(e.leverage.leverage, 1)}×`);
   if (o.maturity && e.earningDays < e.days) out.push(`سررسید روز ${formatNumber(Math.ceil(e.earningDays), 0)}`);
   const lead = o.assets.deposit[0]?.symbol;
+  if (o.family === 'yt') out.push('وابسته به بازده پایه');
   if (lead && tokenClass({ symbol: lead }) !== 'usd') out.push('وابسته به قیمت');
   if (o.unofficialSource) out.push('منبع غیررسمی');
   if (o.protocol.version === 'vault-v2') out.push('نرخ تاریخی');

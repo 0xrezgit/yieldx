@@ -69,7 +69,7 @@ function Campaigns({ row, e }: { row: Evaluated; e: Estimate }) {
 }
 
 function calculatorHref(o: Opportunity): string | null {
-  if (o.family !== 'pt') return null;
+  if (o.family !== 'pt' && o.family !== 'yt') return null;
   const protocol = o.protocol.id;
   const q = new URLSearchParams({ protocol, market: o.market.id, name: o.market.name, ...(o.maturity ? { maturity: o.maturity } : {}) });
   return `/dashboard?${q}`;
@@ -82,7 +82,8 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
   const e = row.byHorizon[days];
   const x = e.leverage;
   const entry = e.costs.filter((c) => c.key === 'gas-entry').reduce((a, c) => a + c.usd, 0);
-  const other = e.costs.reduce((a, c) => a + c.usd, 0) - entry;
+  const principal = e.costs.filter((c) => c.key === 'yt-principal').reduce((a, c) => a + c.usd, 0);
+  const other = e.costs.reduce((a, c) => a + c.usd, 0) - entry - principal;
   const calc = calculatorHref(o);
   const earn = earnFromOpportunity(o, 'draft');
   return (
@@ -95,7 +96,8 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
           <Line label="هزینه‌ی ورود">{money(-entry)}</Line>
           <Line label={x ? 'آورده در لوپ' : 'تخصیص‌یافته'}>{money(e.allocatable)}</Line>
           {e.unallocated > 0.005 && <Line label="بی‌استفاده (بی‌درآمد)">{money(e.unallocated)}</Line>}
-          <Line label="درآمد پایه">{money(e.baseIncome)}</Line>
+          <Line label={o.yt ? 'بازده دریافتی تا سررسید' : 'درآمد پایه'}>{money(e.baseIncome)}</Line>
+          {principal > 0 && <Line label="بهای YT (در سررسید صفر می‌شود)">{money(-principal)}</Line>}
           {e.rewards > 0 && <Line label="پاداش">{money(e.rewards)}</Line>}
           {e.debtCost > 0 && <Line label="هزینه‌ی بدهی">{money(-e.debtCost)}</Line>}
           <Line label="هزینه‌ی خروج و دریافت پاداش">{money(-other)}</Line>
@@ -128,7 +130,12 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
             </>
           ) : (
             <>
-              <Line label={`نرخ فعلی (${o.rate.kind === 'apr' ? 'APR' : o.rate.kind === 'apy' ? 'APY' : o.book ? 'دفتر سفارش' : 'نامعلوم'})`}>{e.rateNow === null ? '—' : <Num>{formatPercent(e.rateNow, 2)}</Num>}</Line>
+              {o.yt && (
+                <Line label="Implied APY (قیمت YT)">
+                  <Num>{formatPercent(o.yt.impliedPct, 2)}</Num>
+                </Line>
+              )}
+              <Line label={`${o.yt ? 'بازده پایه' : 'نرخ فعلی'} (${o.rate.kind === 'apr' ? 'APR' : o.rate.kind === 'apy' ? 'APY' : o.book ? 'دفتر سفارش' : 'نامعلوم'})`}>{e.rateNow === null ? '—' : <Num>{formatPercent(e.rateNow, 2)}</Num>}</Line>
               {e.rateAfterEntry !== null && e.rateAfterEntry !== e.rateNow && (
                 <Line label="نرخ پس از ورود شما">
                   <Num>{formatPercent(e.rateAfterEntry, 2)}</Num>

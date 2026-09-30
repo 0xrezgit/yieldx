@@ -35,12 +35,13 @@ export const COVERAGE_CHECKED_AT = '2026-09-30';
 
 export const COVERAGE: CoverageRow[] = [
   { protocol: 'Pendle', product: 'PT', version: 'V2', networks: 'همه‌ی شبکه‌های API پندل', source: 'pendle', endpoint: 'api-v2.pendle.finance/core/v1/{chain}/markets', status: 'partial', ranked: true, reason: 'تا سررسید داخل افق؛ بدون quote، فقط مبلغ کوچک نسبت به استخر؛ کارمزد سواپ لحاظ‌نشده.' },
-  { protocol: 'Pendle', product: 'YT', version: 'V2', networks: 'همه', source: 'pendle', endpoint: 'همان', status: 'partial', ranked: false, reason: 'فقط ابزار YT؛ ارزش خروج مدل قابل اتکا ندارد.' },
+  { protocol: 'Pendle', product: 'YT', version: 'V2', networks: 'همه', source: 'pendle', endpoint: 'همان', status: 'partial', ranked: true, reason: 'تا سررسید داخل افق با بازده پایه‌ی امروز؛ پوینت بدون ارزش دلاری؛ بدون quote.' },
   { protocol: 'Pendle', product: 'LP', version: 'V2', networks: 'همه', source: null, endpoint: null, status: 'unavailable', ranked: false, reason: 'مدل LP پندل ساخته نشده.' },
   { protocol: 'Spectra', product: 'PT', version: null, networks: 'شبکه‌های پیکربندی‌شده', source: 'spectra', endpoint: 'api.spectra.finance/v1/{network}/pools', status: 'partial', ranked: true, reason: 'مثل PT پندل.' },
-  { protocol: 'Spectra', product: 'YT', version: null, networks: 'همان', source: 'spectra', endpoint: 'همان', status: 'partial', ranked: false, reason: 'فقط ابزار YT.' },
+  { protocol: 'Spectra', product: 'YT', version: null, networks: 'همان', source: 'spectra', endpoint: 'همان', status: 'partial', ranked: true, reason: 'مثل YT پندل؛ بازده پایه به‌صورت APR ساده.' },
   { protocol: 'Exponent', product: 'PT', version: null, networks: 'Solana', source: 'exponent', endpoint: 'api.exponent.finance/markets', status: 'partial', ranked: true, reason: 'اندازه‌ی بازار جای نقدینگی استخر؛ بدون quote.' },
-  { protocol: 'Exponent', product: 'YT و CLMM', version: null, networks: 'Solana', source: 'exponent', endpoint: 'همان', status: 'partial', ranked: false, reason: 'فقط ابزار تخصصی.' },
+  { protocol: 'Exponent', product: 'YT', version: null, networks: 'Solana', source: 'exponent', endpoint: 'همان', status: 'partial', ranked: true, reason: 'مثل YT پندل.' },
+  { protocol: 'Exponent', product: 'CLMM', version: null, networks: 'Solana', source: 'exponent', endpoint: 'همان', status: 'partial', ranked: false, reason: 'فقط ابزار تخصصی.' },
   { protocol: 'Morpho', product: 'Variable (بازارهای Blue)', version: 'Blue', networks: 'Ethereum، Base، Arbitrum، Optimism، Polygon، Unichain، Katana، HyperEVM', source: 'morpho', endpoint: 'api.morpho.org/graphql', status: 'supported', ranked: true, reason: 'نرخ لحظه‌ای و منحنی IRM؛ صفحه‌بندی کامل.' },
   { protocol: 'Morpho', product: 'Vaults', version: 'V1', networks: 'همان', source: 'morpho', endpoint: 'همان', status: 'supported', ranked: true, reason: 'نرخ خالص پس از کارمزد، بدون پاداش.' },
   { protocol: 'Morpho', product: 'Vaults', version: 'V2', networks: 'همان', source: 'morpho', endpoint: 'همان', status: 'partial', ranked: true, reason: 'فقط بازده تحقق‌یافته‌ی ۷ روزه منتشر می‌شود (نرخ تاریخی).' },
