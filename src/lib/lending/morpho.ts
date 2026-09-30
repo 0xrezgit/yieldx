@@ -16,11 +16,17 @@ import { morphoLink } from '../market/links';
  * - Market `currentIrmCurve`: supply APY at each utilization (for the rate after
  *   the user's deposit).
  * - Market `state.liquidityAssetsUsd`: what can be borrowed — and so withdrawn — now.
- * - Vault V1 `state.netApyWithoutRewards`: «excluding rewards, after deducting the
- *   performance fee». `liquidity.usd`: «withdrawable liquidity».
+ * - Vault V1 `state.netApyExcludingRewards`: «instantaneous vault APY excluding rewards,
+ *   after deducting the performance fee». `liquidity.usd`: «withdrawable liquidity».
+ *   Its rewards are `state.allRewards` (same shape as a market's `state.rewards`).
  * - Vault V2 `avgNetApy`: realized from share price, «after fees, with rewards»;
  *   `liquidityUsd`: liquidity adapter + idle assets.
  * - Reward `supplyApr`: APR, reported without a campaign end date.
+ * - A market is identified by `marketId` (the on-chain id) and filtered with `listed`.
+ *
+ * Schema renames seen live on 2026-10-01 (the old names now fail validation):
+ * `uniqueKey` → `marketId`, filter `whitelisted` → `listed`, vault state
+ * `netApyWithoutRewards` → `netApyExcludingRewards`, vault state `rewards` → `allRewards`.
  */
 
 const CFG = lending.morpho;
@@ -50,7 +56,7 @@ interface RawReward {
   supplyApr: number | null;
 }
 export interface RawMorphoMarket {
-  uniqueKey: string;
+  marketId: string;
   lltv: string;
   loanAsset: RawAsset;
   collateralAsset: RawAsset | null;
@@ -75,11 +81,11 @@ export interface RawMorphoVault {
   warnings: RawWarning[];
   liquidity: { usd: number } | null;
   state: {
-    netApyWithoutRewards: number;
+    netApyExcludingRewards: number;
     fee: number;
     totalAssetsUsd: number | null;
     timestamp: string | number;
-    rewards: RawReward[];
+    allRewards: RawReward[];
   } | null;
 }
 export interface RawMorphoVaultV2 {
@@ -102,12 +108,13 @@ export interface MorphoData {
 }
 
 const ASSET = 'address symbol logoURI chain { id } yield { apr }';
-const REWARD = `rewards { asset { ${ASSET} } supplyApr }`;
+const REWARD_FIELDS = `asset { ${ASSET} } supplyApr`;
+const REWARD = `rewards { ${REWARD_FIELDS} }`;
 
 export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float, $first: Int, $skip: Int) {
-  markets(first: $first, skip: $skip, orderBy: SupplyAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, whitelisted: true, supplyAssetsUsd_gte: $minUsd }) {
+  markets(first: $first, skip: $skip, orderBy: SupplyAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, supplyAssetsUsd_gte: $minUsd }) {
     items {
-      uniqueKey lltv
+      marketId lltv
       loanAsset { ${ASSET} }
       collateralAsset { ${ASSET} }
       warnings { type level }
@@ -115,17 +122,17 @@ export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float
       state { supplyApy borrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp ${REWARD} }
     }
   }
-  vaults(first: $first, skip: $skip, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, whitelisted: true, totalAssetsUsd_gte: $minUsd }) {
+  vaults(first: $first, skip: $skip, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, totalAssetsUsd_gte: $minUsd }) {
     items {
       address name
       asset { ${ASSET} }
       chain { id }
       warnings { type level }
       liquidity { usd }
-      state { netApyWithoutRewards fee totalAssetsUsd timestamp ${REWARD} }
+      state { netApyExcludingRewards fee totalAssetsUsd timestamp allRewards { ${REWARD_FIELDS} } }
     }
   }
-  vaultV2s(first: $first, skip: $skip, where: { chainId_in: $chains, whitelisted: true }) {
+  vaultV2s(first: $first, skip: $skip, where: { chainId_in: $chains, listed: true }) {
     items {
       address name
       asset { ${ASSET} }
@@ -190,7 +197,7 @@ const warningQuality = (w: RawWarning[] | undefined): { quality: DataQuality | n
 export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity | null {
   const s = m.state;
   const chainId = m.loanAsset?.chain?.id;
-  if (!s || !chainId || !m.uniqueKey || !m.loanAsset?.address) return null;
+  if (!s || !chainId || !m.marketId || !m.loanAsset?.address) return null;
   const network = networkByChainId(chainId);
   const w = warningQuality(m.warnings);
   const supplied = finite(s.supplyAssetsUsd);
@@ -204,11 +211,11 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
   const collateral = m.collateralAsset?.symbol ?? '—';
   const lltv = Number(m.lltv) / 1e18;
   return {
-    key: `morpho:${network.key}:${m.uniqueKey.toLowerCase()}:supply`,
+    key: `morpho:${network.key}:${m.marketId.toLowerCase()}:supply`,
     family: 'lend',
     protocol: { id: 'morpho', version: 'blue', name: 'Morpho' },
     chain: network.key,
-    market: { id: m.uniqueKey, address: null, name: `${m.loanAsset.symbol} · وثیقه ${collateral}${Number.isFinite(lltv) && lltv > 0 ? ` · LLTV ${formatPercent(lltv * 100, 1)}` : ''}` },
+    market: { id: m.marketId, address: null, name: `${m.loanAsset.symbol} · وثیقه ${collateral}${Number.isFinite(lltv) && lltv > 0 ? ` · LLTV ${formatPercent(lltv * 100, 1)}` : ''}` },
     assets: {
       deposit: [{ symbol: m.loanAsset.symbol ?? null, address: m.loanAsset.address }],
       collateral: m.collateralAsset ? [{ symbol: m.collateralAsset.symbol ?? null, address: m.collateralAsset.address }] : [],
@@ -218,7 +225,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
     // Blue markets have no supply cap.
     capacity: { depositRemainingUsd: null, uncapped: true, withdrawableNowUsd: finite(s.liquidityAssetsUsd) },
     exit: { type: 'instant', note: 'برداشت فقط تا سقف نقدینگی آزاد بازار؛ در استفاده‌ی نزدیک ۱۰۰٪ ممکن است موقتاً ممکن نباشد.' },
-    rewards: rewards(s.rewards, m.uniqueKey, chainId),
+    rewards: rewards(s.rewards, m.marketId, chainId),
     supplyCurve: supplied !== null && borrowed !== null && curve.length > 1 ? { suppliedUsd: supplied, borrowedUsd: borrowed, points: curve.map((p) => ({ u: p.utilization, rate: p.supplyApy })), source: 'منحنی IRM گزارش‌شده‌ی Morpho' } : null,
     borrow:
       m.collateralAsset?.address && Number.isFinite(lltv) && lltv > 0
@@ -238,7 +245,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
     quality: w.quality ?? (pct(s.supplyApy) === null ? 'insufficient' : 'current'),
     sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: onchainAt }],
     notes: w.notes,
-    url: morphoLink(chainId, 'market', m.uniqueKey)?.url ?? CFG.app,
+    url: morphoLink(chainId, 'market', m.marketId)?.url ?? CFG.app,
     icon: m.loanAsset.logoURI ?? null,
   };
 }
@@ -258,16 +265,16 @@ export function morphoVault(v: RawMorphoVault, fetchedAt: string): Opportunity |
     chain: network.key,
     market: { id: v.address, address: v.address, name: v.name },
     assets: { deposit: [{ symbol: v.asset?.symbol ?? null, address: v.asset?.address ?? null }] },
-    rate: { value: pct(s.netApyWithoutRewards), kind: 'apy', feesIncluded: true, rewardsIncluded: false, fees: { performancePct: pct(s.fee) }, at },
+    rate: { value: pct(s.netApyExcludingRewards), kind: 'apy', feesIncluded: true, rewardsIncluded: false, fees: { performancePct: pct(s.fee) }, at },
     maturity: null,
     // Room left is bounded by each market's cap in the vault; the API gives no single number.
     capacity: { depositRemainingUsd: null, withdrawableNowUsd: finite(v.liquidity?.usd) },
     exit: { type: 'instant', note: 'برداشت فوری تا سقف نقدینگی قابل برداشت خزانه.' },
-    rewards: rewards(s.rewards, v.address, v.chain.id),
+    rewards: rewards(s.allRewards, v.address, v.chain.id),
     risk: { oracle: null, curator: null, paused: false, incidents: w.notes },
-    quality: w.quality ?? (pct(s.netApyWithoutRewards) === null ? 'insufficient' : 'current'),
+    quality: w.quality ?? (pct(s.netApyExcludingRewards) === null ? 'insufficient' : 'current'),
     sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: onchainAt }],
-    notes: ['بازده خزانه پس از کسر کارمزد عملکرد و بدون پاداش (netApyWithoutRewards)، نرخ لحظه‌ای.', ...w.notes],
+    notes: ['بازده خزانه پس از کسر کارمزد عملکرد و بدون پاداش (netApyExcludingRewards)، نرخ لحظه‌ای.', ...w.notes],
     url: morphoLink(v.chain.id, 'vault', v.address)?.url ?? CFG.app,
     icon: v.asset?.logoURI ?? null,
   };

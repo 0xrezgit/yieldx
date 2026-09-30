@@ -14,10 +14,11 @@ APIهای Morpho و Aave از محیط توسعه‌ی این فاز در دست
   - `currentIrmCurve`: منحنی نرخ، برای محاسبه‌ی «نرخ پس از ورود» به کار می‌رود.
   - `state.liquidityAssetsUsd`: نقدینگی قابل برداشت.
 - **خزانه‌ی V1:**
-  - `state.netApyWithoutRewards`: طبق schema «بدون پاداش، پس از کسر کارمزد عملکرد». این همان پرسش باز گزارش ممیزی بود و حالا پاسخ دارد.
+  - `state.netApyExcludingRewards`: طبق schema «بدون پاداش، پس از کسر کارمزد عملکرد». این همان پرسش باز گزارش ممیزی بود و حالا پاسخ دارد.
   - `liquidity.usd`: نقدینگی قابل برداشت.
 - **خزانه‌ی V2:**
   - `avgNetApy`: بازده تحقق‌یافته از قیمت سهم، «پس از کارمزد، با پاداش». در YieldX، APR پاداش‌ها از آن کم می‌شود تا پاداش دو بار شمرده نشود.
+- **تغییر نام فیلدها در API (دیده‌شده ۹ مهر ۱۴۰۵):** نام‌های قبلی حالا خطای اعتبارسنجی می‌دهند و کل داده‌ی Morpho را از کار انداخته بودند. `uniqueKey` ← `marketId`، فیلتر `whitelisted` ← `listed`، `state.netApyWithoutRewards` خزانه ← `state.netApyExcludingRewards` (همان معنا: بدون پاداش، پس از کارمزد عملکرد)، `state.rewards` خزانه ← `state.allRewards` (همان شکل).
 - **پاداش‌ها:** `supplyApr` بدون تاریخ پایان گزارش می‌شود. پس فهرست می‌شود ولی به دلار تبدیل نمی‌شود. پیوند با کمپین Merkl در فاز ۴ انجام می‌شود.
 
 ## Aave V4
@@ -265,7 +266,7 @@ APIهای Morpho و Aave از محیط توسعه‌ی این فاز در دست
 
 ### لینک ورود به بازار
 - Pendle: `https://app.pendle.finance/trade/markets/{market}/swap?view=pt|yt&chain=…` (قالب از depositUrl زنده‌ی Merkl). نام شبکه همان `nameId` جدول شبکه‌های خود اپ پندل است (۹ مهر ۱۴۰۵)؛ برای نمونه Berachain `bera` و Monad `monad`.
-- Morpho: `https://app.morpho.org/{chain}/market/{uniqueKey}` و `/vault/{address}` (قالب از depositUrl زنده‌ی Merkl). نام شبکه همان `chainIdentifier` جدول شبکه‌های اپ مورفو است؛ برای نمونه Optimism `opmainnet` و HyperEVM `hyperevm`.
+- Morpho: `https://app.morpho.org/{chain}/market/{marketId}` و `/vault/{address}` (قالب از depositUrl زنده‌ی Merkl). نام شبکه همان `chainIdentifier` جدول شبکه‌های اپ مورفو است؛ برای نمونه Optimism `opmainnet` و HyperEVM `hyperevm`.
 - نشانی PT: در Pendle فیلد `pt.address` فهرست بازارها؛ در Spectra نشانی سطح بالای هر ردیف `/v1/{network}/pools` که خودش توکن PT است (نماد `PT-…`)، نه نشانی استخر.
 - Spectra، Exponent، Aave V4، Kamino و Loopscale: قالب صفحه‌ی بازار تأیید نشده؛ لینک اپ پروتکل باز می‌شود و در رتبه‌بندی‌های YT و Loop PT نشانی بازار برای جست‌وجو کنارش نمایش داده می‌شود.
 - بازارهای Merkl: همان depositUrl خود Merkl.

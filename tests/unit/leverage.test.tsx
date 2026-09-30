@@ -163,7 +163,7 @@ describe('cost of capital (report test 11)', () => {
 describe('adapters feed loops', () => {
   it('Morpho: borrow side with its curve, and the collateral’s own yield', () => {
     const m: RawMorphoMarket = {
-      uniqueKey: '0xAB',
+      marketId: '0xAB',
       lltv: '915000000000000000',
       loanAsset: { address: '0xUSDC', symbol: 'USDC', chain: { id: 1 }, yield: null },
       collateralAsset: { address: '0xSUSDE', symbol: 'sUSDe', chain: { id: 1 }, yield: { apr: 0.07 } },
