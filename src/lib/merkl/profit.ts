@@ -2,6 +2,7 @@ import { hasBoost, restrictions } from './rules';
 import { checkRewardPrice, gate, isDollarLike, isMeme, isYieldToken, allowedMemes, type PriceCheck, type Reason, type VetContext } from './vetting';
 import type { GasQuote, MerklAction, MerklCampaign, MerklOpportunity, MerklToken } from './types';
 import { formatPercent } from '../utils/formatting';
+import type { CostItem } from '../../types/opportunity';
 
 /**
  * «سود خالص برآوردی» — the estimated net profit of putting the user's capital into
@@ -26,8 +27,12 @@ import { formatPercent } from '../utils/formatting';
 
 const DAY = 86_400;
 
-export type Horizon = 7 | 30 | 90;
-export const HORIZONS: Horizon[] = [7, 30, 90];
+/** Any whole number of days from 1 to 365; the presets are shortcuts only. */
+export type Horizon = number;
+export const HORIZONS = [7, 30, 90] as const;
+export const MIN_HORIZON = 1;
+export const MAX_HORIZON = 365;
+export const clampHorizon = (d: number) => (Number.isFinite(d) ? Math.min(MAX_HORIZON, Math.max(MIN_HORIZON, Math.round(d))) : 30);
 
 export interface EstimateSettings {
   capital: number;
@@ -60,13 +65,8 @@ const STEPS: Record<'HOLD' | 'LEND' | 'POOL' | 'STAKE', { entry: Step[]; exit: S
   POOL: { entry: ['approve', 'approve', 'addLiquidity'], exit: ['removeLiquidity'] },
 };
 
-export interface CostItem {
-  key: string;
-  label: string;
-  usd: number;
-  /** measured: from live data; assumed: the user's setting; model: computed from live data with a stated model. */
-  basis: 'measured' | 'assumed' | 'model';
-}
+/** Shared with the protocol-independent estimate engine. */
+export type { CostItem };
 
 function gasCost(chainId: number, steps: Step[], s: EstimateSettings, gas: GasQuote[]): { usd: number; basis: 'measured' | 'assumed' } {
   const q = gas.find((g) => g.chainId === chainId);
@@ -456,6 +456,12 @@ export function estimate(o: MerklOpportunity, s: EstimateSettings, ctx: VetConte
 
 export interface Ranking {
   rows: Estimate[];
+  /**
+   * Pools with an estimate, kept out of the general ranking: their fee income and
+   * rewards are counted but the change in value of the two assets (impermanent
+   * loss) is not — «تحلیل تخصصی».
+   */
+  pools: Estimate[];
   /** Admissible but without a dollar estimate, with the reason. */
   noEstimate: NoEstimate[];
   /** Left out by the listing gates. */
@@ -469,21 +475,26 @@ export const TOP_N = 30;
 /** The «top 30» list: gate → estimate → positive net only → sorted by net over the common horizon. */
 export function rankTop(list: MerklOpportunity[], s: EstimateSettings, ctx: VetContext, gas: GasQuote[] = [], n = TOP_N): Ranking {
   const rows: Estimate[] = [];
+  const pools: Estimate[] = [];
   const noEstimate: NoEstimate[] = [];
   const excluded: NoEstimate[] = [];
+  const s1 = { ...s, horizon: clampHorizon(s.horizon) };
   for (const o of list) {
     const g = gate(o, ctx);
     if (g) {
       excluded.push({ ok: false, o, reason: g });
       continue;
     }
-    const e = estimate(o, s, ctx, gas);
+    const e = estimate(o, s1, ctx, gas);
     if (e.ok === false) noEstimate.push(e);
     else if (e.net <= 0) noEstimate.push(no(o, 'net-negative', 'هزینه‌های لحاظ‌شده از پاداش این افق بیشتر است'));
+    else if (o.action === 'POOL') pools.push(e);
     else rows.push(e);
   }
-  rows.sort((a, b) => b.net - a.net || b.netLow - a.netLow);
-  return { rows: rows.slice(0, n), noEstimate, excluded, total: rows.length };
+  const byNet = (a: Estimate, b: Estimate) => b.net - a.net || b.netLow - a.netLow;
+  rows.sort(byNet);
+  pools.sort(byNet);
+  return { rows: rows.slice(0, n), pools, noEstimate, excluded, total: rows.length };
 }
 
 /** Reasons grouped by how often they occur. */

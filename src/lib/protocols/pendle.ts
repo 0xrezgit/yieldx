@@ -1,7 +1,7 @@
 import protocols from '../../config/protocols.json';
 import type { MarketData, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
-import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, plausibleAPY, toPercent } from './base';
+import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, isObject, plausibleAPY, toPercent, type Shape } from './base';
 
 /** One row of GET /v1/{chain}/markets (paginated). */
 interface PendleListItem {
@@ -56,6 +56,10 @@ interface PendleMarket {
 const tokenRef = (t: PendleToken | undefined) => (t ? { symbol: t.symbol ?? null, address: t.address ?? null } : null);
 const isoOrNull = (x: string | undefined) => (x && Number.isFinite(new Date(x).getTime()) ? new Date(x).toISOString() : null);
 
+const isPage: Shape<PendlePage> = (b): b is PendlePage =>
+  isObject(b) && Array.isArray((b as PendlePage).results) && typeof (b as PendlePage).total === 'number';
+const isMarket: Shape<PendleMarket> = (b): b is PendleMarket => isObject(b) && typeof (b as PendleMarket).expiry === 'string';
+
 interface PendleHistory {
   underlyingApy: string[];
 }
@@ -98,6 +102,7 @@ export class PendleAdapter extends BaseAdapter {
       const data = await fetchJson<PendlePage>(
         this.name,
         `${this.base}/v1/${chainId}/markets?is_active=true&limit=${PAGE}&skip=${page * PAGE}`,
+        isPage,
       );
       items.push(...data.results);
       if (items.length >= data.total || data.results.length < PAGE) break;
@@ -129,7 +134,7 @@ export class PendleAdapter extends BaseAdapter {
    */
   private async chains(): Promise<number[]> {
     try {
-      const { chainIds } = await fetchJson<{ chainIds: number[] }>(this.name, `${this.base}/v1/chains`);
+      const { chainIds } = await fetchJson<{ chainIds: number[] }>(this.name, `${this.base}/v1/chains`, isObject<{ chainIds: number[] }>);
       const ids = (chainIds ?? []).filter((id) => Number.isInteger(id) && id > 0);
       if (ids.length) return ids;
     } catch {
@@ -149,7 +154,7 @@ export class PendleAdapter extends BaseAdapter {
     const { chainId, address } = parsePendleMarketId(marketId);
     let m: PendleMarket;
     try {
-      m = await fetchJson<PendleMarket>(this.name, `${this.base}/v1/${chainId}/markets/${address}`);
+      m = await fetchJson<PendleMarket>(this.name, `${this.base}/v1/${chainId}/markets/${address}`, isMarket);
     } catch (e) {
       if (e instanceof UpstreamError && e.status === 404) throw new MarketNotFoundError(this.name, marketId);
       throw e;
@@ -190,6 +195,7 @@ export class PendleAdapter extends BaseAdapter {
     const h = await fetchJson<PendleHistory>(
       this.name,
       `${this.base}/v1/${chainId}/markets/${address}/historical-data?time_frame=day`,
+      isObject<PendleHistory>,
     );
     return (h.underlyingApy ?? [])
       .slice(-Math.max(1, days))

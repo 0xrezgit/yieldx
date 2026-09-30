@@ -271,10 +271,10 @@ describe('analysis', () => {
     expect(a.lean).toBe('hold');
   });
 
-  it('YT: without history the range is labelled as an estimate', () => {
+  it('YT: without history the range is labelled as a hypothetical scenario', () => {
     const p = pos({ kind: 'yt', events: [ev('buy', 0, 1000, 50)] });
     const a = analyzePosition(p, valuePosition(p, quote(), T0), quote());
-    expect(a.assumptions.join(' ')).toContain('تخمینی');
+    expect(a.assumptions.join(' ')).toContain('سناریوی فرضی');
   });
 
   it('switching compares on the same horizon and ignores tiny advantages', () => {

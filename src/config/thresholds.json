@@ -24,9 +24,6 @@
     "maxPlausibleShare": 0.05
   },
   "scenarios": {
-    "bearProbability": 0.25,
-    "baseProbability": 0.5,
-    "bullProbability": 0.25,
     "fallbackSpread": 0.3
   },
   "exit": {

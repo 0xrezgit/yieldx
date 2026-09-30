@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { lpLink } from '../opportunities/LpAnalyzer';
+import { isDollarLike } from '../../lib/merkl/vetting';
 import { ChevronDown, CircleSlash, Trophy } from 'lucide-react';
 import { reasonCounts, type Estimate, type Ranking } from '../../lib/merkl/profit';
 import { formatAgo, formatDate, formatGregorian, formatNumber, formatPercent } from '../../lib/utils/formatting';
@@ -74,7 +77,7 @@ function Row({ e, rank, showId, watched, toggleWatch }: { e: Estimate; rank: num
  * listed with its reason, never filled in.
  */
 export function TopMarkets({ ranking, watch, toggleWatch, horizon, dataAt }: { ranking: Ranking; watch: ReadonlySet<string>; toggleWatch: (id: string) => void; horizon: number; dataAt: number | null }) {
-  const { rows, noEstimate, excluded, total } = ranking;
+  const { rows, pools, noEstimate, excluded, total } = ranking;
   const alike = lookAlikes(rows.map((r) => r.o));
   const noReasons = reasonCounts(noEstimate);
   const exReasons = reasonCounts(excluded);
@@ -99,6 +102,45 @@ export function TopMarkets({ ranking, watch, toggleWatch, horizon, dataAt }: { r
             ))}
           </ol>
         </section>
+      )}
+
+      {pools.length > 0 && (
+        <Collapsible
+          title="استخرهای نقدینگی (LP) — تحلیل تخصصی"
+          icon={<CircleSlash size={18} aria-hidden />}
+          badge={
+            <span className="text-xs text-muted font-normal">
+              (<Num>{formatNumber(pools.length, 0)}</Num>)
+            </span>
+          }
+        >
+          <p className="text-sm text-secondary leading-7">
+            در رتبه‌بندی عمومی نیستند: کارمزد و پاداش استخر حساب شده، ولی تغییر ارزش دو دارایی (زیان ناپایدار) به دلار مدل نشده و بدون آن سود خالص قابل دفاع نیست. عدد کنار هر استخر فقط کارمزد و پاداش منهای هزینه‌هاست.
+          </p>
+          <ol className="flex flex-col divide-y divide-default">
+            {pools.slice(0, 30).map((e, i) => {
+              const toks = e.o.tokens.filter((t) => t.type === 'TOKEN');
+              const href = lpLink({
+                name: e.o.name,
+                a: toks[0]?.symbol,
+                b: toks[1]?.symbol,
+                stable: toks.length > 1 && toks.every(isDollarLike),
+                feeApr: e.native.counted ? e.native.apr : null,
+                rewardUsd: e.incentiveUsd,
+                capital: e.capital,
+                days: e.horizon,
+              });
+              return (
+                <div key={e.o.id} className="flex flex-col">
+                  <Row e={e} rank={i + 1} showId={alike.has(e.o.id)} watched={watch.has(e.o.id)} toggleWatch={() => toggleWatch(e.o.id)} />
+                  <Link href={href} className="tap self-start mb-3 ms-10 inline-flex items-center gap-1.5 rounded-lg border border-control px-3 min-h-9 text-sm text-primary hover:bg-elevated">
+                    تحلیل LP با سناریوی قیمت
+                  </Link>
+                </div>
+              );
+            })}
+          </ol>
+        </Collapsible>
       )}
 
       {noEstimate.length > 0 && (

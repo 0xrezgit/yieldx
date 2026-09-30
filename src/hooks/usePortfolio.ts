@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PortfolioFile, PortfolioSnapshot, Position } from '../types/position';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../lib/data/local-store';
-import { mergeAirdrops, mergeBackup, normalizePosition, parseBackup } from '../lib/portfolio/portfolio';
+import { mergeAirdrops, mergeBackup, mergeEarn, normalizePosition, parseBackup } from '../lib/portfolio/portfolio';
+import { normalizeEarn } from '../lib/portfolio/earn';
+import type { EarnPosition } from '../types/earn';
 import { normalizeProgram } from '../lib/portfolio/airdrop';
 import type { AirdropProgram } from '../types/airdrop';
 
@@ -11,6 +13,7 @@ interface Stored {
   positions: unknown[];
   history: PortfolioSnapshot[];
   airdrops?: unknown[];
+  earn?: unknown[];
 }
 
 /**
@@ -23,6 +26,8 @@ export function usePortfolio() {
   const [history, setHistory] = useState<PortfolioSnapshot[]>([]);
   const [airdrops, setAirdrops] = useState<AirdropProgram[]>([]);
   const airdropRef = useRef<AirdropProgram[]>([]);
+  const [earn, setEarn] = useState<EarnPosition[]>([]);
+  const earnRef = useRef<EarnPosition[]>([]);
   // Latest list for back-to-back updates within one render (e.g. several snapshots at once).
   const ref = useRef<Position[]>([]);
 
@@ -33,6 +38,8 @@ export function usePortfolio() {
     setHistory(Array.isArray(s.history) ? s.history : []);
     airdropRef.current = (s.airdrops ?? []).map(normalizeProgram).filter((a): a is AirdropProgram => a !== null);
     setAirdrops(airdropRef.current);
+    earnRef.current = (s.earn ?? []).map(normalizeEarn).filter((p): p is EarnPosition => p !== null);
+    setEarn(earnRef.current);
   }, []);
 
   useEffect(() => {
@@ -42,7 +49,7 @@ export function usePortfolio() {
     return () => window.removeEventListener('storage', onStorage);
   }, [load]);
 
-  const persist = useCallback((next: Position[], nextHistory?: PortfolioSnapshot[], nextAirdrops?: AirdropProgram[]) => {
+  const persist = useCallback((next: Position[], nextHistory?: PortfolioSnapshot[], nextAirdrops?: AirdropProgram[], nextEarn?: EarnPosition[]) => {
     ref.current = next;
     setPositions(next);
     if (nextHistory) setHistory(nextHistory);
@@ -50,9 +57,24 @@ export function usePortfolio() {
       airdropRef.current = nextAirdrops;
       setAirdrops(nextAirdrops);
     }
+    if (nextEarn) {
+      earnRef.current = nextEarn;
+      setEarn(nextEarn);
+    }
     const current = readLocal<Stored>(STORAGE_KEYS.portfolio, { positions: [], history: [] });
-    writeLocal(STORAGE_KEYS.portfolio, { positions: next, history: nextHistory ?? current.history ?? [], airdrops: airdropRef.current });
+    writeLocal(STORAGE_KEYS.portfolio, { positions: next, history: nextHistory ?? current.history ?? [], airdrops: airdropRef.current, earn: earnRef.current });
   }, []);
+
+  /** Create or update a lending / vault / fixed / loop / LP / borrow position. */
+  const saveEarn = useCallback(
+    (p: EarnPosition) => {
+      const list = earnRef.current;
+      const stamped = { ...p, updatedAt: new Date().toISOString() };
+      persist(ref.current, undefined, undefined, list.some((x) => x.id === p.id) ? list.map((x) => (x.id === p.id ? stamped : x)) : [...list, stamped]);
+    },
+    [persist],
+  );
+  const removeEarn = useCallback((id: string) => persist(ref.current, undefined, undefined, earnRef.current.filter((p) => p.id !== id)), [persist]);
 
   /** Create or update an airdrop record (touches updatedAt). */
   const saveAirdrop = useCallback(
@@ -90,12 +112,12 @@ export function usePortfolio() {
     (h: PortfolioSnapshot[]) => {
       setHistory(h);
       const current = readLocal<Stored>(STORAGE_KEYS.portfolio, { positions: [], history: [] });
-      writeLocal(STORAGE_KEYS.portfolio, { ...current, history: h, airdrops: airdropRef.current });
+      writeLocal(STORAGE_KEYS.portfolio, { ...current, history: h, airdrops: airdropRef.current, earn: earnRef.current });
     },
     [],
   );
 
-  const exportFile = useCallback((): PortfolioFile => ({ version: 1, exportedAt: new Date().toISOString(), positions: positions ?? [], history, airdrops }), [positions, history, airdrops]);
+  const exportFile = useCallback((): PortfolioFile => ({ version: 2, exportedAt: new Date().toISOString(), positions: positions ?? [], history, airdrops, earn }), [positions, history, airdrops, earn]);
 
   /** Returns the number of positions imported, or null for an invalid file. */
   const importFile = useCallback(
@@ -104,11 +126,11 @@ export function usePortfolio() {
       if (!file) return null;
       const merged = mergeBackup(ref.current, file);
       const byAt = new Map([...history, ...file.history].map((h) => [h.at, h]));
-      persist(merged, [...byAt.values()].sort((a, b) => a.at.localeCompare(b.at)), mergeAirdrops(airdropRef.current, file.airdrops));
-      return file.positions.length;
+      persist(merged, [...byAt.values()].sort((a, b) => a.at.localeCompare(b.at)), mergeAirdrops(airdropRef.current, file.airdrops), mergeEarn(earnRef.current, file.earn));
+      return file.positions.length + (file.earn?.length ?? 0);
     },
     [history, persist],
   );
 
-  return { positions, history, airdrops, saveAirdrop, removeAirdrop, save, remove, setHistory: setHistorySnapshots, exportFile, importFile };
+  return { positions, history, airdrops, earn, saveEarn, removeEarn, saveAirdrop, removeAirdrop, save, remove, setHistory: setHistorySnapshots, exportFile, importFile };
 }

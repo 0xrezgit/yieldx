@@ -1,5 +1,5 @@
 import { hasBoost } from './rules';
-import { CAPITAL_ACTIONS, calcCampaign, needsLoop, type EstimateSettings } from './profit';
+import { CAPITAL_ACTIONS, calcCampaign, clampHorizon, needsLoop, type EstimateSettings } from './profit';
 import { gate, tokenClass, type PriceCheck, type VetContext } from './vetting';
 import { tokenKey, type MerklCampaign, type MerklOpportunity, type MerklToken } from './types';
 
@@ -81,7 +81,7 @@ export function rankRewards(list: MerklOpportunity[], s: EstimateSettings, ctx: 
     if (gate(o, ctx) || !CAPITAL_ACTIONS.has(o.action) || needsLoop(o)) continue;
     for (const c of o.campaigns) {
       if (c.start > ctx.now || c.end <= ctx.now) continue;
-      const x = calcCampaign(c, o, s.capital, s.horizon, ctx);
+      const x = calcCampaign(c, o, s.capital, clampHorizon(s.horizon), ctx);
       if (x.status === 'none' || x.unitsPerDay === null || !(x.unitsPerDay > 0)) continue;
       const usd = x.usdPerDay !== null ? x.usdPerDay * x.days : null;
       all.push({

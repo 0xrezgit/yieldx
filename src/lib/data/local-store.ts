@@ -24,5 +24,7 @@ export const STORAGE_KEYS = {
   onboarded: 'yieldx-onboarded',
   opportunities: 'yieldx-opportunities-v1',
   merkl: 'yieldx-merkl-v2',
+  lending: 'yieldx-lending-v1',
+  stable: 'yieldx-stable-v1',
   portfolio: 'yieldx-portfolio-v1',
 } as const;

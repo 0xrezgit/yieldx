@@ -1,7 +1,7 @@
 import protocols from '../../config/protocols.json';
 import type { MarketData, MarketPointsProgram, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
-import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, fetchJson, plausibleAPY, toPercent } from './base';
+import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, fetchJson, isArrayOf, plausibleAPY, toPercent } from './base';
 import { fetchSolanaTokens, type SolanaToken } from './jupiter';
 
 /** Subset of https://api.exponent.finance/markets that YieldX uses. */
@@ -62,7 +62,7 @@ export class ExponentAdapter extends BaseAdapter {
   private base = protocols.exponent.apiBase;
 
   private async all(): Promise<ExponentMarket[]> {
-    return fetchJson<ExponentMarket[]>(this.name, `${this.base}/markets`);
+    return fetchJson<ExponentMarket[]>(this.name, `${this.base}/markets`, isArrayOf<ExponentMarket>);
   }
 
   async listMarkets(): Promise<MarketSummary[]> {

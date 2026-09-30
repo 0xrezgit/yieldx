@@ -100,4 +100,12 @@ export function networkByChainId(chainId: number): Network {
   return BY_CHAIN_ID.get(chainId) ?? unknownNetwork(`Chain ${chainId}`);
 }
 
+/** From a stable key ("eip155:1", "solana:mainnet"). */
+export function networkByKey(key: string): Network {
+  const hit = NETWORKS.find((n) => n.key === key);
+  if (hit) return hit;
+  const id = /^eip155:(\d+)$/.exec(key)?.[1];
+  return id ? networkByChainId(Number(id)) : unknownNetwork(key);
+}
+
 export const networkFa = (name: string) => networkByName(name).nameFa;

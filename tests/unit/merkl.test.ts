@@ -108,7 +108,11 @@ describe('estimated net profit', () => {
     const aBig = est(byId(MORPHO_USD3), { ...S, capital: 100_000 });
     expect(aBig.net / 100_000).toBeGreaterThan((aSmall.net / 1000) * 0.95);
 
-    const at = (capital: number) => rankTop(ops, { ...S, capital }, ctx, gas).rows.map((r) => r.o.id);
+    // Pools sit in their own list now; the amount still re-orders them against lending by net.
+    const at = (capital: number) => {
+      const r = rankTop(ops, { ...S, capital }, ctx, gas);
+      return [...r.rows, ...r.pools].sort((a, b) => b.net - a.net).map((x) => x.o.id);
+    };
     const r1 = at(1000);
     const r2 = at(100_000);
     expect(r1.indexOf(CARROT_POOL)).toBeLessThan(r1.indexOf(MORPHO_USD3));
@@ -350,7 +354,10 @@ describe('ranking', () => {
     expect(r.rows.length).toBe(Math.min(30, r.total));
     for (const x of r.rows) expect(x.net).toBeGreaterThan(0);
     for (let i = 1; i < r.rows.length; i++) expect(r.rows[i - 1].net).toBeGreaterThanOrEqual(r.rows[i].net);
-    expect(r.rows.length + r.noEstimate.length + r.excluded.length).toBe(ops.length);
+    expect(r.rows.length + r.pools.length + r.noEstimate.length + r.excluded.length).toBe(ops.length);
+    // LP stays out of the general ranking.
+    expect(r.rows.some((x) => x.o.action === 'POOL')).toBe(false);
+    expect(r.pools.every((x) => x.o.action === 'POOL')).toBe(true);
     const capped = rankTop(ops, S, ctx, gas, 2);
     expect(capped.rows).toHaveLength(2);
     expect(capped.total).toBe(r.total);
