@@ -23,6 +23,6 @@ export const STORAGE_KEYS = {
   alerts: 'yieldx-alerts-v2',
   onboarded: 'yieldx-onboarded',
   opportunities: 'yieldx-opportunities-v1',
-  merkl: 'yieldx-merkl-v1',
+  merkl: 'yieldx-merkl-v2',
   portfolio: 'yieldx-portfolio-v1',
 } as const;

@@ -5,15 +5,16 @@ export const runtime = 'nodejs';
 
 /**
  * GET /api/merkl/opportunities — every live Merkl opportunity with its live
- * campaigns, slimmed for the browser. Fixed query, no parameters: callers cannot
+ * campaigns, slimmed for the browser, plus programs, reward-token DEX markets and
+ * Ethereum gas. Fixed query, no parameters: callers cannot
  * make the server spend Merkl quota on arbitrary requests.
  */
 export async function GET() {
   try {
     const feed = await getMerklFeed();
     return NextResponse.json(feed, {
-      // Shared caches may reuse it briefly; upstream is cached for 5 minutes anyway.
-      headers: { 'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=600' },
+      // Live list: shared caches may reuse it for 30 s; upstream refreshes every minute.
+      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120' },
     });
   } catch {
     return NextResponse.json({ error: 'upstream_error', message: 'Merkl API unavailable' }, { status: 502, headers: { 'Cache-Control': 'no-store' } });
