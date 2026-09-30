@@ -3,7 +3,9 @@ vi.mock('server-only', () => ({}));
 import { morphoMarket, morphoVault, morphoVaultV2, normalizeMorpho, type MorphoData, type RawMorphoMarket, type RawMorphoVault, type RawMorphoVaultV2 } from '../../src/lib/lending/morpho';
 import { aaveReserve, type RawAaveReserve } from '../../src/lib/lending/aave';
 import { getLendingFeed, resetLendingCache } from '../../src/lib/lending/feed';
-import { rankLending, defaultLendingSettings, clampDays } from '../../src/lib/lending/rank';
+import { evaluate, selectHorizon } from '../../src/lib/market/analysis';
+import { HORIZONS } from '../../src/lib/opportunity/policy';
+import { FALLBACK_TX_USD } from '../../src/lib/opportunity/costs';
 import { curveAt, kinkedSupplyCurve, rateAfterDeposit } from '../../src/lib/opportunity/curve';
 import { estimate } from '../../src/lib/opportunity/estimate';
 import { GET } from '../../src/app/api/lending/route';
@@ -100,7 +102,7 @@ const reserve = (over: Partial<RawAaveReserve> = {}): RawAaveReserve => ({
   ...over,
 });
 
-const input = { capital: 1000, days: 30, needsEarlyExit: true, now: NOW };
+const input = { capital: 1000, days: 30, now: NOW };
 
 describe('rate after the user’s deposit', () => {
   it('interpolates the curve and clamps outside it', () => {
@@ -191,7 +193,7 @@ describe('Aave V4', () => {
 
   it('treats a paused or frozen reserve as unavailable', () => {
     const e = estimate(aaveReserve(reserve({ status: { active: true, frozen: true, paused: false } }), AT)!, input);
-    expect(e.placement).toBe('insufficient');
+    expect(e.placement).toBe('inactive');
   });
 
   it('reads a zero cap as unknown room, not as zero', () => {
@@ -203,19 +205,26 @@ describe('Aave V4', () => {
 describe('ranking for the user’s amount and period', () => {
   const opps = () => [morphoMarket(market(), AT)!, morphoVault(vault(), AT)!, aaveReserve(reserve(), AT)!];
 
-  it('charges gas per network and filters by family', () => {
-    const r = rankLending(opps(), defaultLendingSettings, NOW);
+  it('charges gas per network (a stated default without a measured gas price) and filters by family', () => {
+    const a = evaluate({ opportunities: opps(), merkl: null, gas: [] }, 1000, NOW);
+    const r = selectHorizon(a, 30);
     const eth = r.ranking.top.find((e) => e.key.startsWith('aave:'))!;
     const base = r.ranking.top.find((e) => e.key.includes(':vault'))!;
-    expect(eth.costs.reduce((a, c) => a + c.usd, 0)).toBeCloseTo(3 * defaultLendingSettings.txEthereum, 9);
-    expect(base.costs.reduce((a, c) => a + c.usd, 0)).toBeCloseTo(3 * defaultLendingSettings.txOther, 9);
-    expect(rankLending(opps(), { ...defaultLendingSettings, view: 'vault' }, NOW).total).toBe(1);
+    expect(eth.costs.reduce((a, c) => a + c.usd, 0)).toBeCloseTo(3 * FALLBACK_TX_USD.ethereum, 9);
+    expect(eth.costs.every((c) => c.basis === 'assumed')).toBe(true);
+    expect(base.costs.reduce((a, c) => a + c.usd, 0)).toBeCloseTo(3 * FALLBACK_TX_USD.evm, 9);
+    expect(selectHorizon(a, 30, 'vault').total).toBe(1);
   });
 
-  it('clamps the period to 1–365 whole days', () => {
-    expect(clampDays(0)).toBe(1);
-    expect(clampDays(400)).toBe(365);
-    expect(clampDays(45.4)).toBe(45);
+  it('prices gas from a measured gas price when there is one', () => {
+    const a = evaluate({ opportunities: opps(), merkl: null, gas: [{ chainId: 1, gwei: 2, nativeUsd: 3000, at: NOW }] }, 1000, NOW);
+    const eth = selectHorizon(a, 30).ranking.top.find((e) => e.key.startsWith('aave:'))!;
+    // approve + deposit in, withdraw out: 50k + 200k + 180k gas at 2 gwei and 3000 $/ETH.
+    expect(eth.costs.reduce((x, c) => x + c.usd, 0)).toBeCloseTo(430_000 * 2e-9 * 3000, 9);
+  });
+
+  it('compares exactly four horizons', () => {
+    expect([...HORIZONS]).toEqual([30, 60, 90, 125]);
   });
 });
 
@@ -247,19 +256,24 @@ describe('sources fail independently', () => {
     expect(feed.sources.map((s) => [s.id, s.state])).toEqual([
       ['morpho', 'ok'],
       ['aave', 'error'],
-      // Not mocked here: its own failure hides nothing else.
+      // Not mocked here: their own failure hides nothing else.
       ['midnight', 'error'],
+      ['kamino', 'error'],
+      ['loopscale', 'error'],
     ]);
   });
 
-  it('serves the last good copy, marked stale, when a refresh fails', async () => {
+  it('keeps a minutes-old copy usable after one failed refresh, and marks it stale later', async () => {
     mock(true);
     await getLendingFeed(NOW);
     mock(false);
-    const feed = await getLendingFeed(NOW + 5 * 60_000);
-    const aave = feed.sources.find((s) => s.id === 'aave')!;
-    expect(aave.state).toBe('stale');
-    expect(feed.opportunities.filter((o) => o.protocol.id === 'aave').every((o) => o.quality === 'stale')).toBe(true);
+    const soon = await getLendingFeed(NOW + 5 * 60_000);
+    expect(soon.sources.find((s) => s.id === 'aave')!.state).toBe('ok');
+    expect(soon.sources.find((s) => s.id === 'aave')!.fetchedAt).toBe(new Date(NOW).toISOString());
+    expect(soon.opportunities.filter((o) => o.protocol.id === 'aave').every((o) => o.quality !== 'stale')).toBe(true);
+    const later = await getLendingFeed(NOW + 20 * 60_000);
+    expect(later.sources.find((s) => s.id === 'aave')!.state).toBe('stale');
+    expect(later.opportunities.filter((o) => o.protocol.id === 'aave').every((o) => o.quality === 'stale')).toBe(true);
   });
 
   it('GET /api/lending answers 200 with one source up and 502 with none', async () => {
@@ -274,19 +288,20 @@ describe('sources fail independently', () => {
 describe('lending list render', () => {
   it('shows a row and its details in Persian, symbols isolated, no raw keys', async () => {
     const { renderToString } = await import('react-dom/server');
-    const { LendingRow, LendingDetails, Sources } = await import('../../src/components/lending/LendingOpportunities');
+    const { RankingRow } = await import('../../src/components/market/MarketAnalysis');
+    const { OpportunityDetails } = await import('../../src/components/market/OpportunityDetails');
+    const { Coverage } = await import('../../src/components/market/Coverage');
     const { assertPersianMoney } = await import('../helpers/text');
     const o = aaveReserve(reserve(), AT)!;
     const m = morphoMarket(market(), AT)!;
+    const a = evaluate({ opportunities: [o, m], merkl: null, gas: [] }, 1000, NOW);
+    const v = selectHorizon(a, 30);
     const html = [
-      renderToString(<LendingRow e={estimate(o, input)} o={o} rank={1} />),
-      renderToString(<LendingDetails e={estimate(o, input)} o={o} />),
-      renderToString(<LendingDetails e={estimate(m, input)} o={m} />),
-      // Through the list pipeline, with gas lines.
-      ...rankLending([o, m], defaultLendingSettings, NOW).ranking.top.map((e) => renderToString(<LendingDetails e={e} o={e.key === o.key ? o : m} />)),
-      renderToString(<Sources list={[{ id: 'aave', name: 'Aave V4', state: 'error', fetchedAt: null, count: 0, error: 'x' }]} />),
+      ...a.rows.map((row, i) => renderToString(<RankingRow row={row} rank={i + 1} days={30} open={false} onToggle={() => {}} modelVersion={a.modelVersion} />)),
+      ...a.rows.map((row) => renderToString(<OpportunityDetails row={row} days={30} modelVersion={a.modelVersion} />)),
+      renderToString(<Coverage sources={[{ id: 'aave', name: 'Aave V4', state: 'error', fetchedAt: null, count: 0, error: 'x' }]} counts={v.counts} total={v.total} />),
     ].join('');
-    expect(html).toContain('سود خالص قابل برآورد');
+    expect(html).toContain('سود خالص');
     expect(html).toContain('نرخ پس از ورود');
     expect(html).toContain('پاداش AAVE');
     expect(html).toContain('در دسترس نیست');

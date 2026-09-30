@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-/** Old address of the lending section, now part of the unified ranking. */
-export default function LendingPage() {
-  redirect('/opportunities/ranking');
+/** Old section address; its content is part of the market analysis now. */
+export default function OldSection() {
+  redirect('/');
 }

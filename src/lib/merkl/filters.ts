@@ -1,7 +1,6 @@
-import { normalizeSearch } from '../utils/formatting';
-import { ACTION, merklNetwork, restrictions } from './rules';
-import { isMeme, isRobinhoodChain, tokenClass } from './vetting';
-import type { MerklAction, MerklOpportunity, MerklToken } from './types';
+import { restrictions } from './rules';
+import { isMeme, isRobinhoodChain } from './vetting';
+import type { MerklOpportunity, MerklToken } from './types';
 
 const DAY = 86_400;
 
@@ -23,49 +22,7 @@ export const liveAt = (o: MerklOpportunity, now: number): MerklOpportunity => {
 /** Has a Robinhood-Chain memecoin among its deposit or reward tokens. */
 export const hasRobinhoodMeme = (o: MerklOpportunity) => isRobinhoodChain(o.chain.id) && [...o.tokens, ...o.campaigns.map((c) => c.rewardToken)].some(isMeme);
 
-// ─── Filters ─────────────────────────────────────────────────────────────────
-
-export interface MerklFilters {
-  q: string;
-  chain: number | 'all';
-  protocol: string | 'all';
-  action: MerklAction | 'all';
-  stable: boolean;
-  watchOnly: boolean;
-  /** Hide Robinhood-Chain memecoin opportunities (the only memes shown at all). */
-  hideMeme: boolean;
-}
-
-export const defaultMerklFilters: MerklFilters = { q: '', chain: 'all', protocol: 'all', action: 'all', stable: false, watchOnly: false, hideMeme: false };
-
-export const isStableOpp = (o: MerklOpportunity) => {
-  const deposit = o.tokens.filter((t) => t.type === 'TOKEN');
-  return deposit.length > 0 && deposit.every((t) => tokenClass(t) === 'usd');
-};
 export const isRestricted = (o: MerklOpportunity) => o.campaigns.some((c) => restrictions(c).length > 0);
-
-export function searchText(o: MerklOpportunity): string {
-  const net = merklNetwork(o.chain);
-  return normalizeSearch(
-    [o.name, o.protocol?.name, o.protocol?.id, net.name, net.nameFa, ACTION[o.action].label, o.identifier, ...o.programs.map((p) => p.name), ...o.tokens.map((t) => t.symbol), ...o.campaigns.map((c) => c.rewardToken.symbol)]
-      .filter(Boolean)
-      .join(' '),
-  );
-}
-
-export function applyMerklFilters(list: MerklOpportunity[], f: MerklFilters, watch: ReadonlySet<string> = new Set()): MerklOpportunity[] {
-  const q = normalizeSearch(f.q);
-  return list.filter(
-    (o) =>
-      (f.chain === 'all' || o.chain.id === f.chain) &&
-      (f.protocol === 'all' || o.protocol?.id === f.protocol) &&
-      (f.action === 'all' || o.action === f.action) &&
-      (!f.stable || isStableOpp(o)) &&
-      (!f.watchOnly || watch.has(o.id)) &&
-      (!f.hideMeme || !hasRobinhoodMeme(o)) &&
-      (!q || q.split(' ').every((w) => searchText(o).includes(w))),
-  );
-}
 
 // ─── Flags ───────────────────────────────────────────────────────────────────
 

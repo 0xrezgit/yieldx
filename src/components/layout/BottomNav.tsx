@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { isActive, NAV } from './nav';
 
 /**
- * Mobile / PWA bar: the five destinations, above the iPhone home indicator
+ * Mobile / PWA bar: the two sections, above the iPhone home indicator
  * (safe area). Pages reserve its height (.pb-safe) so it never covers a form or
  * a final action. Hidden on desktop, where the header carries navigation.
  */
@@ -14,8 +14,9 @@ export function BottomNav() {
   return (
     <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-default bottom-safe" aria-label="ناوبری اصلی">
       <ul className="flex max-w-lg mx-auto h-16">
-        {NAV.map(({ href, short, icon: Icon }) => {
-          const active = isActive(pathname, href);
+        {NAV.map((item) => {
+          const { href, short, icon: Icon } = item;
+          const active = isActive(pathname, item);
           return (
             <li key={href} className="flex-1">
               <Link

@@ -1,8 +1,6 @@
-import type { Metadata } from 'next';
-import StableSuggestions from '../../../components/stable/StableSuggestions';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = { title: 'پیشنهاد استیبل‌کوین — YieldX' };
-
-export default function StablePage() {
-  return <StableSuggestions />;
+/** Old section address; its content is part of the market analysis now. */
+export default function OldSection() {
+  redirect('/');
 }

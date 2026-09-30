@@ -225,6 +225,17 @@ export interface Opportunity {
   url?: string | null;
   /** Logo of the deposit asset, when the source gives one. */
   icon?: string | null;
+  /** PT family: the PT token itself (chain + address), for exact collateral matching. */
+  ptToken?: TokenRef | null;
+  /** AMM depth behind a PT, USD; without an executable quote the amount must stay a small share of it. */
+  poolLiquidityUsd?: number | null;
+  /** The source's field meanings come from a third-party client, not the protocol's own documentation. */
+  unofficialSource?: boolean;
+  /**
+   * YT family: the market's implied APY (sets the YT price) and the underlying's own
+   * yield that the YT receives until maturity (`rate` repeats the latter).
+   */
+  yt?: { impliedPct: number; hasPoints: boolean } | null;
 }
 
 /** One cost line. measured: from live data; assumed: the user's setting; model: computed from live data with a stated model. */
@@ -235,21 +246,26 @@ export interface CostItem {
   basis: 'measured' | 'assumed' | 'model';
 }
 
-/** Where an estimate lands in the ranking — only 'ranked' competes for the top list. */
+/**
+ * Where an estimate lands for one horizon — only 'ranked' competes for the top list.
+ * The others are kept (never deleted) and counted in «پوشش داده‌ها».
+ */
 export type Placement =
   | 'ranked'
-  /** Less than half of the capital fits. */
-  | 'low-capacity'
-  /** Net ≤ 0 for this amount and period. */
+  /** Net ≤ 0 for this amount and horizon. */
   | 'unprofitable'
-  /** Matures after the horizon and the user needs to exit before it. */
-  | 'beyond-horizon'
-  /** LP, leverage, YT-for-points: no defensible dollar estimate in the general list. */
-  | 'specialist'
+  /** Needs an exit model, a quote or a price model YieldX does not have (maturity after the horizon, LP, YT, points). */
+  | 'needs-model'
+  /** Nothing of the capital fits (cap reached, empty book, no borrow liquidity). */
+  | 'no-capacity'
   /** Source data older than the freshness limit. */
   | 'stale'
   /** Not enough data to estimate. */
-  | 'insufficient';
+  | 'insufficient'
+  /** Paused, frozen or matured. */
+  | 'inactive'
+  /** Failed validation (red warning, rejected token or price). */
+  | 'rejected';
 
 export interface Estimate {
   key: string;
@@ -285,12 +301,16 @@ export interface Estimate {
   assumptions: string[];
   quality: DataQuality;
   placement: Placement;
+  /** Why it is not ranked, in a few words; null when ranked. */
+  reason?: string | null;
 }
 
 export interface LeverageResult {
-  /** Leverage applied, and the highest that keeps health at the user's minimum. */
+  /** Leverage applied, and the highest that keeps health at the policy minimum. */
   leverage: number;
   maxSafe: number;
+  /** The leverage policy that chose it (versioned). */
+  policy: string;
   /** Own money in, total collateral and debt, USD. */
   equity: number;
   gross: number;

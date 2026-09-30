@@ -1,7 +1,8 @@
-import type { Estimate, Opportunity, Placement } from '../../types/opportunity';
+import type { Estimate, ExitTerms, Opportunity, Placement } from '../../types/opportunity';
 import { qualityRank } from './estimate';
+import { TOP_LIMIT } from './policy';
 
-export const TOP_LIMIT = 30;
+export { TOP_LIMIT };
 
 /**
  * One market reached through several paths (its protocol's API, Merkl, a second
@@ -28,22 +29,42 @@ export function dedupeOpportunities(list: Opportunity[]): Opportunity[] {
 export interface Ranking {
   /** Best net profit first, at most `limit` rows — fewer when fewer qualify. */
   top: Estimate[];
-  /** Everything else, by why it is not in the top list. */
+  /** Ranked but below the cut. They stay in the model and can enter with other inputs. */
+  rest: Estimate[];
+  /** Everything else, by why it is not ranked. */
   aside: Record<Exclude<Placement, 'ranked'>, Estimate[]>;
 }
 
+const EXIT_ORDER: ExitTerms['type'][] = ['instant', 'maturity', 'secondary', 'queue', 'unknown'];
+/** Cents: two results that round to the same cent are a real tie. */
+const cents = (x: number | null) => (x === null ? -Infinity : Math.round(x * 100));
+
 /**
- * Ranks by the estimated net dollars for the same capital and the same period.
- * Risk and data quality filter; they are not part of the score. Ties go to the
- * better data, then to more capital deployed.
+ * Net dollars, then — only on a real tie — better data, easier exit, and a stable key.
+ * Risk is not part of the score.
  */
-export function rankEstimates(estimates: Estimate[], limit = TOP_LIMIT): Ranking {
-  const aside: Ranking['aside'] = { 'low-capacity': [], unprofitable: [], 'beyond-horizon': [], specialist: [], stale: [], insufficient: [] };
+export function compareEstimates(a: Estimate, b: Estimate, exitOf: (key: string) => ExitTerms['type'] = () => 'unknown'): number {
+  return (
+    cents(b.net) - cents(a.net) ||
+    qualityRank(a.quality) - qualityRank(b.quality) ||
+    EXIT_ORDER.indexOf(exitOf(a.key)) - EXIT_ORDER.indexOf(exitOf(b.key)) ||
+    (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
+  );
+}
+
+export const emptyAside = (): Ranking['aside'] => ({ unprofitable: [], 'needs-model': [], 'no-capacity': [], stale: [], insufficient: [], inactive: [], rejected: [] });
+
+/**
+ * Ranks by the estimated net dollars for the same capital and the same horizon, over
+ * the whole qualifying list, then keeps at most `limit`. No family has a quota.
+ */
+export function rankEstimates(estimates: Estimate[], limit = TOP_LIMIT, exitOf?: (key: string) => ExitTerms['type']): Ranking {
+  const aside = emptyAside();
   const ranked: Estimate[] = [];
   for (const e of estimates) {
     if (e.placement === 'ranked') ranked.push(e);
     else aside[e.placement].push(e);
   }
-  ranked.sort((a, b) => (b.net ?? -Infinity) - (a.net ?? -Infinity) || qualityRank(a.quality) - qualityRank(b.quality) || b.allocatable - a.allocatable);
-  return { top: ranked.slice(0, limit), aside };
+  ranked.sort((a, b) => compareEstimates(a, b, exitOf));
+  return { top: ranked.slice(0, limit), rest: ranked.slice(limit), aside };
 }

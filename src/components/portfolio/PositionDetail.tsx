@@ -744,8 +744,8 @@ export default function PositionDetail({ id }: { id: string }) {
           {p.kind !== 'pt' && v.status === 'open' && (
             <p className="text-xs text-sx-muted leading-6">
               مقایسه‌ی خودکار با بازارهای دیگر فعلاً فقط برای PT انجام می‌شود؛ نتیجه‌ی {p.kind === 'yt' ? 'YT به ارزش پوینت' : 'لوپ به نرخ وام و اوراکل هر بازار'} بستگی دارد. برای بررسی دستی به{' '}
-              <Link href="/opportunities" className="text-sx-accent underline underline-offset-4">
-                فرصت‌ها
+              <Link href="/" className="text-sx-accent underline underline-offset-4">
+                تحلیل بازار
               </Link>{' '}
               بروید.
             </p>

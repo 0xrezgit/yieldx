@@ -99,6 +99,8 @@ export class SpectraAdapter extends BaseAdapter {
               isNew: !!m.createdAt && Date.now() - m.createdAt * 1000 < NEW_WINDOW_MS,
               asset: assetRef(m),
               accountingSymbol: m.underlying.symbol ?? null,
+              // The market id is the PT address (see SpectraMarket.address).
+              ptToken: { symbol: `PT-${name(m)}`, address: m.address.toLowerCase() },
             };
           })
           .filter((m): m is MarketSummary => m !== null);

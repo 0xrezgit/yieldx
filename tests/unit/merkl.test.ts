@@ -3,9 +3,8 @@ import raw from '../fixtures/merkl-live-2026-09-30.json';
 import { normalizeOpportunity, type RawOpportunity } from '../../src/lib/merkl/normalize';
 import { DEX_CHAINS, marketFromPairs } from '../../src/lib/merkl/markets';
 import { buildContext, checkRewardPrice, dedupe, gate, isMeme, RULES, suspicion, type VetContext } from '../../src/lib/merkl/vetting';
-import { calcCampaign, CONSERVATIVE, defaultEstimateSettings, estimate, nativeYield, poolFeeTier, rankTop, sellImpact, type Estimate, type EstimateSettings, type NoEstimate } from '../../src/lib/merkl/profit';
-import { rankRewards } from '../../src/lib/merkl/rewards';
-import { applyMerklFilters, defaultMerklFilters, flags, hasRobinhoodMeme, liveAt } from '../../src/lib/merkl/filters';
+import { calcCampaign, CONSERVATIVE, estimate, nativeYield, poolFeeTier, sellImpact, type Estimate, type EstimateSettings, type NoEstimate } from '../../src/lib/merkl/profit';
+import { flags, hasRobinhoodMeme, liveAt } from '../../src/lib/merkl/filters';
 import { tokenKey, type GasQuote, type MerklOpportunity, type TokenMarket } from '../../src/lib/merkl/types';
 
 /**
@@ -27,7 +26,7 @@ const chains = Object.keys(DEX_CHAINS).map(Number);
 const ctxFor = (list: MerklOpportunity[], markets = fx.markets): VetContext => buildContext(list, markets, chains, NOW);
 const ctx = ctxFor(ops);
 const gas: GasQuote[] = [{ chainId: 1, gwei: 0.263, nativeUsd: 2700, at: NOW * 1000 }];
-const S: EstimateSettings = { ...defaultEstimateSettings, capital: 1000, horizon: 30 };
+const S: EstimateSettings = { capital: 1000, horizon: 30, txEthereum: 1, txOther: 0.05 };
 const est = (o: MerklOpportunity, s: EstimateSettings = S, c: VetContext = ctx) => {
   const e = estimate(o, s, c, gas);
   if (e.ok === false) throw new Error(`no estimate: ${e.reason.label}`);
@@ -108,15 +107,9 @@ describe('estimated net profit', () => {
     const aBig = est(byId(MORPHO_USD3), { ...S, capital: 100_000 });
     expect(aBig.net / 100_000).toBeGreaterThan((aSmall.net / 1000) * 0.95);
 
-    // Pools sit in their own list now; the amount still re-orders them against lending by net.
-    const at = (capital: number) => {
-      const r = rankTop(ops, { ...S, capital }, ctx, gas);
-      return [...r.rows, ...r.pools].sort((a, b) => b.net - a.net).map((x) => x.o.id);
-    };
-    const r1 = at(1000);
-    const r2 = at(100_000);
-    expect(r1.indexOf(CARROT_POOL)).toBeLessThan(r1.indexOf(MORPHO_USD3));
-    expect(r2.indexOf(CARROT_POOL)).toBeGreaterThan(r2.indexOf(MORPHO_USD3));
+    // The amount re-orders them by net: the pool's shared budget dilutes, the lending rate does not.
+    expect(est(byId(CARROT_POOL), { ...S, capital: 1000 }).net).toBeGreaterThan(est(byId(MORPHO_USD3), { ...S, capital: 1000 }).net);
+    expect(est(byId(CARROT_POOL), { ...S, capital: 100_000 }).net).toBeLessThan(est(byId(MORPHO_USD3), { ...S, capital: 100_000 }).net);
   });
 
   it('counts each campaign only to its own end within the common horizon', () => {
@@ -222,7 +215,7 @@ describe('prices, points and pre-TGE', () => {
     expect(p.caveats.join()).toContain('دلار');
   });
 
-  it('keeps points out of dollars and ranks them only inside their own unit', () => {
+  it('keeps points out of dollars, counted only in their own unit', () => {
     const o = byId(IPOR_POINTS);
     const e = est(o);
     const pts = e.campaigns.find((x) => x.c.rewardToken.type === 'POINT')!;
@@ -230,21 +223,6 @@ describe('prices, points and pre-TGE', () => {
     expect(pts.unitsPerDay).toBeGreaterThan(0);
     const priced = e.campaigns.filter((x) => x.usdPerDay !== null).reduce((a, x) => a + x.usdPerDay! * x.days, 0);
     expect(e.incentiveUsd).toBeCloseTo(priced, 9);
-
-    const board = rankRewards(ops, S, ctx);
-    expect(board.tokens.every((x) => x.token.type === 'TOKEN' && x.usd !== null)).toBe(true);
-    for (let i = 1; i < board.tokens.length; i++) expect(board.tokens[i - 1].usd!).toBeGreaterThanOrEqual(board.tokens[i].usd!);
-    const g = board.points.find((x) => x.token.symbol.startsWith('ipor'))!;
-    expect(g.entries.every((x) => tokenKey(x.token.chainId, x.token.address) === g.key)).toBe(true);
-    expect(g.entries.every((x) => x.usd === null)).toBe(true);
-  });
-
-  it('ranks reward tokens by dollar value, not by raw count', () => {
-    const board = rankRewards(ops, S, ctx);
-    const top = board.tokens[0];
-    const mostUnits = [...board.tokens].sort((a, b) => b.units - a.units)[0];
-    expect(board.tokens.indexOf(mostUnits)).toBeGreaterThanOrEqual(0);
-    expect(top.usd!).toBeGreaterThanOrEqual(mostUnits.usd!);
   });
 
   it('shows pre-TGE amounts in units with no dollar value', () => {
@@ -252,11 +230,8 @@ describe('prices, points and pre-TGE', () => {
     o.depositUrl = 'https://example.org/usp'; // the live copy has no deposit link, which the gate requires
     expect(o.campaigns[0].rewardToken.type).toBe('PRETGE');
     expect(why(o)).toBe('units-only');
-    const board = rankRewards([o], S, ctxFor([o]));
-    expect(board.pretge).toHaveLength(1);
-    expect(board.pretge[0].entries[0].usd).toBeNull();
-    expect(board.pretge[0].entries[0].units).toBeGreaterThan(0);
-    expect(board.tokens).toHaveLength(0);
+    const x = calcCampaign(o.campaigns[0], o, 1000, 30, ctxFor([o]));
+    expect(x.usdPerDay).toBeNull();
   });
 });
 
@@ -326,8 +301,6 @@ describe('selection', () => {
     expect(e.meme).toBe(true);
     expect(e.confidence).toBe('low');
     expect(e.risks.join()).toContain('ریسک بسیار بالا');
-    // Hidden on request.
-    expect(applyMerklFilters([deep], { ...defaultMerklFilters, hideMeme: true })).toHaveLength(0);
 
     // The same meme elsewhere is excluded.
     const other = clone(deep);
@@ -344,37 +317,6 @@ describe('selection', () => {
     const unverified = clone(deep);
     for (const t of unverified.tokens) if (isMeme(t)) t.verified = false;
     expect(gate(unverified, ctx)?.code).toBe('meme-unverified');
-  });
-});
-
-describe('ranking', () => {
-  it('lists at most thirty, positive net only, sorted, and says how many qualified', () => {
-    const r = rankTop(ops, S, ctx, gas);
-    expect(r.rows.length).toBeLessThanOrEqual(30);
-    expect(r.rows.length).toBe(Math.min(30, r.total));
-    for (const x of r.rows) expect(x.net).toBeGreaterThan(0);
-    for (let i = 1; i < r.rows.length; i++) expect(r.rows[i - 1].net).toBeGreaterThanOrEqual(r.rows[i].net);
-    expect(r.rows.length + r.pools.length + r.noEstimate.length + r.excluded.length).toBe(ops.length);
-    // LP stays out of the general ranking.
-    expect(r.rows.some((x) => x.o.action === 'POOL')).toBe(false);
-    expect(r.pools.every((x) => x.o.action === 'POOL')).toBe(true);
-    const capped = rankTop(ops, S, ctx, gas, 2);
-    expect(capped.rows).toHaveLength(2);
-    expect(capped.total).toBe(r.total);
-  });
-
-  it('changes with the horizon only through each campaign’s end', () => {
-    const r7 = rankTop(ops, { ...S, horizon: 7 }, ctx, gas);
-    const r30 = rankTop(ops, { ...S, horizon: 30 }, ctx, gas);
-    for (const e of r30.rows) {
-      const short = r7.rows.find((x) => x.o.id === e.o.id);
-      if (short) expect(short.incentiveUsd).toBeLessThanOrEqual(e.incentiveUsd + 1e-9);
-    }
-  });
-
-  it('gives no dollar ranking without capital', () => {
-    expect(rankTop(ops, { ...S, capital: 0 }, ctx, gas).rows).toHaveLength(0);
-    expect(rankRewards(ops, { ...S, capital: 0 }, ctx).tokens).toHaveLength(0);
   });
 });
 

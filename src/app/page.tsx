@@ -1,5 +1,8 @@
-import { redirect } from 'next/navigation';
+import type { Metadata } from 'next';
+import MarketAnalysis from '../components/market/MarketAnalysis';
+
+export const metadata: Metadata = { title: 'تحلیل بازار — YieldX' };
 
 export default function Home() {
-  redirect('/dashboard');
+  return <MarketAnalysis />;
 }

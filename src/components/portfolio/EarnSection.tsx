@@ -9,7 +9,9 @@ import { useLending } from '../../hooks/useLending';
 import { switchAdvice, valueEarn, type EarnInputs, type EarnValuation } from '../../lib/portfolio/earn';
 import { newId } from '../../lib/portfolio/portfolio';
 import { buildLoops } from '../../lib/opportunity/leverage';
-import { defaultLendingSettings, rankLending } from '../../lib/lending/rank';
+import { evaluate, selectHorizon } from '../../lib/market/analysis';
+import { HORIZONS, type HorizonDays } from '../../lib/opportunity/policy';
+import { Segmented } from '../opportunities/parts';
 import { networkByKey, networkByName } from '../../lib/registry/networks';
 import { formatDate, formatNumber, formatPercent } from '../../lib/utils/formatting';
 import { NumberField, TextField } from '../ui/field';
@@ -77,8 +79,8 @@ function Money({ label, onAdd, needsDebt }: { label: string; onAdd: (e: EarnEven
   );
 }
 
-function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; v: EarnValuation; save: (p: EarnPosition) => void; remove: () => void; byKey: Map<string, Opportunity>; alternatives: (capital: number, days: number) => { e: import('../../types/opportunity').Estimate; o: Opportunity }[] }) {
-  const [days, setDays] = useState(30);
+function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; v: EarnValuation; save: (p: EarnPosition) => void; remove: () => void; byKey: Map<string, Opportunity>; alternatives: (capital: number, days: HorizonDays) => { e: import('../../types/opportunity').Estimate; o: Opportunity }[] }) {
+  const [days, setDays] = useState<HorizonDays>(30);
   const advice = useMemo(() => switchAdvice(p, v, alternatives(Math.max(0, v.netValueUsd), days), days), [p, v, days, alternatives]);
   const linked = p.opportunityKey ? byKey.has(p.opportunityKey) : false;
   const set = (x: Partial<EarnPosition>) => save({ ...p, ...x });
@@ -174,7 +176,7 @@ function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; 
         <h3 className="font-medium flex items-center gap-2">
           <ArrowLeftRight size={16} aria-hidden /> ادامه یا خروج
         </h3>
-        <NumberField label="مقایسه برای" value={days} onChange={(x) => setDays(Number.isFinite(x) ? Math.min(365, Math.max(1, Math.round(x))) : 30)} suffix="روز" />
+        <Segmented<`${HorizonDays}`> value={`${days}`} onChange={(x) => setDays(Number(x) as HorizonDays)} label="مقایسه برای" size="sm" options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))} />
         {advice.continueUsd !== null && (
           <p className="text-sm text-sx-muted leading-7">
             ادامه با نرخ امروز: <Usd x={advice.continueUsd} />
@@ -339,9 +341,11 @@ export function EarnSection({ earn, saveEarn, removeEarn }: { earn: EarnPosition
   }, [feed]);
   const byKey = useMemo(() => new Map(opps.map((o) => [o.key, o])), [opps]);
   const alternatives = useMemo(
-    () => (capital: number, days: number) => {
-      const r = rankLending(feed?.opportunities ?? [], { ...defaultLendingSettings, capital, days });
-      return r.ranking.top.map((e) => ({ e, o: r.byKey.get(e.key)! })).filter((x) => x.o);
+    () => (capital: number, days: HorizonDays) => {
+      // The same engine and horizons as the market analysis.
+      if (!(capital > 0)) return [];
+      const a = evaluate({ opportunities: feed?.opportunities ?? [], merkl: null, gas: [] }, capital);
+      return selectHorizon(a, days).ranking.top.map((e) => ({ e, o: a.byKey.get(e.key)! })).filter((x) => x.o);
     },
     [feed],
   );
@@ -386,7 +390,7 @@ export function EarnSection({ earn, saveEarn, removeEarn }: { earn: EarnPosition
       )}
       {rows.length === 0 && !adding ? (
         <p className="text-sm text-sx-muted leading-7">
-          هنوز پوزیشنی ثبت نشده. از <Link href="/opportunities/ranking" className="underline underline-offset-4">رتبه‌بندی یکپارچه</Link> دکمه‌ی «ثبت در پرتفوی» را بزنید یا دستی اضافه کنید.
+          هنوز پوزیشنی ثبت نشده. از <Link href="/" className="underline underline-offset-4">تحلیل بازار</Link> دکمه‌ی «ثبت در پرتفوی» را بزنید یا دستی اضافه کنید.
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-sx-border">

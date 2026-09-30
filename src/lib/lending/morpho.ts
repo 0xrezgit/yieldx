@@ -103,8 +103,8 @@ export interface MorphoData {
 const ASSET = 'address symbol logoURI chain { id } yield { apr }';
 const REWARD = `rewards { asset { ${ASSET} } supplyApr }`;
 
-export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float, $first: Int) {
-  markets(first: $first, orderBy: SupplyAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, whitelisted: true, supplyAssetsUsd_gte: $minUsd }) {
+export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float, $first: Int, $skip: Int) {
+  markets(first: $first, skip: $skip, orderBy: SupplyAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, whitelisted: true, supplyAssetsUsd_gte: $minUsd }) {
     items {
       uniqueKey lltv
       loanAsset { ${ASSET} }
@@ -114,7 +114,7 @@ export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float
       state { supplyApy borrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp ${REWARD} }
     }
   }
-  vaults(first: $first, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, whitelisted: true, totalAssetsUsd_gte: $minUsd }) {
+  vaults(first: $first, skip: $skip, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, whitelisted: true, totalAssetsUsd_gte: $minUsd }) {
     items {
       address name
       asset { ${ASSET} }
@@ -124,7 +124,7 @@ export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float
       state { netApyWithoutRewards fee totalAssetsUsd timestamp ${REWARD} }
     }
   }
-  vaultV2s(first: $first, where: { chainId_in: $chains, whitelisted: true }) {
+  vaultV2s(first: $first, skip: $skip, where: { chainId_in: $chains, whitelisted: true }) {
     items {
       address name
       asset { ${ASSET} }
@@ -141,8 +141,18 @@ export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float
 const isMorphoData = (b: unknown): b is MorphoData =>
   isObject<MorphoData>(b) && isObject(b.markets) && isObject(b.vaults) && isObject(b.vaultV2s);
 
+/** Pages until every list is exhausted (or `maxPages`), so new markets are never cut off by a fixed first-N. */
 export async function fetchMorpho(): Promise<MorphoData> {
-  return postGraphql(CFG.name, CFG.graphql, MORPHO_QUERY, { chains: CFG.chains, minUsd: CFG.minSupplyUsd, first: CFG.pageSize }, isMorphoData);
+  const out: MorphoData = { markets: { items: [] }, vaults: { items: [] }, vaultV2s: { items: [] } };
+  for (let page = 0; page < CFG.maxPages; page++) {
+    const d = await postGraphql(CFG.name, CFG.graphql, MORPHO_QUERY, { chains: CFG.chains, minUsd: CFG.minSupplyUsd, first: CFG.pageSize, skip: page * CFG.pageSize }, isMorphoData);
+    const lists = [d.markets.items ?? [], d.vaults.items ?? [], d.vaultV2s.items ?? []];
+    out.markets.items!.push(...(lists[0] as RawMorphoMarket[]));
+    out.vaults.items!.push(...(lists[1] as RawMorphoVault[]));
+    out.vaultV2s.items!.push(...(lists[2] as RawMorphoVaultV2[]));
+    if (lists.every((l) => l.length < CFG.pageSize)) break;
+  }
+  return out;
 }
 
 // ─── Normalisation ───────────────────────────────────────────────────────────
@@ -185,7 +195,11 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
   const supplied = finite(s.supplyAssetsUsd);
   const borrowed = finite(s.borrowAssetsUsd);
   const curve = (m.currentIrmCurve ?? []).filter((p) => Number.isFinite(p.utilization) && Number.isFinite(p.supplyApy)).sort((a, b) => a.utilization - b.utilization);
-  const at = isoFromUnix(s.timestamp);
+  // state.timestamp is the market's last on-chain update («Last update timestamp»), not when
+  // the API computed the rate: a quiet market keeps an old timestamp while its rate is current.
+  // The rate is therefore dated by our fetch; the on-chain time is kept as the source update.
+  const onchainAt = isoFromUnix(s.timestamp);
+  const at = fetchedAt;
   const collateral = m.collateralAsset?.symbol ?? '—';
   const lltv = Number(m.lltv) / 1e18;
   return {
@@ -221,7 +235,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
     assetYield: assetYield(m.loanAsset),
     risk: { oracle: null, curator: null, paused: false, incidents: w.notes },
     quality: w.quality ?? (pct(s.supplyApy) === null ? 'insufficient' : 'current'),
-    sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: at }],
+    sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: onchainAt }],
     notes: w.notes,
     url: CFG.app,
     icon: m.loanAsset.logoURI ?? null,
@@ -233,7 +247,9 @@ export function morphoVault(v: RawMorphoVault, fetchedAt: string): Opportunity |
   if (!s || !v.chain?.id || !v.address) return null;
   const network = networkByChainId(v.chain.id);
   const w = warningQuality(v.warnings);
-  const at = isoFromUnix(s.timestamp);
+  // As for markets: the state timestamp is the last on-chain update, not the rate's age.
+  const onchainAt = isoFromUnix(s.timestamp);
+  const at = fetchedAt;
   return {
     key: `morpho:${network.key}:${v.address.toLowerCase()}:vault`,
     family: 'vault',
@@ -249,7 +265,7 @@ export function morphoVault(v: RawMorphoVault, fetchedAt: string): Opportunity |
     rewards: rewards(s.rewards, v.address, v.chain.id),
     risk: { oracle: null, curator: null, paused: false, incidents: w.notes },
     quality: w.quality ?? (pct(s.netApyWithoutRewards) === null ? 'insufficient' : 'current'),
-    sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: at }],
+    sources: [{ name: 'Morpho API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: onchainAt }],
     notes: ['بازده خزانه پس از کسر کارمزد عملکرد و بدون پاداش (netApyWithoutRewards)، نرخ لحظه‌ای.', ...w.notes],
     url: CFG.app,
     icon: v.asset?.logoURI ?? null,

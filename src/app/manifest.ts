@@ -2,13 +2,14 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    // The installed app's identity stays the same; it now opens on the market analysis.
     id: '/dashboard',
     name: 'YieldX — مشاور معاملات بازده',
     short_name: 'YieldX',
-    description: 'تحلیل ساده‌ی PT، YT، لوپینگ و ایردراپ',
+    description: 'رتبه‌بندی فرصت‌های بازده بر اساس سود خالص دلاری، و پرتفوی شخصی',
     lang: 'fa',
     dir: 'rtl',
-    start_url: '/dashboard',
+    start_url: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
@@ -21,8 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: '/pwa-icon/512', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
     shortcuts: [
-      { name: 'فرصت‌ها', url: '/opportunities' },
-      { name: 'تحلیل بازار', url: '/dashboard' },
+      { name: 'تحلیل بازار', url: '/' },
       { name: 'پرتفوی من', url: '/portfolio' },
     ],
   };

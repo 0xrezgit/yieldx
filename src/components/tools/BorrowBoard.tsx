@@ -56,7 +56,7 @@ export function BorrowBoard({ rows, blocked, amount, days }: { rows: BorrowRow[]
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-secondary leading-6 rounded-md bg-surface border border-default px-3 py-2">
-        هزینه‌ی بهره برای وام <Num>{usd(amount)}</Num> در <Num>{formatNumber(days, 0)}</Num> روز، ارزان‌ترین اول. این بخش جدا از رتبه‌بندی سود است: وام درآمد نیست و فقط وقتی مقصدش مشخص باشد (مثلاً در لوپ) وارد محاسبه‌ی سود می‌شود. گس، کارمزد ایجاد وام و هزینه‌ی تهیه‌ی وثیقه جدا هستند.
+        هزینه‌ی بهره‌ی وام <Num>{usd(amount)}</Num> در <Num>{formatNumber(days, 0)}</Num> روز، ارزان‌ترین اول. وام درآمد نیست؛ گس و هزینه‌ی وثیقه جداست.
       </p>
       {rows.length === 0 ? (
         <Empty>برای این مبلغ و دارایی بازاری پیدا نشد.</Empty>

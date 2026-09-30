@@ -13,8 +13,8 @@ const PT_MAX_AGE_MS = 6 * 3_600_000;
  *
  * Buying PT and holding it to maturity earns the implied APY: it is the compounded
  * rate that turns today's PT price into 1 unit at maturity, so it is read as APY
- * and already net of the protocol's fees (they are in the price). Price impact of
- * buying into the pool is not reported by the list and is left as an unknown cost.
+ * The swap fee and the price impact of buying into the pool are not in the list;
+ * they stay unknown costs and the amount must stay small against the pool (policy.ts).
  */
 export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt: string, now = Date.now()): Opportunity {
   const network = networkByName(m.chain);
@@ -38,6 +38,7 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     rate: {
       value: Number.isFinite(m.impliedAPY) ? m.impliedAPY : null,
       kind: 'apy',
+      // Implied APY is the pool's mid rate: the swap fee is charged on top when buying.
       feesIncluded: true,
       rewardsIncluded: false,
       at: updated,
@@ -49,8 +50,32 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     rewards: [],
     quality: m.expired ? 'insufficient' : quality,
     sources: [{ name: identity.name, url: null, fetchedAt, sourceUpdatedAt: updated }],
+    ptToken: m.ptToken ?? null,
+    poolLiquidityUsd: m.liquidity !== null && Number.isFinite(m.liquidity) && m.liquidity > 0 ? m.liquidity : null,
+    icon: m.icon ?? null,
+  };
+}
+
+/**
+ * The YT of the same market: buying it pays today's YT price for the underlying's
+ * yield until maturity. The base yield is read the way each API publishes it —
+ * Pendle and Exponent as APY, Spectra's IBT figure as APR (simple, the lower reading).
+ * Null when the market gives no base yield: without it there is no estimate.
+ */
+export function ytOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt: string, now = Date.now()): Opportunity | null {
+  if (m.baseAPY === null || !Number.isFinite(m.baseAPY) || !(m.impliedAPY > 0)) return null;
+  const pt = ptOpportunity(protocol, m, fetchedAt, now);
+  return {
+    ...pt,
+    key: pt.key.replace(/:pt$/, ':yt'),
+    family: 'yt',
+    market: { ...pt.market, name: `YT ${m.name}` },
+    rate: { value: m.baseAPY, kind: protocol === 'spectra' ? 'apr' : 'apy', feesIncluded: true, rewardsIncluded: false, at: pt.rate.at },
+    exit: { type: 'maturity', note: 'در سررسید YT صفر می‌شود و بازده جمع‌شده دریافت می‌شود؛ فروش زودتر در استخر ممکن است.' },
+    ptToken: null,
+    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints },
   };
 }
 
 /** Unknown costs every PT entry has today (the list gives no executable quote). */
-export const PT_UNKNOWN_COSTS = ['اثر قیمت خرید PT در استخر برای مبلغ شما', 'کارمزد معامله‌ی ورود و خروج'];
+export const PT_UNKNOWN_COSTS = ['کارمزد سواپ و اثر قیمت خرید PT (بدون quote)'];
