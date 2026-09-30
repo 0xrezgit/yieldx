@@ -129,7 +129,8 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       annualized: annualize(best.cash, i.capital, bestDay),
       perDay: best.cash / bestDay,
       verdict: best.cash >= 0 ? 'free' : loss <= s.lossBudget ? 'cheap' : 'costly',
-      tooBig: tooBig(m, i.capital),
+      // YT buys `notional` of yield exposure against the pool, not just the capital.
+      tooBig: tooBig(m, best.notional),
       freeUntil,
       pointsExposure: best.notional * multiplier,
       perBasePoint: at(bestDay, 1).cash - best.cash,

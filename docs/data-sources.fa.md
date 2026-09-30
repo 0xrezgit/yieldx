@@ -33,7 +33,8 @@ APIهای Morpho و Aave از محیط توسعه‌ی این فاز در دست
 ## Kamino Lend (تحلیل بازار یکپارچه)
 
 - **وضعیت:** پوشش جزئی. هر ذخیره برچسب «منبع غیررسمی» و کیفیت حداکثر «ناقص» دارد.
-- **چرا غیررسمی:** SDK رسمی (`@kamino-finance/klend-sdk` 13) فقط `/v2/kamino-market` را صدا می‌زند. دو مسیر نرخ و معنای فیلدها از کلاینت شخص ثالث `@1delta/margin-fetcher-sol` 0.0.1 گرفته شده که با سند OpenAPI خود Kamino نوشته شده است. از محیط ساخت، API قابل فراخوانی نبود.
+- **چرا غیررسمی:** SDK رسمی (`@kamino-finance/klend-sdk` 13) فقط `/v2/kamino-market` را صدا می‌زند. دو مسیر نرخ و معنای فیلدها از کلاینت شخص ثالث `@1delta/margin-fetcher-sol` 0.0.1 گرفته شده که با سند OpenAPI خود Kamino نوشته شده است.
+- **بررسی با پاسخ زنده (۹ مهر ۱۴۰۵):** همه‌ی فیلدهای به‌کاررفته در پاسخ واقعی بودند و آداپتر ۹۵ ذخیره خواند. `actualAvailableLiquidity` نقدینگی قابل برداشت نیست: در پاسخ زنده برابر `borrowLimit − totalBorrow` است و در ذخیره‌های فقط‌وثیقه صفر است. پس همان `liquidityAvailableUsd` درست است.
 - **درخواست‌ها:** `GET /v2/kamino-market`، سپس برای هر بازار `GET /kamino-market/{market}/reserves/metrics` (نماد، mint، مجموع دلاری و واحدی) و `GET /reserves/batch/stats?market=` (وضعیت، تفکیک APY، سقف‌ها).
 - **معنای فیلدها:** رشته‌ی اعشاری، APY به صورت کسر. نرخ پایه فقط `supplyApyBreakdown.lending` است؛ پاداش farm، پاداش فصل و بازده خود دارایی جدا هستند. `depositLimit` واحد توکن است و `"0"` یعنی بسته. `liquidityAvailableUsd` نقدینگی قابل برداشت است.
 - **پاداش farm:** تاریخ پایان ندارد؛ فهرست می‌شود ولی به دلار شمرده نمی‌شود.
@@ -67,6 +68,9 @@ APIهای Morpho و Aave از محیط توسعه‌ی این فاز در دست
 - **واحدها:** مقادیر خزانه به واحد خام mint اصلی. `interestFee` و `externalYieldInfo.apy` به CBPS هستند (۱٬۰۰۰٬۰۰۰ = ۱۰۰٪).
 - **نرخ:** `interestPerSecond × ثانیه‌های سال ÷ کل دارایی × (۱ − interestFee)` به‌علاوه‌ی بازده بخش بیکار؛ APR ساده.
 - **قیمت یک واحد:** `strategySummary.totalSupplyUsd ÷ کل دارایی` (بدون نیاز به decimals).
+- **بررسی با پاسخ زنده (۹ مهر ۱۴۰۵):** نرخ ناخالص این فرمول (پیش از `interestFee`) برای همه‌ی خزانه‌ها با `strategySummary.wAvgApy` خود API برابر بود.
+- **سقف سپرده:** `vaultMetadata.depositCap` به واحد خام؛ ظرفیت باقی‌مانده = (سقف − کل دارایی) × قیمت یک واحد. این سقف را مدیر خزانه تعیین می‌کند؛ سقف روی زنجیره (`supplyCaps`) نامحدود است.
+- **پاداش:** `rewardEndTime` ثانیه‌ی یونیکس است و به‌صورت رشته می‌آید. برنامه‌های تمام‌شده (۱۶ از ۲۲ در پاسخ زنده) فهرست نمی‌شوند.
 - **Loops و Borrow:** وصل نشده‌اند، چون نرخ به quote هر مبلغ و مدت بستگی دارد.
 
 ## لایه‌ی پاداش و رتبه‌بندی یکپارچه (فاز ۴)
@@ -254,9 +258,11 @@ APIهای Morpho و Aave از محیط توسعه‌ی این فاز در دست
 - همان قاعده‌ی رتبه‌بندی قدیم: YT در بهترین روز با Implied APY امروز فروخته می‌شود؛ Loop PT تا سررسید با اهرم، بهره‌ی وام و LLTV کاربر. چهار فهرست ۱۵تایی و یک «پیشنهاد».
 - کارمزد بازده YT پندل: قرارداد `PendleYieldContractFactory` نرخ `interestFeeRate` را از بهره‌ی YT کم می‌کند (سقف روی زنجیره ۲۰٪)؛ مستندات پندل ۵٪ می‌گوید و همین به کار می‌رود. برای Spectra و Exponent تأیید نشده و کم نمی‌شود.
 - هر ردیف YT می‌گوید هر یک واحد درصد تغییر بازده پایه چند دلار نتیجه را جابه‌جا می‌کند؛ بازار با «بازده پایه‌ی احتمالاً موقت» پیشنهاد نمی‌شود.
+- هشدار «بزرگ نسبت به نقدینگی» در YT روی ارزش اسمی خریده‌شده سنجیده می‌شود، نه سرمایه. نمونه‌ی superWETH (۹ مهر ۱۴۰۵): سرمایه‌ی ۱٬۰۰۰ دلار حدود ۱۳۸ هزار دلار ارزش اسمی می‌خرد که ۳۷٪ نقدینگی ۳۷۲ هزار دلاری استخر است.
 
 ### لینک ورود به بازار
-- Pendle: `https://app.pendle.finance/trade/markets/{market}/swap?view=pt|yt&chain=…` (قالب از depositUrl زنده‌ی Merkl). نام شبکه جز «ethereum» تأیید نشده است.
-- Morpho: `https://app.morpho.org/{chain}/market/{uniqueKey}` و `/vault/{address}` (قالب از depositUrl زنده‌ی Merkl برای ethereum و base).
+- Pendle: `https://app.pendle.finance/trade/markets/{market}/swap?view=pt|yt&chain=…` (قالب از depositUrl زنده‌ی Merkl). نام شبکه همان `nameId` جدول شبکه‌های خود اپ پندل است (۹ مهر ۱۴۰۵)؛ برای نمونه Berachain `bera` و Monad `monad`.
+- Morpho: `https://app.morpho.org/{chain}/market/{uniqueKey}` و `/vault/{address}` (قالب از depositUrl زنده‌ی Merkl). نام شبکه همان `chainIdentifier` جدول شبکه‌های اپ مورفو است؛ برای نمونه Optimism `opmainnet` و HyperEVM `hyperevm`.
+- نشانی PT: در Pendle فیلد `pt.address` فهرست بازارها؛ در Spectra نشانی سطح بالای هر ردیف `/v1/{network}/pools` که خودش توکن PT است (نماد `PT-…`)، نه نشانی استخر.
 - Spectra، Exponent، Aave V4، Kamino و Loopscale: قالب صفحه‌ی بازار تأیید نشده؛ لینک اپ پروتکل باز می‌شود و در رتبه‌بندی‌های YT و Loop PT نشانی بازار برای جست‌وجو کنارش نمایش داده می‌شود.
 - بازارهای Merkl: همان depositUrl خود Merkl.

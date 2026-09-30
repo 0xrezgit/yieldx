@@ -312,6 +312,24 @@ describe('adapters', () => {
     expect(loopscaleVault({ ...v, pause: { depositsPaused: true } }, AT, 'USDC')!.risk!.paused).toBe(true);
   });
 
+  it('Loopscale: deposit cap in native units, reward end times as strings, ended schedules dropped', () => {
+    const v: LoopscaleVaultInfo = {
+      vault: { address: 'V', principalMint: 'USDC', depositsEnabled: true },
+      vaultMetadata: { name: 'USDC Prime', depositCap: '1500000000000' },
+      vaultStrategy: { strategy: { tokenBalance: '200000000000', currentDeployedAmount: '800000000000', externalYieldAmount: '0', interestPerSecond: 2536.53, interestFee: '100000' }, externalYieldInfo: null },
+      strategySummary: { totalSupplyUsd: 1_000_000 },
+      vaultRewardsSchedules: [
+        { rewardMint: 'ENDED', rewardEndTime: String(Date.parse(AT) / 1000 - 86_400) },
+        { rewardMint: 'LIVE', rewardEndTime: String(Date.parse(AT) / 1000 + 86_400) },
+      ],
+    };
+    const o = loopscaleVault(v, AT, 'USDC')!;
+    expect(o.capacity.depositRemainingUsd).toBeCloseTo(500_000, 6);
+    expect(o.rewards.map((r) => r.token.address)).toEqual(['LIVE']);
+    expect(o.rewards[0].endsAt).toBe(new Date(Date.parse(AT) + 86_400_000).toISOString());
+    expect(loopscaleVault({ ...v, vaultMetadata: { name: 'x', depositCap: null } }, AT, 'USDC')!.capacity.depositRemainingUsd).toBeNull();
+  });
+
   it('retries a transient failure with backoff, never a client error', async () => {
     let n = 0;
     await expect(withRetry(async () => (++n < 3 ? Promise.reject(new UpstreamError('X', 503)) : 'ok'), 3, 1, async () => {})).resolves.toBe('ok');

@@ -8,9 +8,10 @@ import { fetchJson, isArrayOf, isObject, mapLimit, withRetry } from '../protocol
  * Source: Kamino's public REST API (api.kamino.finance). Kamino's official SDK only
  * calls `/v2/kamino-market`; the two rate routes below and their field meanings are
  * taken from a third-party client written against Kamino's published OpenAPI
- * document (@1delta/margin-fetcher-sol 0.0.1, measured 2026-09-15/29). They could
- * not be called from the build environment, so every opportunity is marked as coming
- * from an unofficial source and at most «partial» quality.
+ * document (@1delta/margin-fetcher-sol 0.0.1, measured 2026-09-15/29). Every field
+ * used here was checked against the live response on 2026-10-01; the meanings still
+ * rest on that third-party client, so every opportunity is marked as coming from an
+ * unofficial source and at most «partial» quality.
  *
  * - GET /v2/kamino-market                      → markets (lendingMarket, name, isPrimary)
  * - GET /kamino-market/{market}/reserves/metrics → per reserve: symbol, mint, USD totals, token totals
@@ -19,7 +20,8 @@ import { fetchJson, isArrayOf, isObject, mapLimit, withRetry } from '../protocol
  * Meanings used: decimal strings; APYs are fractions. `supplyApyBreakdown.lending`
  * is the supply APY from borrower interest (incentives, season rewards and the
  * asset's own yield are separate lines). `depositLimit` is in token units, "0" =
- * closed. `liquidityAvailableUsd` is what can be withdrawn now.
+ * closed. `liquidityAvailableUsd` is what can be withdrawn now; `actualAvailableLiquidity`
+ * is not — live it equals `borrowLimit − totalBorrow` (0 on collateral-only reserves).
  */
 
 const CFG = lending.kamino;

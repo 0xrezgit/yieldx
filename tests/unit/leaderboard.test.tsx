@@ -52,6 +52,14 @@ describe('leaderYt', () => {
     expect(r.pnl).toBeGreaterThan(0);
   });
 
+  it('judges YT size by the notional bought, not the capital (superWETH-like: tiny YT price, thin pool)', () => {
+    const m = listing({ impliedAPY: 4.74, baseAPY: 25.17, daysToMaturity: 57, liquidity: 372_000 });
+    const [r] = leaderYt([m], s, { capital: 1000 }, false);
+    expect(1000 / 372_000).toBeLessThan(0.02);
+    expect(r.pointsExposure! / (m.points?.ytMultiplier ?? m.ytMultiplier ?? 1) / 372_000).toBeGreaterThan(0.02);
+    expect(r.tooBig).toBe(true);
+  });
+
   it('skips markets without points when asked', () => {
     expect(leaderYt([listing({ hasPoints: false })], s, input, true)).toHaveLength(0);
     expect(leaderYt([listing({ hasPoints: false })], s, input, false)).toHaveLength(1);
@@ -133,6 +141,10 @@ describe('entry links', () => {
     expect(listingLink('pendle', { id: '42161-0x3ffdf143cbe1e594fba183e2b9035eb027a732ec', chain: 'Arbitrum' }, 'pt').url).toContain('view=pt&chain=arbitrum');
     expect(listingLink('spectra', { id: 'base-0xabc', chain: 'Base' }, 'yt').exact).toBe(false);
     expect(morphoLink(8453, 'vault', '0xbeef')!.url).toBe('https://app.morpho.org/base/vault/0xbeef');
+    // Each app's own chain names, not the network's common name.
+    expect(morphoLink(10, 'vault', '0xbeef')!.url).toBe('https://app.morpho.org/opmainnet/vault/0xbeef');
+    expect(listingLink('pendle', { id: '80094-0x3ffdf143cbe1e594fba183e2b9035eb027a732ec', chain: 'Berachain' }, 'yt').url).toContain('chain=bera');
+    expect(listingLink('pendle', { id: '143-0x3ffdf143cbe1e594fba183e2b9035eb027a732ec', chain: 'Monad' }, 'yt').url).toContain('chain=monad');
     expect(isAppRoot('https://app.spectra.finance')).toBe(true);
     expect(isAppRoot('https://app.morpho.org/ethereum/market/0xabc')).toBe(false);
   });

@@ -8,7 +8,8 @@ import { networkByName } from '../registry/networks';
  * Verified formats (from live Merkl `depositUrl` values, which the protocols supply):
  * - Pendle:  https://app.pendle.finance/trade/markets/{market}/swap?view=yt&chain=ethereum
  * - Morpho:  https://app.morpho.org/{chain}/vault/{address}, …/{chain}/market/{uniqueKey}
- *   (seen for «ethereum» and «base»; other chain names follow the same lower-case pattern).
+ * Chain names are each app's own: Pendle's `nameId` and Morpho's `chainIdentifier` from
+ * the chain tables in their app bundles (read 2026-10-01), cross-checked against Merkl.
  * Spectra and Exponent publish no market URL format we could verify: their links open the
  * app, and `exact` is false so the page can show the market address to search for.
  */
@@ -19,8 +20,14 @@ export interface EntryLink {
   exact: boolean;
 }
 
-const PENDLE_CHAIN: Record<number, string> = { 1: 'ethereum', 42161: 'arbitrum', 8453: 'base', 56: 'bnbchain', 5000: 'mantle', 146: 'sonic', 80094: 'berachain', 999: 'hyperevm', 9745: 'plasma', 10: 'optimism' };
-const MORPHO_CHAIN: Record<number, string> = { 1: 'ethereum', 8453: 'base', 42161: 'arbitrum', 10: 'optimism', 137: 'polygon', 130: 'unichain', 747474: 'katana', 999: 'hyperevm' };
+const PENDLE_CHAIN: Record<number, string> = {
+  1: 'ethereum', 10: 'optimism', 56: 'bnbchain', 130: 'unichain', 143: 'monad', 146: 'sonic', 196: 'xlayer', 999: 'hyperevm',
+  4217: 'tempo', 4663: 'robinhood', 8453: 'base', 9745: 'plasma', 42161: 'arbitrum', 43114: 'avalanche', 57073: 'ink', 80094: 'bera', 747474: 'katana',
+};
+const MORPHO_CHAIN: Record<number, string> = {
+  1: 'ethereum', 10: 'opmainnet', 130: 'unichain', 137: 'polygon', 143: 'monad', 480: 'world-chain', 988: 'stable', 999: 'hyperevm',
+  4217: 'tempo', 4663: 'robinhood-chain', 5042: 'arc', 8453: 'base', 42161: 'arbitrum', 98866: 'plume', 747474: 'katana',
+};
 
 export const morphoLink = (chainId: number, kind: 'vault' | 'market', id: string): EntryLink | null => {
   const chain = MORPHO_CHAIN[chainId];
