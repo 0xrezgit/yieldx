@@ -1,5 +1,6 @@
 import type { ProtocolId } from './protocol';
 import type { AirdropProgram } from './airdrop';
+import type { EarnPosition } from './earn';
 
 /**
  * Real positions the user has actually entered (or plans to enter), recorded as
@@ -152,12 +153,15 @@ export interface PortfolioSnapshot {
 }
 
 export interface PortfolioFile {
-  version: 1;
+  /** 2 adds lending / vault / fixed / loop / LP positions (`earn`); version 1 files still import. */
+  version: 1 | 2;
   exportedAt: string;
   positions: Position[];
   history: PortfolioSnapshot[];
   /** Points → airdrop records (absent in files from older versions). */
   airdrops?: AirdropProgram[];
+  /** Lending, vault, fixed-rate, loop, LP and borrow positions (version 2). */
+  earn?: EarnPosition[];
 }
 
 export const emptyManual = (): ManualMarks => ({ tokenPrice: null, assetUsd: null, unclaimedYield: null });

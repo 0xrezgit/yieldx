@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Coins, Gift, Loader2, RefreshCw, Repeat, SlidersHorizontal, Trophy } from 'lucide-react';
+import { Calculator, Coins, Droplets, Gift, Loader2, RefreshCw, Repeat, SlidersHorizontal, Trophy } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
@@ -21,9 +21,10 @@ import { LeaderBoard, defaultRankSettings, type RankSettings } from './LeaderBoa
 import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from './Calculator';
 import { applyFilters, defaultFilters, FilterBar, type Filters } from './filters';
 import { SectionSwitch } from './SectionSwitch';
+import { LpAnalyzer, readLpPrefill, type LpPrefill } from './LpAnalyzer';
 
-type Tab = 'rank' | 'yt' | 'pt' | 'loop' | 'calc';
-const TABS: Tab[] = ['rank', 'yt', 'pt', 'loop', 'calc'];
+type Tab = 'rank' | 'yt' | 'pt' | 'loop' | 'calc' | 'lp';
+const TABS: Tab[] = ['rank', 'yt', 'pt', 'loop', 'calc', 'lp'];
 
 interface Stored {
   tab: Tab;
@@ -53,11 +54,14 @@ export default function Opportunities() {
   const { markets, loading, failed, stale, feeds, updatedAt, refresh } = useAllMarkets();
   const [st, setSt] = useState<Stored | null>(null);
   const [loadingMarket, setLoadingMarket] = useState(false);
+  const [lpPrefill, setLpPrefill] = useState<LpPrefill>({});
 
   // Client-only restore (localStorage), merged over defaults so new fields are always present.
   useEffect(() => {
     const saved = readLocal<Partial<Stored>>(STORAGE_KEYS.opportunities, {});
-    const linked = new URLSearchParams(window.location.search).get('tab');
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get('tab');
+    if (linked === 'lp') setLpPrefill(readLpPrefill(params));
     setSt({
       tab: TABS.includes(linked as Tab) ? (linked as Tab) : (saved.tab ?? initial.tab),
       screen: sane(saved.screen, initial.screen),
@@ -182,11 +186,14 @@ export default function Opportunities() {
             { id: 'pt', label: <><Coins size={15} aria-hidden /> PT</> },
             { id: 'loop', label: <><Repeat size={15} aria-hidden /> Loop</> },
             { id: 'calc', label: <><Calculator size={15} aria-hidden /> ماشین‌حساب</> },
+            { id: 'lp', label: <><Droplets size={15} aria-hidden /> LP</> },
           ]}
         />
       </div>
 
-      {tab !== 'calc' && (
+      {tab === 'lp' && <LpAnalyzer key={JSON.stringify(lpPrefill)} prefill={lpPrefill} />}
+
+      {tab !== 'calc' && tab !== 'lp' && (
         <>
           <FilterBar markets={markets.filter((m) => !m.expired)} f={st.filters} setF={(filters) => patch({ filters })} minLiquidity={s.minLiquidity} setMinLiquidity={(minLiquidity) => setS({ minLiquidity })} shown={filtered.filter((m) => !m.expired).length} total={active} />
           <Collapsible title="فرض‌های محاسبه" icon={<SlidersHorizontal size={18} aria-hidden />}>
@@ -261,7 +268,7 @@ export default function Opportunities() {
           {tab === 'calc' && <CalculatorPanel screen={st.screen} c={st.calc} set={setCalc} markets={markets} onPick={(m) => pick(m)} loadingMarket={loadingMarket} />}
         </>
       )}
-      {!loading && tab !== 'calc' && failed.length === 0 && markets.length === 0 && <p className="text-sm text-secondary">هیچ بازاری دریافت نشد.</p>}
+      {!loading && tab !== 'calc' && tab !== 'lp' && failed.length === 0 && markets.length === 0 && <p className="text-sm text-secondary">هیچ بازاری دریافت نشد.</p>}
       <p className="text-xs text-muted">
         <Num>{formatNumber(active, 0)}</Num> بازار فعال. اعداد تخمینی‌اند و توصیه‌ی مالی نیستند؛ نرخ بالا به‌تنهایی نشانه‌ی فرصت خوب نیست.
       </p>

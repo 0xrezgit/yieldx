@@ -15,6 +15,7 @@ import type { PositionKind } from '../../types/position';
 import type { ProtocolId } from '../../types/protocol';
 import type { PositionStatus } from '../../lib/portfolio/valuation';
 import { Num } from '../ui/num';
+import { EarnSection } from './EarnSection';
 import { AlertList, btn, Disclosure, MarketIdentity, NoWalletNote, Panel, Pnl, QualityBadge, ShareBars, SnapshotChart, StatusBadge, SxPage, Usd } from './parts';
 
 interface Filters {
@@ -335,7 +336,7 @@ export function MaturedSection({ views }: { views: PositionView[] }) {
 }
 
 export default function Portfolio() {
-  const { positions, views, totals, airdropTotals, history, refresh, refreshing, updatedAt, exportFile, importFile } = usePortfolioView();
+  const { positions, views, totals, airdropTotals, history, refresh, refreshing, updatedAt, exportFile, importFile, earn, saveEarn, removeEarn } = usePortfolioView();
   const [f, setF] = useState<Filters>(ALL);
   const [message, setMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -575,6 +576,7 @@ export default function Portfolio() {
         <NoWalletNote />
         <p className="text-sm text-sx-faint">ارزش‌ها به دلار آمریکا هستند. هیچ معامله یا خروجی خودکار انجام نمی‌شود.</p>
       </footer>
+      <EarnSection earn={earn} saveEarn={saveEarn} removeEarn={removeEarn} />
     </SxPage>
   );
 }

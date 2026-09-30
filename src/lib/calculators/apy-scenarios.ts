@@ -10,13 +10,10 @@ export interface APYScenario {
   pnl: number;
   /** PnL including the expected airdrop value, USD. */
   pnlWithAirdrop: number;
-  probability: number;
 }
 
 export interface APYScenarioResult {
   scenarios: Record<ScenarioCase, APYScenario>;
-  expectedPnL: number;
-  expectedPnLWithAirdrop: number;
   /** True when bear/bull came from real history rather than the fallback spread. */
   fromHistory: boolean;
 }
@@ -24,6 +21,9 @@ export interface APYScenarioResult {
 /**
  * Bear / base / bull outcomes for a YT position. Bear and bull use the historical
  * min/max of the base APY; without history they fall back to ± a configured spread.
+ *
+ * These are hypothetical cases side by side, not a forecast: no case carries a
+ * probability and there is no probability-weighted «expected» result.
  */
 export function calculateAPYScenarios(
   baseAPY: number,
@@ -36,22 +36,17 @@ export function calculateAPYScenarios(
   const min = fromHistory ? Math.min(...historicalAPYs, baseAPY) : baseAPY * (1 - spread);
   const max = fromHistory ? Math.max(...historicalAPYs, baseAPY) : baseAPY * (1 + spread);
 
-  const make = (label: string, apy: number, probability: number): APYScenario => {
+  const make = (label: string, apy: number): APYScenario => {
     const pnl = ytPnL(position, apy);
-    return { label, apy, pnl, pnlWithAirdrop: pnl + airdropValue, probability };
+    return { label, apy, pnl, pnlWithAirdrop: pnl + airdropValue };
   };
 
-  const scenarios = {
-    bear: make('بدبینانه', min, thresholds.scenarios.bearProbability),
-    base: make('واقع‌بینانه', baseAPY, thresholds.scenarios.baseProbability),
-    bull: make('خوش‌بینانه', max, thresholds.scenarios.bullProbability),
-  };
-
-  const all = Object.values(scenarios);
   return {
-    scenarios,
-    expectedPnL: all.reduce((sum, s) => sum + s.pnl * s.probability, 0),
-    expectedPnLWithAirdrop: all.reduce((sum, s) => sum + s.pnlWithAirdrop * s.probability, 0),
+    scenarios: {
+      bear: make('بدبینانه', min),
+      base: make('واقع‌بینانه', baseAPY),
+      bull: make('خوش‌بینانه', max),
+    },
     fromHistory,
   };
 }

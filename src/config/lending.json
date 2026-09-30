@@ -1,0 +1,38 @@
+{
+  "morpho": {
+    "name": "Morpho",
+    "nameFa": "مورفو",
+    "graphql": "https://api.morpho.org/graphql",
+    "app": "https://app.morpho.org",
+    "chains": [
+      1,
+      8453,
+      42161,
+      10,
+      137,
+      130,
+      747474,
+      999
+    ],
+    "minSupplyUsd": 100000,
+    "pageSize": 100
+  },
+  "aave": {
+    "name": "Aave",
+    "nameFa": "آوه",
+    "graphql": "https://api.aave.com/graphql",
+    "app": "https://pro.aave.com"
+  },
+  "midnight": {
+    "name": "Morpho Midnight",
+    "api": "https://api.morpho.org/v0/midnight",
+    "app": "https://markets.morpho.org/fixed",
+    "chains": [
+      1,
+      8453
+    ],
+    "maxBooks": 50,
+    "depth": 100,
+    "maxTokens": 60
+  }
+}

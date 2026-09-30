@@ -23,16 +23,80 @@ export class UpstreamError extends Error {
   constructor(
     protocol: string,
     public status: number,
+    detail = `upstream API responded with ${status}`,
   ) {
-    super(`${protocol}: upstream API responded with ${status}.`);
+    super(`${protocol}: ${detail}.`);
     this.name = 'UpstreamError';
   }
 }
 
-export async function fetchJson<T>(protocol: string, url: string): Promise<T> {
-  const res = await fetch(url, { next: { revalidate: 60 }, headers: { accept: 'application/json' } } as RequestInit);
+/** A protocol API that has not answered in this long is treated as down. */
+export const FETCH_TIMEOUT_MS = 15_000;
+
+/** Checks the rough shape of a response before it is cast; a mismatch is an upstream error, not a crash later. */
+export type Shape<T> = (body: unknown) => body is T;
+
+export const isArrayOf = <T>(body: unknown): body is T[] => Array.isArray(body);
+export const isObject = <T extends object>(body: unknown): body is T =>
+  typeof body === 'object' && body !== null && !Array.isArray(body);
+
+/**
+ * GET a protocol API. Every failure mode ends as an UpstreamError so each route
+ * can report «this source is down» instead of a 500: timeout (504), network error
+ * or unreadable body (502), HTTP error (its status), unexpected shape (502).
+ */
+export async function fetchJson<T>(protocol: string, url: string, shape?: Shape<T>, timeoutMs = FETCH_TIMEOUT_MS): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      next: { revalidate: 60 },
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(timeoutMs),
+    } as RequestInit);
+  } catch (e) {
+    const timedOut = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    throw new UpstreamError(protocol, timedOut ? 504 : 502, timedOut ? `no answer within ${timeoutMs / 1000}s` : 'network error');
+  }
   if (!res.ok) throw new UpstreamError(protocol, res.status);
-  return (await res.json()) as T;
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    throw new UpstreamError(protocol, 502, 'response is not valid JSON');
+  }
+  if (shape && !shape(body)) throw new UpstreamError(protocol, 502, 'response has an unexpected shape');
+  return body as T;
+}
+
+/**
+ * POST a fixed GraphQL query. Same failure mapping as fetchJson; a GraphQL `errors`
+ * array without `data` is an upstream error too (partial data is kept).
+ * Not cached by Next (POST) — callers cache the result themselves.
+ */
+export async function postGraphql<T>(protocol: string, url: string, query: string, variables: Record<string, unknown>, shape: Shape<T>, timeoutMs = FETCH_TIMEOUT_MS): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    const timedOut = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    throw new UpstreamError(protocol, timedOut ? 504 : 502, timedOut ? `no answer within ${timeoutMs / 1000}s` : 'network error');
+  }
+  if (!res.ok) throw new UpstreamError(protocol, res.status);
+  let body: { data?: unknown; errors?: unknown[] };
+  try {
+    body = (await res.json()) as typeof body;
+  } catch {
+    throw new UpstreamError(protocol, 502, 'response is not valid JSON');
+  }
+  if (!body || body.data == null) throw new UpstreamError(protocol, 502, Array.isArray(body?.errors) ? 'GraphQL error' : 'response has no data');
+  if (!shape(body.data)) throw new UpstreamError(protocol, 502, 'response has an unexpected shape');
+  return body.data;
 }
 
 /** Shared math — adapters only need to implement data access. */

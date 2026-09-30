@@ -1,7 +1,7 @@
 import protocols from '../../config/protocols.json';
 import type { MarketData, MarketSummary } from '../../types/market';
 import { DAY_MS, daysUntil } from '../utils/math';
-import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, UpstreamError, fetchJson, plausibleAPY } from './base';
+import { BaseAdapter, LiveDataUnavailableError, MarketNotFoundError, UpstreamError, fetchJson, isArrayOf, plausibleAPY } from './base';
 
 /** Subset of https://api.spectra.finance/v1/{network}/pools that YieldX uses. */
 interface SpectraToken {
@@ -70,7 +70,7 @@ export class SpectraAdapter extends BaseAdapter {
   private base = protocols.spectra.apiBase;
 
   private network(network: string): Promise<SpectraMarket[]> {
-    return fetchJson<SpectraMarket[]>(this.name, `${this.base}/v1/${network}/pools`);
+    return fetchJson<SpectraMarket[]>(this.name, `${this.base}/v1/${network}/pools`, isArrayOf<SpectraMarket>);
   }
 
   async listMarkets(): Promise<MarketSummary[]> {

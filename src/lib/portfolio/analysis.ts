@@ -157,7 +157,7 @@ export function analyzePosition(p: Position, v: Valuation, q: MarketQuote | null
       summary.push('سررسید گذشته و YT دیگر ارزش فروش ندارد؛ فقط سود دریافت‌نشده باقی است که باید برداشت شود.');
       lean = 'exit';
     } else if (Number.isFinite(r.base)) {
-      const src = r.fromHistory ? 'سابقه‌ی روزانه‌ی بازار' : 'نرخ فعلی ±۵۰٪ (سابقه‌ی کافی نیست؛ تخمینی)';
+      const src = r.fromHistory ? 'سابقه‌ی روزانه‌ی بازار' : 'سناریوی فرضی: نرخ فعلی ±۵۰٪ (سابقه‌ی کافی نیست؛ پیش‌بینی نیست)';
       s('نگهداری تا سررسید، بازده پایین', holdAt(r.low), `بازده پایه ${formatPercent(r.low, 1)} — ${src}`);
       s('نگهداری تا سررسید، بازده میانه', holdAt(r.base), `بازده پایه ${formatPercent(r.base, 1)} — ${src}`);
       s('نگهداری تا سررسید، بازده بالا', holdAt(r.high), `بازده پایه ${formatPercent(r.high, 1)} — ${src}`);
@@ -177,7 +177,7 @@ export function analyzePosition(p: Position, v: Valuation, q: MarketQuote | null
         summary.push(`پوینت تخمینی تا امروز: ${formatNumber(v.points, 0)} — ارزش آن فقط در سناریوی جدا دیده می‌شود و وارد سود قطعی نمی‌شود.`);
       }
       assumptions.push('YT در سررسید ارزش صفر دارد؛ فقط سود دوره‌ی نگهداری برمی‌گردد.');
-      if (!r.fromHistory) assumptions.push('بدون سابقه‌ی کافی، نرخ فعلی به کل دوره تعمیم داده نشده و بازه‌ی ±۵۰٪ فقط تخمینی است.');
+      if (!r.fromHistory) assumptions.push('بدون سابقه‌ی کافی، نرخ فعلی به کل دوره تعمیم داده نشده و بازه‌ی ±۵۰٪ یک سناریوی فرضی است، نه پیش‌بینی و نه احتمال.');
     }
   }
 

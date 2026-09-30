@@ -4,6 +4,8 @@ import protocols from '../../config/protocols.json';
 import type { Valuation } from './valuation';
 import type { AirdropProgram } from '../../types/airdrop';
 import { normalizeProgram } from './airdrop';
+import { normalizeEarn } from './earn';
+import type { EarnPosition } from '../../types/earn';
 
 /** Portfolio totals, allocation and the snapshot/backup plumbing. */
 
@@ -159,19 +161,28 @@ export function parseBackup(text: string): PortfolioFile | null {
   } catch {
     return null;
   }
-  if (!isObj(raw) || raw.version !== 1 || !Array.isArray(raw.positions)) return null;
+  if (!isObj(raw) || (raw.version !== 1 && raw.version !== 2) || !Array.isArray(raw.positions)) return null;
   const positions = raw.positions.map(normalizePosition);
   if (positions.some((p) => p === null)) return null;
   const history = Array.isArray(raw.history) ? (raw.history.filter((s) => isObj(s) && isStr(s.at) && isNum(s.netValueUsd)) as PortfolioSnapshot[]) : [];
   const airdrops = Array.isArray(raw.airdrops) ? raw.airdrops.map(normalizeProgram) : [];
   if (airdrops.some((a) => a === null)) return null;
-  return { version: 1, exportedAt: isStr(raw.exportedAt) ? raw.exportedAt : '', positions: positions as Position[], history, airdrops: airdrops as AirdropProgram[] };
+  const earn = Array.isArray(raw.earn) ? raw.earn.map(normalizeEarn) : [];
+  if (earn.some((e) => e === null)) return null;
+  return { version: 2, exportedAt: isStr(raw.exportedAt) ? raw.exportedAt : '', positions: positions as Position[], history, airdrops: airdrops as AirdropProgram[], earn: earn as EarnPosition[] };
 }
 
 /** Merge imported airdrop records: same id → imported copy wins. */
 export function mergeAirdrops(current: AirdropProgram[], imported: AirdropProgram[] = []): AirdropProgram[] {
   const byId = new Map(current.map((a) => [a.id, a]));
   for (const a of imported) byId.set(a.id, a);
+  return [...byId.values()];
+}
+
+/** Merge imported earn positions: same id → imported copy wins. */
+export function mergeEarn(current: EarnPosition[], imported: EarnPosition[] = []): EarnPosition[] {
+  const byId = new Map(current.map((p) => [p.id, p]));
+  for (const p of imported) byId.set(p.id, p);
   return [...byId.values()];
 }
 

@@ -5,7 +5,7 @@ import { Loader2, ListChecks, RefreshCw, Sparkles, Trophy } from 'lucide-react';
 import { useMerkl } from '../../hooks/useMerkl';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
 import { applyMerklFilters, defaultMerklFilters, hasRobinhoodMeme, liveAt, type MerklFilters } from '../../lib/merkl/filters';
-import { defaultEstimateSettings, GAS_UNITS, HORIZONS, rankTop, TOP_N, type EstimateSettings, type Horizon } from '../../lib/merkl/profit';
+import { clampHorizon, defaultEstimateSettings, GAS_UNITS, HORIZONS, MAX_HORIZON, MIN_HORIZON, rankTop, TOP_N, type EstimateSettings } from '../../lib/merkl/profit';
 import { rankRewards } from '../../lib/merkl/rewards';
 import { buildContext, gate, RULES } from '../../lib/merkl/vetting';
 import { formatNumber, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
@@ -47,7 +47,7 @@ function sane<T extends object>(value: Partial<T> | undefined, fallback: T): T {
 function restore(): Stored {
   const saved = readLocal<Partial<Stored>>(STORAGE_KEYS.merkl, {});
   const settings = sane(saved.settings, initial.settings);
-  if (!HORIZONS.includes(settings.horizon)) settings.horizon = initial.settings.horizon;
+  settings.horizon = clampHorizon(settings.horizon);
   const linked = new URLSearchParams(window.location.search).get('tab');
   return {
     tab: linked === 'rewards' || linked === 'top' ? linked : saved.tab === 'rewards' ? 'rewards' : 'top',
@@ -123,13 +123,27 @@ export default function MerklOpportunities() {
         <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-3 items-end">
           <NumberField label="مبلغ سرمایه" value={st.settings.capital} onChange={(v) => setS({ capital: Number.isFinite(v) ? Math.max(0, v) : 0 })} suffix="دلار" />
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm text-secondary">افق مقایسه</span>
-            <Segmented
-              value={String(st.settings.horizon) as `${Horizon}`}
-              onChange={(v) => setS({ horizon: Number(v) as Horizon })}
+            <NumberField
               label="افق مقایسه"
-              options={HORIZONS.map((h) => ({ id: String(h) as `${Horizon}`, label: <><Num>{formatNumber(h, 0)}</Num> روز</> }))}
+              value={st.settings.horizon}
+              onChange={(v) => setS({ horizon: Number.isFinite(v) ? Math.max(0, v) : 0 })}
+              suffix="روز"
+              warning={st.settings.horizon !== clampHorizon(st.settings.horizon) ? `با ${formatNumber(clampHorizon(st.settings.horizon), 0)} روز حساب می‌شود.` : undefined}
+              note={<>هر عدد صحیح از <Num>{formatNumber(MIN_HORIZON, 0)}</Num> تا <Num>{formatNumber(MAX_HORIZON, 0)}</Num> روز</>}
             />
+            <div className="flex gap-1" role="group" aria-label="افق‌های پرکاربرد">
+              {HORIZONS.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setS({ horizon: h })}
+                  aria-pressed={st.settings.horizon === h}
+                  className={`tap rounded-md px-3 min-h-9 text-sm border ${st.settings.horizon === h ? 'border-accent text-primary bg-elevated' : 'border-default text-secondary hover:text-primary'}`}
+                >
+                  <Num>{formatNumber(h, 0)}</Num> روز
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -159,9 +173,9 @@ export default function MerklOpportunities() {
       ) : !(st.settings.capital > 0) ? (
         <p className="text-sm text-secondary">مبلغ سرمایه را وارد کنید.</p>
       ) : st.tab === 'top' ? (
-        <TopMarkets ranking={ranking} watch={watch} toggleWatch={toggleWatch} horizon={st.settings.horizon} dataAt={dataAt} />
+        <TopMarkets ranking={ranking} watch={watch} toggleWatch={toggleWatch} horizon={clampHorizon(st.settings.horizon)} dataAt={dataAt} />
       ) : (
-        <RewardsBoard board={board} horizon={st.settings.horizon} watch={watch} toggleWatch={toggleWatch} />
+        <RewardsBoard board={board} horizon={clampHorizon(st.settings.horizon)} watch={watch} toggleWatch={toggleWatch} />
       )}
 
       <Collapsible title="فرض‌ها، هزینه‌ها و معیارهای گزینش" icon={<ListChecks size={18} aria-hidden />}>

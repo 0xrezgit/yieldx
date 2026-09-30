@@ -165,14 +165,11 @@ describe('APY scenarios', () => {
     expect(r.scenarios.bull.apy).toBeCloseTo(13);
   });
 
-  it('computes a probability-weighted expected value', () => {
+  it('gives no case a probability and builds no expected value', () => {
     const r = calculateAPYScenarios(5, [3, 8], pos);
-    const s = r.scenarios;
-    const probs = s.bear.probability + s.base.probability + s.bull.probability;
-    expect(probs).toBeCloseTo(1);
-    expect(r.expectedPnL).toBeCloseTo(
-      s.bear.pnl * s.bear.probability + s.base.pnl * s.base.probability + s.bull.pnl * s.bull.probability,
-    );
+    for (const c of Object.values(r.scenarios)) expect(c).not.toHaveProperty('probability');
+    expect(r).not.toHaveProperty('expectedPnL');
+    expect(r).not.toHaveProperty('expectedPnLWithAirdrop');
   });
 });
 
