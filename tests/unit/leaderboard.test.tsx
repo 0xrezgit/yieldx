@@ -60,6 +60,19 @@ describe('leaderYt', () => {
     expect(r.tooBig).toBe(true);
   });
 
+  it('reads Spectra base yield as simple APR, Pendle as APY — the market analysis rule', () => {
+    const base = { capital: 1000, underlyingPrice: 1, daysToMaturity: 90, entryAPY: 8, baseAPY: 12, holdDays: 90, exitAPY: 8, feePercent: 0, pointsPerDay: 0, ytMultiplier: 1, pointsBasis: 'usd' as const, valuePerPoint: 0 };
+    const apr = simulateYt({ ...base, baseRateKind: 'apr' });
+    const apy = simulateYt(base);
+    expect(apr.yieldEarned).toBeCloseTo(apr.notional * 0.12 * (90 / 365), 9);
+    expect(apy.yieldEarned).toBeCloseTo(apy.notional * (Math.pow(1.12, 90 / 365) - 1), 9);
+    const m = { impliedAPY: 8, baseAPY: 12, daysToMaturity: 90 };
+    const [sp] = leaderYt([listing({ ...m, protocol: 'spectra' })], s, { capital: 1000 }, false);
+    const [ex] = leaderYt([listing({ ...m, protocol: 'exponent' })], s, { capital: 1000 }, false);
+    // Same numbers, no yield fee on either: only the base-rate reading differs.
+    expect(sp.pnl).toBeGreaterThan(ex.pnl);
+  });
+
   it('skips markets without points when asked', () => {
     expect(leaderYt([listing({ hasPoints: false })], s, input, true)).toHaveLength(0);
     expect(leaderYt([listing({ hasPoints: false })], s, input, false)).toHaveLength(1);
@@ -109,6 +122,14 @@ describe('leaderLoop', () => {
     expect(r.verdict).toBe('worth');
     const [loss] = leaderLoop([listing({ impliedAPY: 3 })], s, { ...defaultLoopSettings, borrowAPY: 12 }, { capital: 10_000 });
     expect(loss.verdict).toBe('loss');
+  });
+
+  it('leaves out loops liquidatable at entry and reports health on the rest', () => {
+    const m = listing({ impliedAPY: 12, daysToMaturity: 90 });
+    // LLTV 86%: 8× puts LTV at 7 ÷ (8 × 0.995) ≈ 88% — liquidated on entry.
+    expect(leaderLoop([m], s, { ...defaultLoopSettings, leverage: 8, lltv: 86 }, { capital: 10_000 })).toHaveLength(0);
+    const [r] = leaderLoop([m], s, { ...defaultLoopSettings, leverage: 3, lltv: 86 }, { capital: 10_000 });
+    expect(r.health).toBeCloseTo((0.86 * 3 * (1 - s.feePercent / 100)) / 2, 9);
   });
 
   it('keeps loops to markets listed for looping or deep stablecoin markets', () => {

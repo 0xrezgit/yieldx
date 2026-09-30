@@ -4,7 +4,7 @@ import type { ProtocolId } from '../../types/protocol';
 import { protocolIdentity } from '../registry/identity';
 import { networkByName } from '../registry/networks';
 import { listingLink } from '../market/links';
-import { YT_YIELD_FEE_PCT } from '../calculators/trade';
+import { BASE_RATE_KIND, YT_YIELD_FEE_PCT } from '../calculators/trade';
 
 /** PT/YT list data older than this is stale. */
 const PT_MAX_AGE_MS = 6 * 3_600_000;
@@ -73,7 +73,7 @@ export function ytOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     key: pt.key.replace(/:pt$/, ':yt'),
     family: 'yt',
     market: { ...pt.market, name: `YT ${m.name}` },
-    rate: { value: m.baseAPY, kind: protocol === 'spectra' ? 'apr' : 'apy', feesIncluded: true, rewardsIncluded: false, at: pt.rate.at },
+    rate: { value: m.baseAPY, kind: BASE_RATE_KIND[protocol] ?? 'apy', feesIncluded: true, rewardsIncluded: false, at: pt.rate.at },
     exit: { type: 'maturity', note: 'در سررسید YT صفر می‌شود و بازده جمع‌شده دریافت می‌شود؛ فروش زودتر در استخر ممکن است.' },
     ptToken: null,
     url: listingLink(protocol, m, 'yt').url,

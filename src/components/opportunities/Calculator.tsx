@@ -5,7 +5,7 @@ import { CheckCircle2, ChevronDown, Info, TriangleAlert, XCircle } from 'lucide-
 import type { PointsBasis } from '../../types/market';
 import type { ProtocolId } from '../../types/protocol';
 import thresholds from '../../config/thresholds.json';
-import { maxLoopLeverage, simulateLoop, simulatePt, simulateYt, ytEntryLimits, ytPriceFromAPY, YT_YIELD_FEE_PCT } from '../../lib/calculators/trade';
+import { maxLoopLeverage, simulateLoop, simulatePt, simulateYt, ytEntryLimits, ytPriceFromAPY, BASE_RATE_KIND, YT_YIELD_FEE_PCT } from '../../lib/calculators/trade';
 import { ptPriceFromAPY } from '../../lib/calculators/implied-apy';
 import { formatCompact, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
 import { defaultScreenSettings, rankingExclusions, type ScreenSettings } from '../../lib/risk/opportunities';
@@ -359,6 +359,7 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
     pointsBasis: c.pointsBasis,
     valuePerPoint: c.valuePerMillion / 1e6,
     yieldFeePercent: c.protocol ? (YT_YIELD_FEE_PCT[c.protocol] ?? 0) : 0,
+    baseRateKind: c.protocol ? BASE_RATE_KIND[c.protocol] : undefined,
   };
   if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0 && c.underlyingPrice > 0)) return <ResultVerdict off={unreliable} kind="info">سرمایه، روز تا سررسید و نرخ ورود باید بیشتر از صفر باشند.</ResultVerdict>;
 

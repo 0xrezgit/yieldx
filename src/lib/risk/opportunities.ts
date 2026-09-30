@@ -2,7 +2,7 @@ import thresholds from '../../config/thresholds.json';
 import type { MarketListing } from '../../types/market';
 import type { ProtocolId } from '../../types/protocol';
 import { ptPriceFromAPY } from '../calculators/implied-apy';
-import { simulateLoop, simulateYt, ytEntryLimits, ytPriceFromAPY, YT_YIELD_FEE_PCT } from '../calculators/trade';
+import { BASE_RATE_KIND, simulateLoop, simulateYt, ytEntryLimits, ytPriceFromAPY, YT_YIELD_FEE_PCT } from '../calculators/trade';
 import { formatNumber, formatUSDCompact } from '../utils/formatting';
 
 /**
@@ -112,6 +112,7 @@ export function screenYt(markets: OpportunityListing[], s: ScreenSettings, point
       pointsBasis: 'usd' as const,
       valuePerPoint: 0,
       yieldFeePercent: YT_YIELD_FEE_PCT[m.protocol] ?? 0,
+      baseRateKind: BASE_RATE_KIND[m.protocol],
     };
     const trade = simulateYt({ ...base, entryAPY: m.impliedAPY, exitAPY: m.impliedAPY });
     const limits = ytEntryLimits(base, s.lossBudget);

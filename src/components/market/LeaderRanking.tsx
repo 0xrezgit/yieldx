@@ -6,6 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, T
 import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import { defaultLoopSettings, defaultScreenSettings, type LoopSettings, type OpportunityListing } from '../../lib/risk/opportunities';
 import { maxLoopLeverage } from '../../lib/calculators/trade';
+import thresholds from '../../config/thresholds.json';
 import { isStable } from '../../lib/risk/opportunities';
 import { listingLink, marketAddress } from '../../lib/market/links';
 import protocols from '../../config/protocols.json';
@@ -25,6 +26,9 @@ const VERDICT: Record<Verdict, { label: string; tone: Tone }> = {
   cheap: { label: 'ضرر کم', tone: 'warning' },
   costly: { label: 'پرهزینه', tone: 'danger' },
 };
+
+/** Below this health a loop is shown but never suggested. */
+const MIN_HEALTH = thresholds.opportunities.loopMinHealth;
 
 const money = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
@@ -81,6 +85,12 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
             </Pill>
           )}
           {row.tooBig && <Pill tone="danger">بزرگ نسبت به نقدینگی</Pill>}
+          {strategy === 'loop' && row.health != null && (
+            <Pill tone={row.health < MIN_HEALTH ? 'warning' : 'muted'}>
+              سلامت <Num>{formatNumber(row.health, 2)}</Num>
+              {row.health < MIN_HEALTH && ' · نزدیک لیکوییدشدن'}
+            </Pill>
+          )}
           {strategy === 'yt' && row.perBasePoint != null && Number.isFinite(row.perBasePoint) && (
             <Pill tone="info">
               هر ۱٪ بازده پایه ≈ <Num>{formatUSD(Math.abs(row.perBasePoint), 0)}</Num>
@@ -146,7 +156,7 @@ function Bucket({ title, icon, cls, rows, strategy }: { title: string; icon: Rea
 
 function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStrategy }) {
   // A temporary base-yield boost would make the suggestion rest on a number that will not last.
-  const good = rows.filter((r) => (strategy === 'yt' ? r.verdict === 'free' && !temporaryBase(r.m) : r.verdict === 'worth') && !r.tooBig);
+  const good = rows.filter((r) => (strategy === 'yt' ? r.verdict === 'free' && !temporaryBase(r.m) : r.verdict === 'worth' && (r.health == null || r.health >= MIN_HEALTH)) && !r.tooBig);
   const total = [...good].sort((a, b) => b.pnl - a.pnl)[0];
   const daily = [...good].sort((a, b) => b.perDay - a.perDay)[0];
   const line = (label: string, r: LeaderRow | undefined) =>
@@ -172,7 +182,7 @@ function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStr
           {daily && daily !== total && line('بیشترین سود در هر روز', daily)}
         </ul>
       ) : (
-        <p className="text-secondary">{strategy === 'yt' ? 'با این فرض‌ها هیچ YTی بی‌ضرر نیست.' : 'با این نرخ وام و اهرم هیچ لوپی از حداقل بازده بالاتر نیست.'}</p>
+        <p className="text-secondary">{strategy === 'yt' ? 'با این فرض‌ها هیچ YTی بی‌ضرر نیست.' : `با این نرخ وام و اهرم هیچ لوپی با سلامت دست‌کم ${formatNumber(MIN_HEALTH, 2)} از حداقل بازده بالاتر نیست.`}</p>
       )}
       <p className="text-xs text-muted">بازارهای با بازده پایه‌ی احتمالاً موقت پیشنهاد نمی‌شوند. فقط بر پایه‌ی همین فرض‌ها؛ نقدینگی، ریسک لیکوییدشدن و بازار وام واقعی را پیش از ورود بررسی کنید.</p>
     </section>
@@ -201,7 +211,8 @@ export function LeaderRanking({ markets, capital, strategy }: { markets: Opportu
   const b = useMemo(() => buckets(rows, by), [rows, by]);
   const gains = rows.filter((x) => x.pnl >= 0).length;
   const count = (p: string) => rows.filter((r) => r.m.protocol === p).length;
-  const safe = maxLoopLeverage(loop.lltv, 1);
+  // Leverage at which the loop is liquidatable at entry, after the entry fee.
+  const safe = maxLoopLeverage(loop.lltv, 1, s.feePercent);
   const num = (v: number, d: number) => (Number.isFinite(v) ? v : d);
 
   if (!(capital > 0)) return <Empty>سرمایه‌ی اولیه را وارد کنید.</Empty>;
@@ -220,7 +231,7 @@ export function LeaderRanking({ markets, capital, strategy }: { markets: Opportu
         </div>
         {strategy === 'loop' && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <NumberField label="اهرم" value={loop.leverage} onChange={(v) => setLoop({ ...loop, leverage: num(v, 1) })} suffix="×" warning={loop.leverage >= safe ? 'در این LLTV لیکویید می‌شود.' : undefined} />
+            <NumberField label="اهرم" value={loop.leverage} onChange={(v) => setLoop({ ...loop, leverage: num(v, 1) })} suffix="×" warning={loop.leverage >= safe ? 'در این LLTV از همان ورود لیکویید می‌شود؛ هیچ لوپی نمایش داده نمی‌شود.' : undefined} />
             <NumberField label="بهره‌ی وام" value={loop.borrowAPY} onChange={(v) => setLoop({ ...loop, borrowAPY: num(v, 0) })} suffix="%" />
             <NumberField label="LLTV" value={loop.lltv} onChange={(v) => setLoop({ ...loop, lltv: num(v, 0) })} suffix="%" />
             <NumberField label="حداقل بازده سالانه" value={hurdle} onChange={setHurdle} suffix="%" />

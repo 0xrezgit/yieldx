@@ -1,5 +1,5 @@
 import thresholds from '../../config/thresholds.json';
-import { simulateLoop, simulateYt, YT_YIELD_FEE_PCT } from '../calculators/trade';
+import { BASE_RATE_KIND, simulateLoop, simulateYt, YT_YIELD_FEE_PCT } from '../calculators/trade';
 import type { LoopSettings, OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
 
@@ -8,6 +8,7 @@ import { isLoopable, isStable } from './opportunities';
  * «رتبه‌بندی دلاری Loop PT»): what a given capital earns or loses in each market.
  *
  * - A PT loop is held to maturity at the leverage, borrow rate and LLTV the user enters.
+ *   A loop already liquidatable at entry (health below 1) cannot be opened and is left out.
  * - YT is sold on its best day — the day with the highest cash result at today's
  *   implied APY — which can be well before maturity. The longest loss-free hold
  *   (points for free) is reported next to it.
@@ -39,6 +40,8 @@ export interface LeaderRow {
   pointsExposure: number | null;
   /** YT only: USD change of the result per 1 percentage point of base yield (the one input that decides it). */
   perBasePoint?: number | null;
+  /** Loop only: health factor at entry (LLTV × collateral ÷ debt); null without debt. */
+  health?: number | null;
 }
 
 export interface LeaderInput {
@@ -52,8 +55,8 @@ const annualize = (pnl: number, capital: number, days: number) => {
   return days > 0 && g > 0 ? (Math.pow(g, 365 / days) - 1) * 100 : pnl < 0 ? -100 : 0;
 };
 
-const tooBig = (m: OpportunityListing, capital: number) =>
-  m.liquidity !== null && m.liquidity > 0 && capital / m.liquidity > thresholds.liquidity.positionShareWarning;
+const tooBig = (m: OpportunityListing, size: number, share = thresholds.liquidity.positionShareWarning) =>
+  m.liquidity !== null && m.liquidity > 0 && size / m.liquidity > share;
 
 const eligible = (m: OpportunityListing, s: ScreenSettings) =>
   !m.expired && m.daysToMaturity >= s.minDays && m.impliedAPY > 0 && (m.liquidity === null || m.liquidity >= s.minLiquidity);
@@ -62,26 +65,29 @@ const fixedVerdict = (annualized: number, hurdle: number): Verdict => (annualize
 
 /** PT loops: markets Pendle lists for looping, or deep stablecoin markets; held to maturity. */
 export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, l: LoopSettings, i: LeaderInput): LeaderRow[] {
-  return markets
-    .filter((m) => eligible(m, s) && m.daysToMaturity >= thresholds.opportunities.loopMinDays && (isLoopable(m) || (isStable(m) && (m.liquidity ?? 0) >= thresholds.opportunities.loopCandidateLiquidityUsd)))
-    .map((m) => {
-      const D = m.daysToMaturity;
-      const r = simulateLoop({ capital: i.capital, daysToMaturity: D, entryAPY: m.impliedAPY, leverage: l.leverage, borrowAPY: l.borrowAPY, lltv: l.lltv, feePercent: s.feePercent });
-      const annualized = annualize(r.profit, i.capital, D);
-      return {
-        m,
-        pnl: r.profit,
-        pnlPercent: (r.profit / i.capital) * 100,
-        days: D,
-        annualized,
-        perDay: r.profit / D,
-        verdict: fixedVerdict(annualized, i.hurdle ?? 8),
-        // The loop buys `leverage` × capital of PT.
-        tooBig: tooBig(m, i.capital * Math.max(1, l.leverage)),
-        freeUntil: null,
-        pointsExposure: null,
-      };
+  const out: LeaderRow[] = [];
+  for (const m of markets) {
+    if (!(eligible(m, s) && m.daysToMaturity >= thresholds.opportunities.loopMinDays && (isLoopable(m) || (isStable(m) && (m.liquidity ?? 0) >= thresholds.opportunities.loopCandidateLiquidityUsd)))) continue;
+    const D = m.daysToMaturity;
+    const r = simulateLoop({ capital: i.capital, daysToMaturity: D, entryAPY: m.impliedAPY, leverage: l.leverage, borrowAPY: l.borrowAPY, lltv: l.lltv, feePercent: s.feePercent });
+    if (r.healthFactor < 1) continue;
+    const annualized = annualize(r.profit, i.capital, D);
+    out.push({
+      m,
+      pnl: r.profit,
+      pnlPercent: (r.profit / i.capital) * 100,
+      days: D,
+      annualized,
+      perDay: r.profit / D,
+      verdict: fixedVerdict(annualized, i.hurdle ?? 8),
+      // The loop buys `leverage` × capital of PT.
+      tooBig: tooBig(m, i.capital * Math.max(1, l.leverage)),
+      freeUntil: null,
+      pointsExposure: null,
+      health: Number.isFinite(r.healthFactor) ? r.healthFactor : null,
     });
+  }
+  return out;
 }
 
 export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: LeaderInput, pointsOnly: boolean): LeaderRow[] {
@@ -106,6 +112,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
         pointsBasis: 'usd',
         valuePerPoint: 0,
         yieldFeePercent: YT_YIELD_FEE_PCT[m.protocol] ?? 0,
+        baseRateKind: BASE_RATE_KIND[m.protocol],
       });
 
     // Best exit day at today's implied APY; ties go to the longer hold (more points).
@@ -130,7 +137,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       perDay: best.cash / bestDay,
       verdict: best.cash >= 0 ? 'free' : loss <= s.lossBudget ? 'cheap' : 'costly',
       // YT buys `notional` of yield exposure against the pool, not just the capital.
-      tooBig: tooBig(m, best.notional),
+      tooBig: tooBig(m, best.notional, thresholds.liquidity.ytShareWarning),
       freeUntil,
       pointsExposure: best.notional * multiplier,
       perBasePoint: at(bestDay, 1).cash - best.cash,
