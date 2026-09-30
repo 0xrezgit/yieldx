@@ -1,11 +1,13 @@
 import thresholds from '../../config/thresholds.json';
-import { simulateYt } from '../calculators/trade';
-import type { OpportunityListing, ScreenSettings } from './opportunities';
+import { simulateLoop, simulateYt } from '../calculators/trade';
+import type { LoopSettings, OpportunityListing, ScreenSettings } from './opportunities';
+import { isLoopable, isStable } from './opportunities';
 
 /**
- * YT dollar leaderboard («رتبه‌بندی دلاری YT»), kept beside the market analysis:
- * what a given capital earns or loses buying each market's YT.
+ * Dollar leaderboards kept beside the market analysis («رتبه‌بندی دلاری YT» and
+ * «رتبه‌بندی دلاری Loop PT»): what a given capital earns or loses in each market.
  *
+ * - A PT loop is held to maturity at the leverage, borrow rate and LLTV the user enters.
  * - YT is sold on its best day — the day with the highest cash result at today's
  *   implied APY — which can be well before maturity. The longest loss-free hold
  *   (points for free) is reported next to it.
@@ -13,7 +15,9 @@ import type { OpportunityListing, ScreenSettings } from './opportunities';
  * Every row carries the holding period, so a small profit over a long time can be
  * told apart from a good one: `annualized` and `perDay` normalise by time.
  */
-export type Verdict = 'free' | 'cheap' | 'costly';
+export type LeaderStrategy = 'yt' | 'loop';
+
+export type Verdict = 'worth' | 'thin' | 'loss' | 'free' | 'cheap' | 'costly';
 
 export interface LeaderRow {
   m: OpportunityListing;
@@ -37,6 +41,8 @@ export interface LeaderRow {
 
 export interface LeaderInput {
   capital: number;
+  /** Minimum annualised return that makes a loop worth the lock-up, %. */
+  hurdle?: number;
 }
 
 const annualize = (pnl: number, capital: number, days: number) => {
@@ -49,6 +55,32 @@ const tooBig = (m: OpportunityListing, capital: number) =>
 
 const eligible = (m: OpportunityListing, s: ScreenSettings) =>
   !m.expired && m.daysToMaturity >= s.minDays && m.impliedAPY > 0 && (m.liquidity === null || m.liquidity >= s.minLiquidity);
+
+const fixedVerdict = (annualized: number, hurdle: number): Verdict => (annualized <= 0 ? 'loss' : annualized >= hurdle ? 'worth' : 'thin');
+
+/** PT loops: markets Pendle lists for looping, or deep stablecoin markets; held to maturity. */
+export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, l: LoopSettings, i: LeaderInput): LeaderRow[] {
+  return markets
+    .filter((m) => eligible(m, s) && m.daysToMaturity >= thresholds.opportunities.loopMinDays && (isLoopable(m) || (isStable(m) && (m.liquidity ?? 0) >= thresholds.opportunities.loopCandidateLiquidityUsd)))
+    .map((m) => {
+      const D = m.daysToMaturity;
+      const r = simulateLoop({ capital: i.capital, daysToMaturity: D, entryAPY: m.impliedAPY, leverage: l.leverage, borrowAPY: l.borrowAPY, lltv: l.lltv, feePercent: s.feePercent });
+      const annualized = annualize(r.profit, i.capital, D);
+      return {
+        m,
+        pnl: r.profit,
+        pnlPercent: (r.profit / i.capital) * 100,
+        days: D,
+        annualized,
+        perDay: r.profit / D,
+        verdict: fixedVerdict(annualized, i.hurdle ?? 8),
+        // The loop buys `leverage` × capital of PT.
+        tooBig: tooBig(m, i.capital * Math.max(1, l.leverage)),
+        freeUntil: null,
+        pointsExposure: null,
+      };
+    });
+}
 
 export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: LeaderInput, pointsOnly: boolean): LeaderRow[] {
   const out: LeaderRow[] = [];

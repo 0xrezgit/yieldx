@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buckets, leaderYt, type LeaderRow } from '../../src/lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderYt, type LeaderRow } from '../../src/lib/risk/leaderboard';
+import { simulateLoop } from '../../src/lib/calculators/trade';
+import { defaultLoopSettings } from '../../src/lib/risk/opportunities';
 import { defaultScreenSettings, type OpportunityListing } from '../../src/lib/risk/opportunities';
 import { simulateYt } from '../../src/lib/calculators/trade';
 
@@ -89,18 +91,35 @@ describe('bucket size', () => {
   });
 });
 
+describe('leaderLoop', () => {
+  it('matches the loop simulator at maturity and judges against the minimum return', () => {
+    const m = listing({ impliedAPY: 12, daysToMaturity: 90 });
+    const [r] = leaderLoop([m], s, defaultLoopSettings, { capital: 10_000, hurdle: 8 });
+    const sim = simulateLoop({ capital: 10_000, daysToMaturity: 90, entryAPY: 12, leverage: defaultLoopSettings.leverage, borrowAPY: defaultLoopSettings.borrowAPY, lltv: defaultLoopSettings.lltv, feePercent: s.feePercent });
+    expect(r.pnl).toBeCloseTo(sim.profit, 9);
+    expect(r.days).toBe(90);
+    expect(r.verdict).toBe('worth');
+    const [loss] = leaderLoop([listing({ impliedAPY: 3 })], s, { ...defaultLoopSettings, borrowAPY: 12 }, { capital: 10_000 });
+    expect(loss.verdict).toBe('loss');
+  });
+
+  it('keeps loops to markets listed for looping or deep stablecoin markets', () => {
+    expect(leaderLoop([listing({ categories: [], name: 'ETHx' })], s, defaultLoopSettings, { capital: 1000 })).toHaveLength(0);
+  });
+});
+
 describe('YT dollar ranking view', () => {
   it('lists all three protocols with symbol and protocol, four buckets, in Persian', async () => {
     const { renderToString } = await import('react-dom/server');
-    const { YtRanking } = await import('../../src/components/market/YtRanking');
+    const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
     const { assertPersianMoney } = await import('../helpers/text');
     const markets = [
       listing({ id: 'p1', name: 'sUSDe', impliedAPY: 5, baseAPY: 9 }),
       listing({ id: 's1', protocol: 'spectra', name: 'stUSR', impliedAPY: 12, baseAPY: 6, hasPoints: false }),
       listing({ id: 'e1', protocol: 'exponent', name: 'ONyc', chain: 'Solana', impliedAPY: 14, baseAPY: 9 }),
     ];
-    const html = renderToString(<YtRanking markets={markets} capital={1000} />);
-    for (const t of ['بیشترین سود', 'کمترین سود', 'کمترین ضرر', 'بیشترین ضرر', 'sUSDe', 'stUSR', 'ONyc', 'Pendle', 'Spectra', 'Exponent']) expect(html).toContain(t);
+    const html = renderToString(<LeaderRanking markets={markets} capital={1000} strategy="yt" />) + renderToString(<LeaderRanking markets={markets} capital={1000} strategy="loop" />);
+    for (const t of ['پیشنهاد', 'بهره‌ی وام', 'بیشترین سود', 'کمترین سود', 'کمترین ضرر', 'بیشترین ضرر', 'sUSDe', 'stUSR', 'ONyc', 'Pendle', 'Spectra', 'Exponent']) expect(html).toContain(t);
     expect(html).not.toContain('NaN');
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, '').replace(/<bdi dir="ltr"[^>]*>[^<]*<\/bdi>/g, '').replace(/alt="[^"]*"/g, ''));
   });

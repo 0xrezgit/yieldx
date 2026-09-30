@@ -18,9 +18,9 @@ import { Collapsible } from '../ui/card';
 import { Empty, Pill, Segmented } from '../opportunities/parts';
 import { OpportunityDetails, usd } from './OpportunityDetails';
 import { Coverage } from './Coverage';
-import { YtRanking } from './YtRanking';
+import { LeaderRanking } from './LeaderRanking';
 
-type View = 'all' | 'yt';
+type View = 'all' | 'yt' | 'loop';
 
 interface Stored {
   capital: number | null;
@@ -33,7 +33,7 @@ interface Stored {
 function restore(): Stored {
   const s = readLocal<Partial<Stored>>(STORAGE_KEYS.market, {});
   const capital = typeof s.capital === 'number' && Number.isFinite(s.capital) && s.capital > 0 ? s.capital : null;
-  return { capital, horizon: isHorizon(s.horizon) ? s.horizon : DEFAULT_HORIZON, view: s.view === 'yt' ? 'yt' : 'all' };
+  return { capital, horizon: isHorizon(s.horizon) ? s.horizon : DEFAULT_HORIZON, view: s.view === 'yt' || s.view === 'loop' ? s.view : 'all' };
 }
 
 function Identity({ row }: { row: Evaluated }) {
@@ -149,6 +149,7 @@ export default function MarketAnalysis() {
         options={[
           { id: 'all', label: 'رتبه‌بندی یکپارچه' },
           { id: 'yt', label: 'رتبه‌بندی دلاری YT' },
+          { id: 'loop', label: 'رتبه‌بندی دلاری Loop PT' },
         ]}
       />
 
@@ -164,7 +165,7 @@ export default function MarketAnalysis() {
         )}
       </section>
 
-      {st.view === 'yt' && (m.loading && !m.markets.length ? <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" /> : <YtRanking markets={m.markets} capital={capital} />)}
+      {st.view !== 'all' && (m.loading && !m.markets.length ? <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" /> : <LeaderRanking key={st.view} markets={m.markets} capital={capital} strategy={st.view} />)}
       {st.view === 'all' && (
         <>
 
