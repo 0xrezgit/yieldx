@@ -27,12 +27,8 @@ import type { CostItem } from '../../types/opportunity';
 
 const DAY = 86_400;
 
-/** Any whole number of days from 1 to 365; the presets are shortcuts only. */
+/** Days of the horizon (the market analysis uses 30, 60, 90 and 125). */
 export type Horizon = number;
-export const HORIZONS = [7, 30, 90] as const;
-export const MIN_HORIZON = 1;
-export const MAX_HORIZON = 365;
-export const clampHorizon = (d: number) => (Number.isFinite(d) ? Math.min(MAX_HORIZON, Math.max(MIN_HORIZON, Math.round(d))) : 30);
 
 export interface EstimateSettings {
   capital: number;
@@ -42,8 +38,6 @@ export interface EstimateSettings {
   /** USD per transaction on every other network (assumption). */
   txOther: number;
 }
-
-export const defaultEstimateSettings: EstimateSettings = { capital: 1000, horizon: 30, txEthereum: 1, txOther: 0.05 };
 
 export const CONSERVATIVE = { tvlUp: 0.25, priceDown: 0.2 } as const;
 
@@ -309,7 +303,7 @@ export function estimate(o: MerklOpportunity, s: EstimateSettings, ctx: VetConte
   const actionWhy = ACTION_REASON[o.action];
   if (!CAPITAL_ACTIONS.has(o.action) && actionWhy) return no(o, actionWhy[0], actionWhy[1]);
   if (needsLoop(o)) return no(o, 'loop', 'نیاز به لوپ/اهرم: به نرخ وام و ریسک نقدشدن بستگی دارد؛ عدد دلاری ساخته نشد');
-  if (o.tokens.some(isYieldToken)) return no(o, 'yt', 'نگه‌داری YT: ارزش خود YT تا سررسید کم می‌شود؛ برای برآورد از بخش YT یلدایکس استفاده کنید');
+  if (o.tokens.some(isYieldToken)) return no(o, 'yt', 'نگه‌داری YT: ارزش خود YT تا سررسید کم می‌شود؛ ابزار YT را ببینید');
 
   const kind = o.action as keyof typeof STEPS;
   const live = o.campaigns.filter((c) => c.start <= now && c.end > now);
@@ -334,7 +328,7 @@ export function estimate(o: MerklOpportunity, s: EstimateSettings, ctx: VetConte
   if (!priced.length) {
     const failed = tokenCampaigns.find((x) => x.status !== 'none' && !x.price.ok);
     if (failed?.price.reason) return no(o, failed.price.reason.code, failed.price.reason.label);
-    if (campaigns.some((x) => x.status !== 'none' && x.c.rewardToken.type !== 'TOKEN')) return no(o, 'units-only', 'فقط پوینت یا توکن عرضه‌نشده؛ در بخش «رتبه‌بندی توکن و پوینت» ببینید');
+    if (campaigns.some((x) => x.status !== 'none' && x.c.rewardToken.type !== 'TOKEN')) return no(o, 'units-only', 'فقط پوینت یا توکن عرضه‌نشده؛ ارزش دلاری ندارد');
     return no(o, 'no-reward', 'پاداش قیمت‌دار قابل برآوردی ندارد');
   }
 
@@ -451,78 +445,3 @@ export function estimate(o: MerklOpportunity, s: EstimateSettings, ctx: VetConte
     dataAt,
   };
 }
-
-// ─── Ranking ─────────────────────────────────────────────────────────────────
-
-export interface Ranking {
-  rows: Estimate[];
-  /**
-   * Pools with an estimate, kept out of the general ranking: their fee income and
-   * rewards are counted but the change in value of the two assets (impermanent
-   * loss) is not — «تحلیل تخصصی».
-   */
-  pools: Estimate[];
-  /** Admissible but without a dollar estimate, with the reason. */
-  noEstimate: NoEstimate[];
-  /** Left out by the listing gates. */
-  excluded: NoEstimate[];
-  /** Estimable rows before the cut to `n`. */
-  total: number;
-}
-
-export const TOP_N = 30;
-
-/** The «top 30» list: gate → estimate → positive net only → sorted by net over the common horizon. */
-export function rankTop(list: MerklOpportunity[], s: EstimateSettings, ctx: VetContext, gas: GasQuote[] = [], n = TOP_N): Ranking {
-  const rows: Estimate[] = [];
-  const pools: Estimate[] = [];
-  const noEstimate: NoEstimate[] = [];
-  const excluded: NoEstimate[] = [];
-  const s1 = { ...s, horizon: clampHorizon(s.horizon) };
-  for (const o of list) {
-    const g = gate(o, ctx);
-    if (g) {
-      excluded.push({ ok: false, o, reason: g });
-      continue;
-    }
-    const e = estimate(o, s1, ctx, gas);
-    if (e.ok === false) noEstimate.push(e);
-    else if (e.net <= 0) noEstimate.push(no(o, 'net-negative', 'هزینه‌های لحاظ‌شده از پاداش این افق بیشتر است'));
-    else if (o.action === 'POOL') pools.push(e);
-    else rows.push(e);
-  }
-  const byNet = (a: Estimate, b: Estimate) => b.net - a.net || b.netLow - a.netLow;
-  rows.sort(byNet);
-  pools.sort(byNet);
-  return { rows: rows.slice(0, n), pools, noEstimate, excluded, total: rows.length };
-}
-
-/** Reasons grouped by how often they occur. */
-export function reasonCounts(items: NoEstimate[]): { code: string; label: string; count: number }[] {
-  const m = new Map<string, { code: string; label: string; count: number }>();
-  for (const e of items) {
-    const key = e.reason.code;
-    const hit = m.get(key);
-    if (hit) hit.count++;
-    else m.set(key, { code: key, label: GROUP_LABEL[key] ?? e.reason.label, count: 1 });
-  }
-  return [...m.values()].sort((a, b) => b.count - a.count);
-}
-
-const GROUP_LABEL: Record<string, string> = {
-  restricted: 'شرط دسترسی (فهرست سفید، هویت، کاربران یک اپ…)',
-  model: 'سازوکار پاداش برای سرمایه‌ی شما قابل مدل نیست (نقدینگی متمرکز، ایردراپ…)',
-  'fake-price': 'توکن با قیمت ناهمخوان با نامش',
-  lookalike: 'توکن هم‌نام با دارایی معتبر',
-  meme: 'میم‌کوین (خارج از Robinhood Chain)',
-  'meme-unverified': 'میم‌کوین Robinhood Chain بدون تأیید',
-  'meme-liquidity': 'میم‌کوین Robinhood Chain با نقدشوندگی ناکافی',
-  'meme-price': 'میم‌کوین Robinhood Chain بدون قیمت تازه',
-  'meme-price-gap': 'میم‌کوین Robinhood Chain با قیمت ناهمخوان',
-  'no-price': 'توکن پاداش بدون قیمت معتبر',
-  thin: 'نقدشوندگی توکن پاداش ناکافی',
-  'price-gap': 'قیمت Merkl و بازار DEX ناهمخوان',
-  unverified: 'توکن پاداش تأییدنشده و بدون بازار',
-  'price-stale': 'قیمت توکن پاداش قدیمی',
-  'price-deprecated': 'منبع قیمت منسوخ',
-};

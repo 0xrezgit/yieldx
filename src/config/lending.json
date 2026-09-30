@@ -15,7 +15,8 @@
       999
     ],
     "minSupplyUsd": 100000,
-    "pageSize": 100
+    "pageSize": 100,
+    "maxPages": 5
   },
   "aave": {
     "name": "Aave",
@@ -34,5 +35,21 @@
     "maxBooks": 50,
     "depth": 100,
     "maxTokens": 60
+  },
+  "kamino": {
+    "name": "Kamino",
+    "api": "https://api.kamino.finance",
+    "app": "https://kamino.com/earn/lend",
+    "maxMarkets": 25,
+    "concurrency": 4,
+    "minSupplyUsd": 100000
+  },
+  "loopscale": {
+    "name": "Loopscale",
+    "api": "https://tars.loopscale.com/v1",
+    "app": "https://app.loopscale.com/lend",
+    "pageSize": 50,
+    "maxPages": 4,
+    "minSupplyUsd": 50000
   }
 }

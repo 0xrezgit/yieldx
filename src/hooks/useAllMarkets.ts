@@ -44,12 +44,16 @@ export function useAllMarkets() {
 
   useEffect(() => {
     refresh(false);
-    const timer = setInterval(() => refresh(true), REFRESH_MS);
+    // No polling in a hidden tab; returning to it, or reconnecting, refreshes.
+    const timer = setInterval(() => document.visibilityState === 'visible' && refresh(true), REFRESH_MS);
     const onVisible = () => document.visibilityState === 'visible' && refresh(false);
+    const onOnline = () => refresh(true);
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
     };
   }, [refresh]);
 

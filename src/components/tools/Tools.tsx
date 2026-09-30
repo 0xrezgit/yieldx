@@ -1,42 +1,36 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Coins, Droplets, Gift, Loader2, RefreshCw, Repeat, SlidersHorizontal, Trophy } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Calculator, Droplets, Gift, HandCoins, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
 import { fetchMarket } from '../../lib/data/market-data';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
-import { defaultLoopSettings, defaultScreenSettings, type LoopSettings, type OpportunityListing, type ScreenSettings } from '../../lib/risk/opportunities';
-import { formatNumber } from '../../lib/utils/formatting';
+import { defaultScreenSettings, type OpportunityListing, type ScreenSettings } from '../../lib/risk/opportunities';
 import { Collapsible } from '../ui/card';
 import { NumberField } from '../ui/field';
 import { DataStatus } from '../ui/data-status';
-import { Num } from '../ui/num';
-import { Segmented } from './parts';
-import { YtBoard } from './YtBoard';
-import { PtBoard } from './PtBoard';
-import { LoopBoard } from './LoopBoard';
-import { LeaderBoard, defaultRankSettings, type RankSettings } from './LeaderBoard';
-import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from './Calculator';
-import { applyFilters, defaultFilters, FilterBar, type Filters } from './filters';
-import { SectionSwitch } from './SectionSwitch';
-import { LpAnalyzer, readLpPrefill, type LpPrefill } from './LpAnalyzer';
+import { Segmented } from '../opportunities/parts';
+import { YtBoard } from '../opportunities/YtBoard';
+import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from '../opportunities/Calculator';
+import { applyFilters, defaultFilters, FilterBar, type Filters } from '../opportunities/filters';
+import { LpAnalyzer, readLpPrefill, type LpPrefill } from '../opportunities/LpAnalyzer';
+import { BorrowTool } from './BorrowTool';
 
-type Tab = 'rank' | 'yt' | 'pt' | 'loop' | 'calc' | 'lp';
-const TABS: Tab[] = ['rank', 'yt', 'pt', 'loop', 'calc', 'lp'];
+type Tab = 'yt' | 'calc' | 'lp' | 'borrow';
+const TABS: Tab[] = ['yt', 'calc', 'lp', 'borrow'];
 
 interface Stored {
   tab: Tab;
   screen: ScreenSettings;
-  loop: LoopSettings;
-  rank: RankSettings;
   calc: CalcState;
   filters: Filters;
   ytPointsOnly: boolean;
 }
 
-const initial: Stored = { tab: 'rank', screen: defaultScreenSettings, loop: defaultLoopSettings, rank: defaultRankSettings, calc: defaultCalc, filters: defaultFilters, ytPointsOnly: true };
+const initial: Stored = { tab: 'yt', screen: defaultScreenSettings, calc: defaultCalc, filters: defaultFilters, ytPointsOnly: true };
 
 /** Settings from storage or typing may hold NaN/null — fall back per field so the boards never silently empty. */
 function sane<T extends object>(value: Partial<T> | undefined, fallback: T): T {
@@ -49,8 +43,11 @@ function sane<T extends object>(value: Partial<T> | undefined, fallback: T): T {
   return out as T;
 }
 
-/** Where to look: YT (points), fixed-rate PT and PT loops across protocols, plus a trade calculator. */
-export default function Opportunities() {
+/**
+ * «ابزارهای تخصصی» of the market analysis: what has no dollar estimate in the ranking
+ * (YT, LP) or answers another question (a trade calculator, the cost of a loan).
+ */
+export default function Tools() {
   const { markets, loading, failed, stale, feeds, updatedAt, refresh } = useAllMarkets();
   const [st, setSt] = useState<Stored | null>(null);
   const [loadingMarket, setLoadingMarket] = useState(false);
@@ -63,10 +60,8 @@ export default function Opportunities() {
     const linked = params.get('tab');
     if (linked === 'lp') setLpPrefill(readLpPrefill(params));
     setSt({
-      tab: TABS.includes(linked as Tab) ? (linked as Tab) : (saved.tab ?? initial.tab),
+      tab: TABS.includes(linked as Tab) ? (linked as Tab) : TABS.includes(saved.tab as Tab) ? (saved.tab as Tab) : initial.tab,
       screen: sane(saved.screen, initial.screen),
-      loop: sane(saved.loop, initial.loop),
-      rank: sane(saved.rank, initial.rank),
       calc: sane(saved.calc, initial.calc),
       filters: { ...defaultFilters, ...saved.filters },
       ytPointsOnly: saved.ytPointsOnly ?? true,
@@ -146,11 +141,13 @@ export default function Opportunities() {
 
   return (
     <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="page-title">فرصت‌ها</h1>
-          <p className="text-sm text-secondary">کجا را بررسی کنم؟ بازارهای PT، YT و لوپ همه‌ی پروتکل‌ها، زنده و قابل مقایسه.</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+          <Link href="/" className="tap inline-flex items-center gap-1 text-sm text-secondary hover:text-primary self-start">
+            <ArrowRight size={14} aria-hidden /> تحلیل بازار
+          </Link>
+          <h1 className="page-title">ابزارهای تخصصی</h1>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
             {loading ? (
               <p className="text-xs text-secondary flex items-center gap-1.5">
                 <Loader2 size={12} className="animate-spin" aria-hidden /> در حال دریافت بازارها…
@@ -159,7 +156,7 @@ export default function Opportunities() {
               ids.map((id) =>
                 failed.includes(id) ? (
                   <p key={id} className="text-xs text-danger flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-danger" aria-hidden /> <bdi dir="ltr">{protocols[id].name}</bdi>: دریافت نشد — بقیه‌ی پروتکل‌ها نمایش داده می‌شوند
+                    <span className="size-2 rounded-full bg-danger" aria-hidden /> <bdi dir="ltr">{protocols[id].name}</bdi>: دریافت نشد
                   </p>
                 ) : (
                   <DataStatus key={id} source="api" fetchedAt={feeds[id]?.at ?? null} stale={stale.includes(id)} label={<bdi dir="ltr">{protocols[id].name}</bdi>} />
@@ -173,106 +170,61 @@ export default function Opportunities() {
         </button>
       </header>
 
-      <SectionSwitch current="markets" />
-
       <div className="sticky top-14 z-20 -mx-[var(--space-page-x)] px-[var(--space-page-x)] py-2 bg-canvas/95 backdrop-blur">
         <Segmented
           value={tab}
           onChange={(t) => patch({ tab: t })}
-          label="بخش"
+          label="ابزار"
           options={[
-            { id: 'rank', label: <><Trophy size={15} aria-hidden /> رتبه‌بندی</> },
             { id: 'yt', label: <><Gift size={15} aria-hidden /> YT</> },
-            { id: 'pt', label: <><Coins size={15} aria-hidden /> PT</> },
-            { id: 'loop', label: <><Repeat size={15} aria-hidden /> Loop</> },
             { id: 'calc', label: <><Calculator size={15} aria-hidden /> ماشین‌حساب</> },
             { id: 'lp', label: <><Droplets size={15} aria-hidden /> LP</> },
+            { id: 'borrow', label: <><HandCoins size={15} aria-hidden /> هزینه‌ی وام</> },
           ]}
         />
       </div>
 
       {tab === 'lp' && <LpAnalyzer key={JSON.stringify(lpPrefill)} prefill={lpPrefill} />}
+      {tab === 'borrow' && <BorrowTool />}
 
-      {tab !== 'calc' && tab !== 'lp' && (
+      {tab === 'yt' && (
         <>
           <FilterBar markets={markets.filter((m) => !m.expired)} f={st.filters} setF={(filters) => patch({ filters })} minLiquidity={s.minLiquidity} setMinLiquidity={(minLiquidity) => setS({ minLiquidity })} shown={filtered.filter((m) => !m.expired).length} total={active} />
           <Collapsible title="فرض‌های محاسبه" icon={<SlidersHorizontal size={18} aria-hidden />}>
-            {tab === 'yt' && (
-              <>
-                <Segmented
-                  value={s.ytMode}
-                  onChange={(ytMode) => setS({ ytMode })}
-                  label="افق YT"
-                  size="sm"
-                  options={[
-                    { id: 'roundtrip', label: 'خرید و فروش بعد از چند روز' },
-                    { id: 'maturity', label: 'نگه‌داری تا سررسید' },
-                  ]}
-                />
-                <label className="flex items-center gap-2 text-sm text-secondary min-h-11">
-                  <input type="checkbox" checked={st.ytPointsOnly} onChange={(e) => patch({ ytPointsOnly: e.target.checked })} />
-                  فقط بازارهای پوینت‌دار
-                </label>
-              </>
-            )}
+            <Segmented
+              value={s.ytMode}
+              onChange={(ytMode) => setS({ ytMode })}
+              label="افق YT"
+              size="sm"
+              options={[
+                { id: 'roundtrip', label: 'خرید و فروش بعد از چند روز' },
+                { id: 'maturity', label: 'نگه‌داری تا سررسید' },
+              ]}
+            />
+            <label className="flex items-center gap-2 text-sm text-secondary min-h-11">
+              <input type="checkbox" checked={st.ytPointsOnly} onChange={(e) => patch({ ytPointsOnly: e.target.checked })} />
+              فقط بازارهای پوینت‌دار
+            </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {tab === 'yt' && s.ytMode === 'roundtrip' && <NumberField label="روز نگه‌داری" value={s.holdDays} onChange={(v) => Number.isFinite(v) && setS({ holdDays: Math.max(1, v) })} />}
-              {(tab === 'yt' || (tab === 'rank' && st.rank.strategy === 'yt')) && <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />}
+              {s.ytMode === 'roundtrip' && <NumberField label="روز نگه‌داری" value={s.holdDays} onChange={(v) => Number.isFinite(v) && setS({ holdDays: Math.max(1, v) })} />}
+              <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />
               <NumberField label="کارمزد هر معامله" value={s.feePercent} onChange={(v) => setS({ feePercent: v })} suffix="%" help="کارمزد و لغزش قیمت هر خرید یا فروش، به درصد." />
               <NumberField label="حداقل روز تا سررسید" value={s.minDays} onChange={(v) => setS({ minDays: v })} />
             </div>
           </Collapsible>
+          {loading ? (
+            <div className="flex flex-col gap-2" aria-busy="true">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="h-16 rounded-lg bg-surface border border-default animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <YtBoard markets={filtered} s={s} feeds={feeds} pointsOnly={st.ytPointsOnly} onCalc={(m) => pick(m, 'yt')} />
+          )}
         </>
       )}
-
-      {loading && tab !== 'calc' ? (
-        <div className="flex flex-col gap-2" aria-busy="true">
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="h-16 rounded-lg bg-surface border border-default animate-pulse" />
-          ))}
-        </div>
-      ) : (
-        <>
-          {tab === 'rank' && (
-            <LeaderBoard
-              markets={filtered}
-              s={s}
-              r={st.rank}
-              setR={(p) => patch({ rank: { ...st.rank, ...p } })}
-              loop={st.loop}
-              setLoop={(loop) => patch({ loop })}
-              onCalc={(row, strategy) =>
-                pick(row.m, strategy, {
-                  capital: st.rank.capital,
-                  ...(strategy === 'yt' ? { holdDays: row.days } : { holdDays: row.m.daysToMaturity }),
-                  ...(strategy === 'loop' ? { leverage: st.loop.leverage, borrowAPY: st.loop.borrowAPY, lltv: st.loop.lltv } : {}),
-                })
-              }
-            />
-          )}
-          {tab === 'yt' && <YtBoard markets={filtered} s={s} feeds={feeds} pointsOnly={st.ytPointsOnly} onCalc={(m) => pick(m, 'yt')} />}
-          {tab === 'pt' && <PtBoard markets={filtered} s={s} feeds={feeds} onCalc={(m) => pick(m, 'pt')} />}
-          {tab === 'loop' && (
-            <LoopBoard
-              markets={filtered}
-              s={s}
-              l={st.loop}
-              setL={(loop) => patch({ loop })}
-              feeds={feeds}
-              onCalc={(m) => {
-                setCalc({ leverage: st.loop.leverage, borrowAPY: st.loop.borrowAPY, lltv: st.loop.lltv });
-                pick(m, 'loop');
-              }}
-            />
-          )}
-          {tab === 'calc' && <CalculatorPanel screen={st.screen} c={st.calc} set={setCalc} markets={markets} onPick={(m) => pick(m)} loadingMarket={loadingMarket} />}
-        </>
-      )}
-      {!loading && tab !== 'calc' && tab !== 'lp' && failed.length === 0 && markets.length === 0 && <p className="text-sm text-secondary">هیچ بازاری دریافت نشد.</p>}
-      <p className="text-xs text-muted">
-        <Num>{formatNumber(active, 0)}</Num> بازار فعال. اعداد تخمینی‌اند و توصیه‌ی مالی نیستند؛ نرخ بالا به‌تنهایی نشانه‌ی فرصت خوب نیست.
-      </p>
-      {updatedAt === null && !loading && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
+      {tab === 'calc' && <CalculatorPanel screen={st.screen} c={st.calc} set={setCalc} markets={markets} onPick={(m) => pick(m)} loadingMarket={loadingMarket} />}
+      {updatedAt === null && !loading && tab !== 'lp' && tab !== 'borrow' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
     </main>
   );
 }

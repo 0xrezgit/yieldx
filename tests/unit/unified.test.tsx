@@ -3,11 +3,13 @@ import raw from '../fixtures/merkl-live-2026-09-30.json';
 import { normalizeOpportunity, type RawOpportunity } from '../../src/lib/merkl/normalize';
 import { DEX_CHAINS } from '../../src/lib/merkl/markets';
 import { buildContext } from '../../src/lib/merkl/vetting';
-import { clampHorizon, defaultEstimateSettings, estimate as merklEstimate, rankTop } from '../../src/lib/merkl/profit';
+import { estimate as merklEstimate } from '../../src/lib/merkl/profit';
 import type { GasQuote, MerklOpportunity, TokenMarket } from '../../src/lib/merkl/types';
 import type { Opportunity } from '../../src/types/opportunity';
 import { linkMerkl, merklAddress, withoutMerklDuplicates } from '../../src/lib/opportunity/merkl-link';
-import { defaultLendingSettings, rankLending, type LendingSettings, type MerklInput } from '../../src/lib/lending/rank';
+import { evaluate, selectHorizon, type FamilyFilter, type MerklInput } from '../../src/lib/market/analysis';
+import { FALLBACK_TX_USD } from '../../src/lib/opportunity/costs';
+import type { HorizonDays } from '../../src/lib/opportunity/policy';
 
 /**
  * Real Merkl API v4 data captured on 2026-09-30 (the same fixture as the Merkl
@@ -20,7 +22,7 @@ const NOW = fx.capturedAt;
 const ops = fx.opportunities.map((o) => normalizeOpportunity(o, NOW)).filter((o): o is MerklOpportunity => o !== null);
 const ctx = buildContext(ops, fx.markets, Object.keys(DEX_CHAINS).map(Number), NOW);
 const gas: GasQuote[] = [{ chainId: 1, gwei: 0.263, nativeUsd: 2700, at: NOW * 1000 }];
-const merkl: MerklInput = { list: ops, ctx, gas, stale: false, fetchedAt: new Date(NOW * 1000).toISOString() };
+const merkl: MerklInput = { list: ops, ctx, stale: false, fetchedAt: new Date(NOW * 1000).toISOString() };
 
 const ROCKAWAY = '0x2cA22cb25558fa2018ecb1CE4eD8AF92Ee7ea423';
 const STEAKHOUSE_BASE = '0xbeeff2490FEffa212faC2f6553682C219E6a8845';
@@ -43,8 +45,10 @@ const vault = (address: string, chain = 'eip155:1', over: Partial<Opportunity> =
   ...over,
 });
 
-const S: LendingSettings = { ...defaultLendingSettings, capital: 1000, days: 30 };
-const rank = (list: Opportunity[], s: LendingSettings = S, m: MerklInput | null = merkl) => rankLending(list, s, NOW * 1000, m);
+const rank = (list: Opportunity[], days: HorizonDays = 30, m: MerklInput | null = merkl, filter: FamilyFilter = 'all') => {
+  const a = evaluate({ opportunities: list, merkl: m, gas }, 1000, NOW * 1000);
+  return { ...selectHorizon(a, days, filter), byKey: a.byKey, linked: a.linked, rows: a.rows };
+};
 const row = (r: ReturnType<typeof rank>, key: string) => [...r.ranking.top, ...Object.values(r.ranking.aside).flat()].find((e) => e.key === key)!;
 
 describe('linking Merkl to protocol opportunities', () => {
@@ -97,7 +101,7 @@ describe('Merkl rewards on a linked vault', () => {
   });
 
   it('is the same estimate without Merkl, minus the rewards', () => {
-    const without = row(rank([vault(ROCKAWAY)], S, null), vault(ROCKAWAY).key);
+    const without = row(rank([vault(ROCKAWAY)], 30, null), vault(ROCKAWAY).key);
     const withM = row(rank([vault(ROCKAWAY)]), vault(ROCKAWAY).key);
     expect(withM.baseIncome).toBeCloseTo(without.baseIncome!, 12);
     expect(withM.rewards).toBeGreaterThan(0);
@@ -113,38 +117,40 @@ describe('one list for every family', () => {
     // Morpho has an adapter: its Merkl markets are not listed a second time.
     for (const m of ops.filter((x) => x.protocol?.id === 'morpho')) expect(keys.has(`merkl:${m.id}`)).toBe(false);
     const e = row(r, `merkl:${aaveLend.id}`);
-    const direct = merklEstimate(aaveLend, { ...defaultEstimateSettings, capital: 1000, horizon: 30, txEthereum: S.txEthereum, txOther: S.txOther }, ctx, gas);
+    const direct = merklEstimate(aaveLend, { capital: 1000, horizon: 30, txEthereum: FALLBACK_TX_USD.ethereum, txOther: FALLBACK_TX_USD.evm }, ctx, gas);
     if (direct.ok) expect(e.net).toBeCloseTo(direct.net, 9);
   });
 
-  it('sends borrowing, pools and leverage to the specialist section', () => {
+  it('gives borrowing, pools and leverage no dollar number of their own', () => {
     const r = rank([]);
     const borrow = ops.find((m) => m.action === 'BORROW' && m.protocol?.id === 'aave')!;
-    expect(r.ranking.aside.specialist.some((e) => e.key === `merkl:${borrow.id}`)).toBe(true);
+    expect(r.ranking.aside['needs-model'].some((e) => e.key === `merkl:${borrow.id}`)).toBe(true);
     expect(r.ranking.top.every((e) => r.byKey.get(e.key)!.family !== 'lp')).toBe(true);
   });
 
   it('filters to what pays a priced reward', () => {
-    const r = rank([vault(ROCKAWAY), vault('0x1111111111111111111111111111111111111111')], { ...S, view: 'rewards' });
+    const r = rank([vault(ROCKAWAY), vault('0x1111111111111111111111111111111111111111')], 30, merkl, 'rewards');
     expect(r.total).toBeGreaterThan(0);
     for (const e of [...r.ranking.top, ...Object.values(r.ranking.aside).flat()]) expect(e.rewards).toBeGreaterThan(0);
   });
 
   it('marks Merkl rows stale when the Merkl feed is the last good copy', () => {
-    const r = rank([], S, { ...merkl, stale: true });
+    const r = rank([], 30, { ...merkl, stale: true });
     const aaveLend = ops.find((m) => m.protocol?.id === 'aave' && m.action === 'LEND')!;
     const e = row(r, `merkl:${aaveLend.id}`);
     if (e.net !== null) expect(e.placement).toBe('stale');
   });
 });
 
-describe('Merkl page: any horizon, LP apart', () => {
-  it('accepts any whole number of days from 1 to 365', () => {
-    expect(clampHorizon(45)).toBe(45);
-    expect(clampHorizon(0)).toBe(1);
-    expect(clampHorizon(1000)).toBe(365);
-    const r45 = rankTop(ops, { ...defaultEstimateSettings, capital: 1000, horizon: 45 }, ctx, gas);
-    for (const e of r45.rows) for (const c of e.campaigns) expect(c.days).toBeLessThanOrEqual(45);
-    expect(r45.rows.every((e) => e.horizon === 45)).toBe(true);
+describe('Merkl campaigns per horizon', () => {
+  it('counts each campaign only until its end, so a later horizon never loses reward days', () => {
+    const r30 = rank([vault(ROCKAWAY)], 30);
+    const r125 = rank([vault(ROCKAWAY)], 125);
+    const k = vault(ROCKAWAY).key;
+    const d30 = row(r30, k).rewardLines.filter((l) => l.source === 'merkl').map((l) => l.days);
+    const d125 = row(r125, k).rewardLines.filter((l) => l.source === 'merkl').map((l) => l.days);
+    // Both campaigns end inside 30 days: the reward is the same at 125 — never extended.
+    expect(d125).toEqual(d30);
+    expect(row(r125, k).rewards).toBeCloseTo(row(r30, k).rewards, 6);
   });
 });

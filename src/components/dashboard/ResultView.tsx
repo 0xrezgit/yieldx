@@ -40,8 +40,8 @@ export function StartState({ onManual }: { onManual: () => void }) {
       پروتکل و بازار را از فرم انتخاب کنید و سرمایه را وارد کنید. نتیجه‌ی نقدی تخمینی هر استراتژی (PT، YT، لوپ و CLMM) با داده‌ی زنده‌ی همان بازار حساب می‌شود. تا انتخاب بازار، هیچ پیشنهاد یا سودی نمایش داده نمی‌شود.
       <span className="block mt-2 text-muted">
         <Search size={13} className="inline -mt-0.5" aria-hidden /> بازار مناسب را نمی‌دانید؟ از{' '}
-        <Link href="/opportunities" className="text-accent underline underline-offset-4">
-          فرصت‌ها
+        <Link href="/" className="text-accent underline underline-offset-4">
+          تحلیل بازار
         </Link>{' '}
         شروع کنید.
       </span>

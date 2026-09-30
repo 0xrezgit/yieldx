@@ -21,6 +21,8 @@ interface PendleListItem {
   liquidity?: { usd: number } | number;
   underlyingAsset?: PendleToken;
   accountingAsset?: PendleToken;
+  /** The PT token: an object like the others, or an id string "<chainId>-<address>". */
+  pt?: PendleToken | string;
   dataUpdatedAt?: string;
 }
 
@@ -54,6 +56,13 @@ interface PendleMarket {
 }
 
 const tokenRef = (t: PendleToken | undefined) => (t ? { symbol: t.symbol ?? null, address: t.address ?? null } : null);
+
+/** The PT address from either form Pendle uses; null when absent or malformed. */
+export function ptRef(pt: PendleToken | string | undefined): { symbol: string | null; address: string } | null {
+  const raw = typeof pt === 'string' ? pt : pt?.address;
+  const m = typeof raw === 'string' ? /(0x[0-9a-fA-F]{40})$/.exec(raw) : null;
+  return m ? { symbol: typeof pt === 'object' ? (pt.symbol ?? null) : null, address: m[1].toLowerCase() } : null;
+}
 const isoOrNull = (x: string | undefined) => (x && Number.isFinite(new Date(x).getTime()) ? new Date(x).toISOString() : null);
 
 const isPage: Shape<PendlePage> = (b): b is PendlePage =>
@@ -125,6 +134,7 @@ export class PendleAdapter extends BaseAdapter {
       asset: tokenRef(m.underlyingAsset),
       accountingSymbol: m.accountingAsset?.symbol ?? null,
       sourceUpdatedAt: isoOrNull(m.dataUpdatedAt),
+      ptToken: ptRef(m.pt),
     }));
   }
 

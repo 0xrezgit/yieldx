@@ -7,7 +7,7 @@ import { borrowQuotes } from '../../src/lib/opportunity/borrow';
 import { maxLoopLeverage } from '../../src/lib/calculators/trade';
 import { morphoMarket, type RawMorphoMarket } from '../../src/lib/lending/morpho';
 import { normalizeAave, type RawAaveReserve } from '../../src/lib/lending/aave';
-import { defaultLendingSettings, rankLending } from '../../src/lib/lending/rank';
+import { evaluate, selectHorizon } from '../../src/lib/market/analysis';
 
 // Controlled test data for the formulas; adapter fixtures follow the official
 // schemas field by field. Not market data.
@@ -42,7 +42,8 @@ const market = (over: Partial<Opportunity> = {}): Opportunity => ({
   ...over,
 });
 
-const input = (lev = { allow: true, minHealth: 1.3, target: null as number | null }) => ({ capital: 1000, days: 30, needsEarlyExit: true, now: NOW, leverage: lev });
+const pol = (minHealth: number, maxLeverage = 10) => ({ version: 'test', minHealth, maxLeverage });
+const input = (lev = pol(1.3)) => ({ capital: 1000, days: 30, now: NOW, leverage: lev });
 
 describe('loops from borrow sides', () => {
   it('builds only pairs that move together and whose collateral has its own yield', () => {
@@ -55,17 +56,19 @@ describe('loops from borrow sides', () => {
     expect(loops[0]).toMatchObject({ family: 'leverage', loop: { pairClass: 'usd', maxLtv: 0.86 } });
   });
 
-  it('stays in the specialist section unless leverage is allowed', () => {
+  it('is estimated only under a leverage policy, and never as complete data', () => {
     const [loop] = buildLoops([market()]);
-    expect(estimate(loop, input({ ...defaultLeverageInput })).placement).toBe('specialist');
-    expect(estimate(loop, input()).leverage).toBeTruthy();
+    expect(estimate(loop, { capital: 1000, days: 30, now: NOW }).placement).toBe('needs-model');
+    const e = estimate(loop, input({ ...defaultLeverageInput }));
+    expect(e.leverage!.policy).toBe(defaultLeverageInput.version);
+    expect(e.quality).toBe('partial');
   });
 });
 
 describe('loop maths (report tests 10 and 12)', () => {
   it('E 1000, 3×, collateral 8% APY, borrow 5% APY, 30 days, no costs → about 11.00 on own money', () => {
     const [loop] = buildLoops([market()]);
-    const e = estimate(loop, input({ allow: true, minHealth: 1.05, target: 3 }));
+    const e = estimate(loop, input(pol(1.05, 3)));
     const x = e.leverage!;
     expect(x.leverage).toBe(3);
     expect(x.gross).toBeCloseTo(3000, 9);
@@ -77,7 +80,7 @@ describe('loop maths (report tests 10 and 12)', () => {
     expect(x.equity).toBe(1000);
   });
 
-  it('defaults to the highest leverage that keeps the user’s health, not the protocol maximum', () => {
+  it('takes the highest leverage that keeps the policy’s health, not the protocol maximum', () => {
     const [loop] = buildLoops([market()]);
     const x = estimate(loop, input()).leverage!;
     expect(x.leverage).toBeCloseTo(maxLoopLeverage(86, 1.3), 12);
@@ -85,16 +88,15 @@ describe('loop maths (report tests 10 and 12)', () => {
     expect(x.health.value).toBeCloseTo(1.3, 9);
   });
 
-  it('caps a requested leverage above the safe limit and says so', () => {
+  it('never goes above the policy’s leverage cap, whatever the health allows', () => {
     const [loop] = buildLoops([market()]);
-    const e = estimate(loop, input({ allow: true, minHealth: 1.3, target: 6 }));
-    expect(e.leverage!.leverage).toBeCloseTo(maxLoopLeverage(86, 1.3), 12);
-    expect(e.assumptions.some((a) => a.includes('حد ایمن'))).toBe(true);
+    expect(estimate(loop, input(pol(1.3, 2))).leverage!.leverage).toBe(2);
+    expect(estimate(loop, input(pol(1.3, 6))).leverage!.leverage).toBeCloseTo(maxLoopLeverage(86, 1.3), 12);
   });
 
   it('reports how far the collateral can fall before liquidation: 1 − B ÷ (G × LLTV)', () => {
     const [loop] = buildLoops([market()]);
-    const x = estimate(loop, input({ allow: true, minHealth: 1.05, target: 3 })).leverage!;
+    const x = estimate(loop, input(pol(1.05, 3))).leverage!;
     expect(x.liquidationDrop).toBeCloseTo(1 - 2000 / (3000 * 0.86), 12);
   });
 
@@ -110,7 +112,7 @@ describe('loop maths (report tests 10 and 12)', () => {
     expect(rateAfterBorrow(curve, 2_000, 5)!).toBeGreaterThan(5);
     expect(rateAfterBorrow(curve, 6_000, 5)).toBeNull();
     const [loop] = buildLoops([market({ borrow: side({ availableUsd: 500 }) })]);
-    const e = estimate(loop, input({ allow: true, minHealth: 1.05, target: 3 }));
+    const e = estimate(loop, input(pol(1.05, 3)));
     expect(e.leverage!.debt).toBeCloseTo(500, 9);
     expect(e.unallocated).toBeGreaterThan(0);
   });
@@ -219,30 +221,28 @@ describe('adapters feed loops', () => {
     expect(loop.loop!.collateral.supplyPct).toBeCloseTo(1, 9);
   });
 
-  it('puts loops in the ranking only when leverage is allowed, and keeps borrow-only reserves out', () => {
-    const list = [market()];
-    const off = rankLending(list, { ...defaultLendingSettings, view: 'leverage' }, NOW);
-    expect(off.ranking.top).toHaveLength(0);
-    expect(off.ranking.aside.specialist).toHaveLength(1);
-    const on = rankLending(list, { ...defaultLendingSettings, allowLeverage: true, view: 'leverage' }, NOW);
-    expect(on.ranking.top).toHaveLength(1);
-    expect(on.ranking.top[0].leverage).toBeTruthy();
-    const borrowOnly = rankLending([market({ key: 'b', family: 'borrow' })], defaultLendingSettings, NOW);
-    expect([...borrowOnly.byKey.keys()].includes('b')).toBe(false);
+  it('puts loops in the same ranking under the policy, and keeps borrow-only reserves out', () => {
+    const a = evaluate({ opportunities: [market()], merkl: null, gas: [] }, 1000, NOW);
+    const v = selectHorizon(a, 30, 'leverage');
+    expect(v.ranking.top).toHaveLength(1);
+    expect(v.ranking.top[0].leverage!.policy).toBe(defaultLeverageInput.version);
+    expect(selectHorizon(a, 30).ranking.top.map((e) => e.key)).toContain(v.ranking.top[0].key);
+    const borrowOnly = evaluate({ opportunities: [market({ key: 'b', family: 'borrow' })], merkl: null, gas: [] }, 1000, NOW);
+    expect(borrowOnly.byKey.has('b')).toBe(false);
   });
 });
 
 describe('render', () => {
-  it('shows the loop in Persian: own money, debt, health, liquidation distance and both risks', async () => {
+  it('shows the loop in Persian: own money, debt, health and liquidation distance', async () => {
     const { renderToString } = await import('react-dom/server');
-    const { LendingDetails } = await import('../../src/components/lending/LendingOpportunities');
-    const { BorrowBoard } = await import('../../src/components/lending/BorrowBoard');
+    const { OpportunityDetails } = await import('../../src/components/market/OpportunityDetails');
+    const { BorrowBoard } = await import('../../src/components/tools/BorrowBoard');
     const { assertPersianMoney } = await import('../helpers/text');
-    const [loop] = buildLoops([market()]);
-    const e = estimate(loop, input());
+    const a = evaluate({ opportunities: [market()], merkl: null, gas: [] }, 1000, NOW);
+    const row = a.rows.find((r) => r.o.family === 'leverage')!;
     const q = borrowQuotes([market()], 1000, 30, 'usd', NOW);
-    const html = renderToString(<LendingDetails e={e} o={loop} />) + renderToString(<BorrowBoard rows={q.rows} blocked={q.blocked} amount={1000} days={30} />);
-    for (const t of ['آورده‌ی شما', 'بدهی', 'افت قیمت نسبی تا لیکوییدشدن', 'ریسک ۱', 'ریسک ۲', 'هزینه‌ی بهره برای وام']) expect(html).toContain(t);
+    const html = renderToString(<OpportunityDetails row={row} days={30} modelVersion="t" />) + renderToString(<BorrowBoard rows={q.rows} blocked={q.blocked} amount={1000} days={30} />);
+    for (const t of ['آورده در لوپ', 'وثیقه / بدهی', 'هزینه‌ی بدهی', 'افت تا لیکوییدشدن', 'هزینه‌ی بهره‌ی وام']) expect(html).toContain(t);
     expect(html).not.toContain('NaN');
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, '').replace(/<bdi dir="ltr"[^>]*>[^<]*<\/bdi>/g, ''));
   });

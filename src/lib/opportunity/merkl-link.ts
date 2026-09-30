@@ -4,7 +4,7 @@ import { calcCampaign, estimate as merklEstimate, needsLoop, type EstimateSettin
 import { gate, isYieldToken, type VetContext } from '../merkl/vetting';
 import { restrictions } from '../merkl/rules';
 import { networkByChainId } from '../registry/networks';
-import { placeOf } from './estimate';
+import { placeOf, reasonOf } from './estimate';
 
 /**
  * The reward layer across sources.
@@ -124,7 +124,7 @@ export function addMerklRewards(e: Estimate, linked: MerklOpportunity[], ctx: Ve
     assumptions,
     net,
     netPct: (net / e.capital) * 100,
-    placement: e.placement === 'ranked' || e.placement === 'unprofitable' || e.placement === 'low-capacity' ? placeOf(e.quality, net, e.allocatable, e.capital) : e.placement,
+    ...(e.placement === 'ranked' || e.placement === 'unprofitable' ? { placement: placeOf(e.quality, net, e.allocatable, e.capital), reason: reasonOf(placeOf(e.quality, net, e.allocatable, e.capital)) } : {}),
   };
 }
 
@@ -182,12 +182,16 @@ export function merklEstimateShared(m: MerklOpportunity, o: Opportunity, s: Esti
     placement: 'insufficient',
   };
   if (o.family === 'lp' || o.family === 'leverage' || o.family === 'yt' || o.family === 'borrow') {
-    return { ...base, placement: 'specialist', assumptions: [...base.assumptions, o.family === 'lp' ? 'استخر نقدینگی: تغییر ارزش دو دارایی (زیان ناپایدار) مدل نشده؛ در «تحلیل تخصصی».' : 'به نرخ وام، اهرم یا ارزش YT بستگی دارد؛ در «تحلیل تخصصی».'] };
+    const why = o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : o.family === 'yt' ? 'YT: ارزش خروج مدل قابل اتکا ندارد.' : 'به نرخ وام و اهرم بستگی دارد و داده‌ی آن از Merkl نمی‌آید.';
+    return { ...base, placement: 'needs-model', reason: why, assumptions: [...base.assumptions, why] };
   }
   const g = gate(m, ctx);
-  if (g) return { ...base, assumptions: [...base.assumptions, g.label] };
+  if (g) return { ...base, placement: 'rejected', reason: g.label, assumptions: [...base.assumptions, g.label] };
   const r = merklEstimate(m, s, ctx, gas);
-  if (r.ok === false) return { ...base, assumptions: [...base.assumptions, r.reason.label] };
+  if (r.ok === false) {
+    const p = r.reason.code === 'units-only' || r.reason.code === 'model' ? 'needs-model' : 'insufficient';
+    return { ...base, placement: p, reason: r.reason.label, assumptions: [...base.assumptions, r.reason.label] };
+  }
   const quality: DataQuality = stale ? 'stale' : r.confidence === 'high' ? 'current' : 'partial';
   return {
     ...base,
@@ -206,5 +210,6 @@ export function merklEstimateShared(m: MerklOpportunity, o: Opportunity, s: Esti
     assumptions: [...base.assumptions, r.native.note, ...r.why.map((w) => `اطمینان کمتر: ${w}`), ...r.risks],
     quality,
     placement: placeOf(quality, r.net, r.deployed, s.capital),
+    reason: reasonOf(placeOf(quality, r.net, r.deployed, s.capital)),
   };
 }

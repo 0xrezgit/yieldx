@@ -1,8 +1,6 @@
-import type { Metadata } from 'next';
-import MerklOpportunities from '../../../components/merkl/MerklOpportunities';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = { title: 'پاداش‌های Merkl — YieldX' };
-
-export default function MerklPage() {
-  return <MerklOpportunities />;
+/** Old section address; its content is part of the market analysis now. */
+export default function OldSection() {
+  redirect('/');
 }

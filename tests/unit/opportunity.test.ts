@@ -30,7 +30,7 @@ const opp = (over: Partial<Opportunity> = {}): Opportunity => ({
   ...over,
 });
 
-const input = (over: Partial<EstimateInput> = {}): EstimateInput => ({ capital: 1000, days: 30, needsEarlyExit: true, now: NOW, ...over });
+const input = (over: Partial<EstimateInput> = {}): EstimateInput => ({ capital: 1000, days: 30, now: NOW, ...over });
 
 const reward = (over: Partial<RewardStream> = {}): RewardStream => ({
   key: '1:campaign-a',
@@ -114,17 +114,18 @@ describe('estimate — shared rules', () => {
     expect(e.unknown.some((u) => u.includes('ظرفیت'))).toBe(true);
   });
 
-  it('puts a product maturing after the period aside when an early exit may be needed', () => {
-    const o = opp({ family: 'pt', maturity: inDays(90) });
-    expect(estimate(o, input()).placement).toBe('beyond-horizon');
-    const hold = estimate(o, input({ needsEarlyExit: false }));
+  it('never shows the profit to a maturity after the horizon as the horizon’s profit', () => {
+    const o = opp({ family: 'pt', maturity: inDays(90), poolLiquidityUsd: 1e8 });
+    const e = estimate(o, input());
+    expect(e.placement).toBe('needs-model');
+    expect(e.net).toBeNull();
+    const hold = estimate(o, input({ days: 90 }));
     expect(hold.placement).toBe('ranked');
     expect(hold.earningDays).toBe(90);
-    expect(hold.assumptions.some((a) => a.includes('مدت متفاوت'))).toBe(true);
   });
 
   it('earns nothing after a maturity inside the period', () => {
-    const e = estimate(opp({ family: 'pt', maturity: inDays(10) }), input());
+    const e = estimate(opp({ family: 'pt', maturity: inDays(10), poolLiquidityUsd: 1e8 }), input());
     expect(e.earningDays).toBe(10);
     expect(e.baseIncome).toBeCloseTo(1000 * (Math.pow(1.1, 10 / 365) - 1), 9);
   });
@@ -147,9 +148,11 @@ describe('estimate — shared rules', () => {
     expect(e.placement).toBe('stale');
   });
 
-  it('sends LP, leverage, YT and borrow to the specialist section', () => {
+  it('gives LP, YT, borrow and a loop without its spec no dollar number', () => {
     for (const family of ['lp', 'leverage', 'yt', 'borrow'] as const) {
-      expect(estimate(opp({ family }), input()).placement).toBe('specialist');
+      const e = estimate(opp({ family }), input());
+      expect(e.placement).toBe('needs-model');
+      expect(e.net).toBeNull();
     }
   });
 
@@ -169,9 +172,10 @@ describe('ranking', () => {
 
   it('re-orders with the amount: capacity matters for large capital', () => {
     expect(two(1000, 30).top.map((e) => e.key)).toEqual(['capped', 'open']);
+    // The capital that does not fit earns nothing, so the capped market falls behind — still ranked on its dollars.
     const big = two(100_000, 30);
-    expect(big.top.map((e) => e.key)).toEqual(['open']);
-    expect(big.aside['low-capacity'].map((e) => e.key)).toEqual(['capped']);
+    expect(big.top.map((e) => e.key)).toEqual(['open', 'capped']);
+    expect(big.top[1].unallocated).toBeCloseTo(95_000, 6);
   });
 
   it('re-orders with the period: a fixed cost weighs more on a short one', () => {
@@ -184,12 +188,13 @@ describe('ranking', () => {
     expect(cheapHigh(180)[0]).toBe('high-with-fee');
   });
 
-  it('shows exactly as many rows as qualify, up to 30', () => {
+  it('shows exactly as many rows as qualify, up to 60, keeping the rest', () => {
     const many = (n: number) => Array.from({ length: n }, (_, i) => estimate(opp({ key: `k${i}`, rate: { ...opp().rate, value: 5 + i } }), input()));
-    expect(rankEstimates(many(12)).top).toHaveLength(12);
-    const top = rankEstimates(many(45)).top;
-    expect(top).toHaveLength(30);
-    expect(top[0].key).toBe('k44');
+    expect(rankEstimates(many(23)).top).toHaveLength(23);
+    const r = rankEstimates(many(75));
+    expect(r.top).toHaveLength(60);
+    expect(r.rest).toHaveLength(15);
+    expect(r.top[0].key).toBe('k74');
   });
 
   it('breaks ties by data quality', () => {
@@ -248,8 +253,9 @@ describe('PT markets in the shared model', () => {
     expect(o.key).toBe('pendle:eip155:1:0xmarket:pt');
     expect(o.rate).toMatchObject({ value: 10, kind: 'apy', feesIncluded: true });
     expect(o.maturity).toBe(inDays(60));
+    expect(o.poolLiquidityUsd).toBe(5e6);
     // Holding to maturity: 1000 × (1.10^(60/365) − 1).
-    const e = estimate(o, input({ needsEarlyExit: false }));
+    const e = estimate(o, input({ days: 60 }));
     expect(e.baseIncome).toBeCloseTo(1000 * (Math.pow(1.1, 60 / 365) - 1), 6);
   });
 

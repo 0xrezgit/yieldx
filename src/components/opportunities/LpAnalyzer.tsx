@@ -11,7 +11,7 @@ import { Segmented } from './parts';
 const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2);
 const signed = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
-/** Values a Merkl pool (or a link) can pass in: `/opportunities?tab=lp&a=…&b=…&fee=…&rewardUsd=…&stable=1&days=…&capital=…&name=…`. */
+/** Values a Merkl pool (or a link) can pass in: `/tools?tab=lp&a=…&b=…&fee=…&rewardUsd=…&stable=1&days=…&capital=…&name=…`. */
 export interface LpPrefill {
   name?: string;
   a?: string;
@@ -52,7 +52,7 @@ export function lpLink(p: LpPrefill): string {
   if (p.rewardUsd != null && Number.isFinite(p.rewardUsd)) q.set('rewardUsd', String(Math.round(p.rewardUsd * 100) / 100));
   if (p.capital) q.set('capital', String(p.capital));
   if (p.days) q.set('days', String(p.days));
-  return `/opportunities?${q}`;
+  return `/tools?${q}`;
 }
 
 /**

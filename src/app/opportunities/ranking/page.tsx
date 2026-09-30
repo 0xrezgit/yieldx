@@ -1,8 +1,6 @@
-import type { Metadata } from 'next';
-import LendingOpportunities from '../../../components/lending/LendingOpportunities';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = { title: 'رتبه‌بندی یکپارچه — YieldX' };
-
-export default function RankingPage() {
-  return <LendingOpportunities />;
+/** Old section address; its content is part of the market analysis now. */
+export default function OldSection() {
+  redirect('/');
 }

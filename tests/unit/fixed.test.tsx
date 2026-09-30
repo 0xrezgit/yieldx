@@ -3,7 +3,7 @@ vi.mock('server-only', () => ({}));
 import type { Opportunity, OrderBook } from '../../src/types/opportunity';
 import { fillAsks, sellIntoBids, settlementFeeAt, impliedApy } from '../../src/lib/opportunity/book';
 import { estimate } from '../../src/lib/opportunity/estimate';
-import { rankLending, defaultLendingSettings } from '../../src/lib/lending/rank';
+import { evaluate, selectHorizon } from '../../src/lib/market/analysis';
 import { fetchMidnight, midnightOpportunity, MIDNIGHT_FEE_BREAKPOINTS_SEC, MIDNIGHT_MAX_CONTINUOUS_FEE_YEAR, MIDNIGHT_MAX_SETTLEMENT_FEES, type RawBook } from '../../src/lib/lending/midnight';
 
 // Controlled test data for the formulas and schema-shaped fixtures (official
@@ -48,7 +48,7 @@ const fixed = (over: Partial<OrderBook> = {}, maturityDays = 20, o: Partial<Oppo
   ...o,
 });
 
-const input = (over = {}) => ({ capital: 10_000, days: 30, needsEarlyExit: true, now: NOW, ...over });
+const input = (over = {}) => ({ capital: 10_000, days: 30, now: NOW, ...over });
 
 describe('order book fill (report test 6)', () => {
   it('walks the book instead of using the best price, and keeps the rest unallocated', () => {
@@ -109,29 +109,27 @@ describe('fees taken at the protocol maximum', () => {
 });
 
 describe('maturity against the user’s period (report test 7)', () => {
-  it('puts a maturity after the period aside when an early exit may be needed, with today’s sale value', () => {
+  it('gives a maturity after the horizon no number for that horizon (today’s bids are not an exit model)', () => {
     const e = estimate(fixed({}, 90), input({ capital: 1000 }));
-    expect(e.placement).toBe('beyond-horizon');
-    expect(e.net).not.toBeNull();
-    expect(e.exitToday?.usd).toBeCloseTo(e.allocatable / (e.allocatable / (1000 / 0.985)) * 0.98 * 0 + (1000 / 0.985) * 0.98, 6);
+    expect(e.placement).toBe('needs-model');
+    expect(e.net).toBeNull();
   });
 
-  it('compares it held to maturity when the user will hold', () => {
-    const e = estimate(fixed({}, 90), input({ capital: 1000, needsEarlyExit: false }));
+  it('ranks it at the horizon that reaches its maturity', () => {
+    const e = estimate(fixed({}, 90), input({ capital: 1000, days: 90 }));
     expect(e.placement).toBe('ranked');
     expect(e.earningDays).toBe(90);
   });
 
-  it('lets the ranking switch with the setting', () => {
-    const list = [fixed({}, 90), fixed({}, 20)];
-    const s = { ...defaultLendingSettings, capital: 1000, days: 30, view: 'fixed' as const };
-    expect(rankLending(list, { ...s, needsEarlyExit: true }, NOW).ranking.top).toHaveLength(1);
-    expect(rankLending(list, { ...s, needsEarlyExit: false }, NOW).ranking.top).toHaveLength(2);
+  it('each horizon selects its own candidates', () => {
+    const a = evaluate({ opportunities: [fixed({}, 90), fixed({}, 20)], merkl: null, gas: [] }, 1000, NOW);
+    expect(selectHorizon(a, 30, 'fixed').ranking.top).toHaveLength(1);
+    expect(selectHorizon(a, 90, 'fixed').ranking.top).toHaveLength(2);
   });
 
-  it('marks a gated market as partial data and an empty book as insufficient', () => {
+  it('marks a gated market as partial data and an empty book as without capacity', () => {
     expect(estimate(fixed({ gated: true }), input()).quality).toBe('partial');
-    expect(estimate(fixed({ asks: [] }), input()).placement).toBe('insufficient');
+    expect(estimate(fixed({ asks: [] }), input()).placement).toBe('no-capacity');
   });
 });
 
@@ -202,15 +200,18 @@ describe('Midnight adapter', () => {
 describe('fixed-rate row render', () => {
   it('shows the maturity, today’s sale value and the effective rate in Persian', async () => {
     const { renderToString } = await import('react-dom/server');
-    const { LendingRow, LendingDetails } = await import('../../src/components/lending/LendingOpportunities');
+    const { RankingRow } = await import('../../src/components/market/MarketAnalysis');
+    const { OpportunityDetails } = await import('../../src/components/market/OpportunityDetails');
     const { assertPersianMoney } = await import('../helpers/text');
     const o = midnightOpportunity(rawBook(), tokens, AT)!;
-    const e = estimate(o, input({ capital: 500, needsEarlyExit: false }));
-    const html = renderToString(<LendingRow e={e} o={o} rank={1} />) + renderToString(<LendingDetails e={e} o={o} />);
+    const row = evaluate({ opportunities: [o], merkl: null, gas: [] }, 500, NOW).rows[0];
+    expect(row.byHorizon[90].placement).toBe('ranked');
+    expect(row.byHorizon[30].placement).toBe('needs-model');
+    const html = renderToString(<RankingRow row={row} rank={1} days={90} open={false} onToggle={() => {}} modelVersion="t" />) + renderToString(<OpportunityDetails row={row} days={90} modelVersion="t" />);
     expect(html).toContain('نرخ ثابت');
-    expect(html).toContain('سررسید');
-    expect(html).toContain('فروش امروز');
-    expect(html).toContain('نرخ مؤثر برای مبلغ شما');
+    expect(html).toContain('در سررسید');
+    expect(html).toContain('سررسید روز');
+    expect(html).toContain('نیازمند مدل خروج');
     expect(html).toContain('نه تضمین بازگشت اصل سرمایه');
     expect(html).not.toContain('NaN');
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, '').replace(/<bdi dir="ltr"[^>]*>[^<]*<\/bdi>/g, ''));

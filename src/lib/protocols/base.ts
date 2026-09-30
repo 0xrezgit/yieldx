@@ -99,6 +99,67 @@ export async function postGraphql<T>(protocol: string, url: string, query: strin
   return body.data;
 }
 
+/** POST a JSON body (REST APIs that take their filters in the body). Same failure mapping as fetchJson. */
+export async function postJson<T>(protocol: string, url: string, body: unknown, shape?: Shape<T>, timeoutMs = FETCH_TIMEOUT_MS): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e) {
+    const timedOut = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError');
+    throw new UpstreamError(protocol, timedOut ? 504 : 502, timedOut ? `no answer within ${timeoutMs / 1000}s` : 'network error');
+  }
+  if (!res.ok) throw new UpstreamError(protocol, res.status);
+  let data: unknown;
+  try {
+    data = await res.json();
+  } catch {
+    throw new UpstreamError(protocol, 502, 'response is not valid JSON');
+  }
+  if (shape && !shape(data)) throw new UpstreamError(protocol, 502, 'response has an unexpected shape');
+  return data as T;
+}
+
+/** Transient failures worth one more try: timeouts, network errors, rate limits and 5xx. */
+const retryable = (e: unknown) => e instanceof UpstreamError && (e.status === 429 || e.status >= 500);
+
+/** Retries a call on transient failures with exponential backoff (e.g. 400 ms, then 1.2 s). */
+export async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseMs = 400, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      if (!retryable(e) || i === attempts - 1) break;
+      await sleep(baseMs * 3 ** i);
+    }
+  }
+  throw last;
+}
+
+/** Runs `fn` over `items` with at most `limit` calls in flight; results keep the input order. */
+export async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
+  const out: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) {
+      try {
+        out[i] = { status: 'fulfilled', value: await fn(items[i]) };
+      } catch (reason) {
+        out[i] = { status: 'rejected', reason };
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 /** Shared math — adapters only need to implement data access. */
 export abstract class BaseAdapter implements ProtocolAdapter {
   abstract id: ProtocolId;

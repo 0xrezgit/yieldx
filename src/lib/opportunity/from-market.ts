@@ -13,8 +13,8 @@ const PT_MAX_AGE_MS = 6 * 3_600_000;
  *
  * Buying PT and holding it to maturity earns the implied APY: it is the compounded
  * rate that turns today's PT price into 1 unit at maturity, so it is read as APY
- * and already net of the protocol's fees (they are in the price). Price impact of
- * buying into the pool is not reported by the list and is left as an unknown cost.
+ * The swap fee and the price impact of buying into the pool are not in the list;
+ * they stay unknown costs and the amount must stay small against the pool (policy.ts).
  */
 export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt: string, now = Date.now()): Opportunity {
   const network = networkByName(m.chain);
@@ -38,6 +38,7 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     rate: {
       value: Number.isFinite(m.impliedAPY) ? m.impliedAPY : null,
       kind: 'apy',
+      // Implied APY is the pool's mid rate: the swap fee is charged on top when buying.
       feesIncluded: true,
       rewardsIncluded: false,
       at: updated,
@@ -49,8 +50,11 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     rewards: [],
     quality: m.expired ? 'insufficient' : quality,
     sources: [{ name: identity.name, url: null, fetchedAt, sourceUpdatedAt: updated }],
+    ptToken: m.ptToken ?? null,
+    poolLiquidityUsd: m.liquidity !== null && Number.isFinite(m.liquidity) && m.liquidity > 0 ? m.liquidity : null,
+    icon: m.icon ?? null,
   };
 }
 
 /** Unknown costs every PT entry has today (the list gives no executable quote). */
-export const PT_UNKNOWN_COSTS = ['اثر قیمت خرید PT در استخر برای مبلغ شما', 'کارمزد معامله‌ی ورود و خروج'];
+export const PT_UNKNOWN_COSTS = ['کارمزد سواپ و اثر قیمت خرید PT (بدون quote)'];

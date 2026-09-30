@@ -5,6 +5,7 @@ import { formatNumber, formatPercent } from '../utils/formatting';
 import { askDepth, fillAsks, impliedApy, sellIntoBids, settlementFeeAt } from './book';
 import { rateAfterDeposit } from './curve';
 import { leverageEstimate, type LeverageInput } from './leverage';
+import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS } from './policy';
 import { periodGrowth, simpleIncome } from './rates';
 
 /**
@@ -30,8 +31,6 @@ import { periodGrowth, simpleIncome } from './rates';
 export interface EstimateInput {
   capital: number;
   days: number;
-  /** The user may need their money back before a maturity that falls after the period. */
-  needsEarlyExit: boolean;
   /** Known entry costs (gas, swap fee) — paid out of the capital before it is deployed. */
   entryCosts?: CostItem[];
   /** Known exit and claim costs. */
@@ -40,17 +39,15 @@ export interface EstimateInput {
   unknownCosts?: string[];
   /** Rate data older than this is stale. */
   maxAgeHours?: number;
-  /** Leverage settings; loops stay in the specialist section unless allowed. */
+  /** Leverage policy; without it a loop is not estimated. */
   leverage?: LeverageInput;
   now?: number;
 }
 
-/** Families whose value depends on more than a rate (price paths, points, debt) — shown in «تحلیل تخصصی». */
+/** Families whose value depends on more than a rate (price paths, points, debt) — no dollar estimate without their own model. */
 export const SPECIALIST_FAMILIES = new Set<OpportunityFamily>(['yt', 'lp', 'leverage', 'borrow']);
 
-export const DEFAULT_MAX_AGE_HOURS = 24;
-/** Below this share of the capital fitting, the opportunity leaves the top list. */
-export const MIN_ALLOCATABLE_SHARE = 0.5;
+export const DEFAULT_MAX_AGE_HOURS = MAX_RATE_AGE_HOURS;
 
 const QUALITY_ORDER: DataQuality[] = ['current', 'partial', 'stale', 'insufficient'];
 export const worseQuality = (a: DataQuality, b: DataQuality): DataQuality =>
@@ -141,45 +138,45 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     quality,
     placement: 'insufficient',
   };
-  const stop = (p: Placement, why: string): Estimate => ({ ...base, quality, placement: p, assumptions: [...assumptions, why] });
+  const stop = (p: Placement, why: string): Estimate => ({ ...base, quality, placement: p, reason: why, assumptions: [...assumptions, why] });
 
   if (!(capital > 0) || !(days > 0)) return stop('insufficient', 'مبلغ و مدت باید بزرگ‌تر از صفر باشند.');
-  if (o.family === 'leverage' && o.loop && input.leverage?.allow) return leverageEstimate(o, input, input.leverage, base);
-  if (SPECIALIST_FAMILIES.has(o.family)) return stop('specialist', 'این نوع فرصت به مدل جدا (قیمت، بدهی یا پوینت) نیاز دارد و در «تحلیل تخصصی» بررسی می‌شود.');
-  if (o.risk?.paused) return stop('insufficient', 'بازار متوقف یا منجمد است.');
+  if (o.quality === 'insufficient') return stop('insufficient', 'داده‌ی منبع برای برآورد کافی نیست.');
+  if (o.risk?.paused) return stop('inactive', 'بازار متوقف یا منجمد است.');
+  if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, input.leverage, base, now);
+  if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : o.family === 'yt' ? 'YT: ارزش خروج مدل قابل اتکا ندارد.' : 'به مدل جدا نیاز دارد.');
 
-  // Period: a maturity inside the period shortens the earning days; one after it needs an exit model.
+  // Horizon: a maturity inside it ends the earning there (cash earns nothing after, no
+  // reinvestment); one after it would need an exit price at the horizon, which is not modelled.
   let earningDays = days;
   const m = maturityState(o.maturity, now);
   if (m.state === 'invalid') return stop('insufficient', 'تاریخ سررسید نامعتبر است.');
-  if (m.state === 'matured') return stop('insufficient', 'سررسید گذشته است.');
+  if (m.state === 'matured') return stop('inactive', 'سررسید گذشته است.');
   if (m.state === 'active' && m.days !== null) {
-    if (m.days < days) {
-      earningDays = m.days;
-      assumptions.push(`سررسید ${formatNumber(m.days, 0)} روز دیگر است؛ روزهای بعد از آن بی‌درآمد فرض شد (سرمایه‌گذاری مجدد فرض نشده).`);
-    } else if (m.days > days) {
-      if (input.needsEarlyExit) {
-        const why = `سررسید ${formatNumber(m.days, 0)} روز دیگر است، بعد از مدت شما؛ ارزش خروج پیش از سررسید مدل معتبری ندارد.`;
-        if (!o.book) return stop('beyond-horizon', why);
-        // Still priced to maturity from the book, with today's sale value beside it — kept out of the ranking.
-        const spendable = Math.max(0, capital - sum(input.entryCosts ?? []));
-        const held = fixedFromBook(o, input, { base, assumptions: [...assumptions, why], unknown, quality, entry: input.entryCosts ?? [], spendable, earningDays: m.days, now });
-        return { ...held, placement: held.placement === 'insufficient' ? 'insufficient' : 'beyond-horizon' };
-      }
-      earningDays = m.days;
-      assumptions.push(`مدت متفاوت: تا سررسید (${formatNumber(m.days, 0)} روز) نگه داشته می‌شود، نه ${formatNumber(days, 0)} روز.`);
-    }
+    if (m.days > days) return stop('needs-model', `سررسید ${formatNumber(Math.ceil(m.days), 0)} روز دیگر؛ خروج پیش از آن مدل ندارد.`);
+    earningDays = m.days;
+    if (m.days < days) assumptions.push(`سررسید روز ${formatNumber(Math.ceil(m.days), 0)}؛ پس از آن نقد و بی‌درآمد.`);
+  }
+
+  // An AMM entry without an executable quote: only for amounts small against the pool.
+  if (o.family === 'pt') {
+    const liq = o.poolLiquidityUsd ?? null;
+    if (liq === null || !(liq > 0)) return stop('needs-model', 'نقدینگی استخر گزارش نشده؛ بدون quote برآورد نمی‌شود.');
+    if (capital > liq * MAX_POOL_SHARE_WITHOUT_QUOTE) return stop('needs-model', 'مبلغ نسبت به نقدینگی استخر بزرگ است؛ quote لازم است.');
+    quality = worseQuality(quality, 'partial');
   }
 
   // Capital that fits.
   const entry = input.entryCosts ?? [];
   const spendable = Math.max(0, capital - sum(entry));
   if (o.book) return fixedFromBook(o, input, { base, assumptions, unknown, quality, entry, spendable, earningDays, now });
+  if (o.family === 'pt') assumptions.push('Implied APY امروز تا سررسید؛ PT در سررسید یک واحد دارایی پایه می‌شود.');
   const cap = o.capacity.depositRemainingUsd;
   if (cap === null && !o.capacity.uncapped) unknown.push('ظرفیت باقی‌مانده‌ی سپرده گزارش نشده است.');
   const allocatable = cap === null ? spendable : Math.max(0, Math.min(spendable, cap));
   const unallocated = Math.max(0, capital - sum(entry) - allocatable);
   const unallocatedReason = unallocated > 0 ? 'ظرفیت باقی‌مانده کمتر از مبلغ شماست؛ این بخش درآمدی ندارد.' : null;
+  if (!(allocatable > 0)) return { ...stop('no-capacity', 'ظرفیت سپرده پر است.'), unallocated, unallocatedReason };
 
   // The rate after the user's own deposit moves utilization, when the curve is known.
   let rateAfterEntry = o.rate.value;
@@ -271,6 +268,7 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   const placement = placeOf(quality, net, allocatable, capital);
 
   return {
+    reason: reasonOf(placement),
     key: o.key,
     capital,
     days,
@@ -294,22 +292,29 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   };
 }
 
+/**
+ * Placement from quality and the result. Capital that does not fit already earns
+ * nothing in `net`, so a partly-filled opportunity still competes on its dollars.
+ */
 export const placeOf = (quality: DataQuality, net: number, allocatable: number, capital: number): Placement =>
   quality === 'insufficient'
     ? 'insufficient'
     : quality === 'stale'
       ? 'stale'
-      : !(net > 0)
-        ? 'unprofitable'
-        : allocatable / capital < MIN_ALLOCATABLE_SHARE
-          ? 'low-capacity'
+      : !(allocatable > 0) || !(capital > 0)
+        ? 'no-capacity'
+        : !(net > 0)
+          ? 'unprofitable'
           : 'ranked';
+
+/** A short default reason for a placement that has no specific one. */
+export const reasonOf = (p: Placement): string | null =>
+  p === 'ranked' ? null : p === 'unprofitable' ? 'هزینه‌ها از درآمد این دوره بیشترند.' : p === 'stale' ? 'داده‌ی منبع قدیمی است.' : p === 'no-capacity' ? 'ظرفیت ندارد.' : p === 'insufficient' ? 'داده‌ی کافی نیست.' : null;
 
 /**
  * Fixed rate held to maturity, priced from the order book for the user's own
- * amount (see book.ts). The period rules above already decided the earning days:
- * the units are held to maturity, and a maturity after the period is only here
- * when the user said they will not need to exit early.
+ * amount (see book.ts). Only reached when the maturity falls inside the horizon:
+ * the units redeem at maturity and the cash earns nothing after it.
  */
 function fixedFromBook(
   o: Opportunity,
@@ -347,7 +352,6 @@ function fixedFromBook(
     `کارمزد پیوسته ${formatPercent(cf * 100, 2)} در سال روی واحدها تا سررسید؛ ${b.continuousFeePerYear.basis === 'max' ? 'بیشینه‌ی مجاز پروتکل' : 'مقدار همین بازار'}.`,
     'نرخ ثابت یعنی قیمت خرید ثابت است، نه تضمین بازگشت اصل سرمایه؛ نکول وام‌گیرنده و لیکوییدیشن ناکافی وثیقه ممکن است.',
   );
-  if (earningDays !== input.days) assumptions.push('تا سررسید نگه داشته می‌شود؛ بعد از آن سرمایه‌گذاری مجدد فرض نشده.');
   if (b.gated) {
     quality = worseQuality(quality, 'partial');
     assumptions.push('ورود به این بازار ممکن است به نشانی‌های مجاز محدود باشد (gate)؛ خروج همیشه ممکن است.');
@@ -372,7 +376,8 @@ function fixedFromBook(
     netPct: (net / input.capital) * 100,
     assumptions,
     quality,
-    placement: fill.units === 0 ? 'insufficient' : placeOf(quality, net, allocatable, input.capital),
+    placement: fill.units === 0 ? 'no-capacity' : placeOf(quality, net, allocatable, input.capital),
+    reason: fill.units === 0 ? 'دفتر فروش خالی است.' : reasonOf(placeOf(quality, net, allocatable, input.capital)),
     exitToday: fill.units > 0 ? { usd: exit.sold > 0 ? exit.proceeds * b.unitUsd : null, complete: exit.sold >= fill.units * 0.999 } : null,
   };
 }

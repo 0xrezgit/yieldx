@@ -36,6 +36,8 @@ export interface MarketIdentityFields {
   accountingSymbol?: string | null;
   /** When the protocol itself last updated these numbers (not when we fetched them). */
   sourceUpdatedAt?: string | null;
+  /** The PT token (address on the market's network), when the API names it. */
+  ptToken?: TokenRef | null;
 }
 
 export interface MarketData extends MarketIdentityFields {

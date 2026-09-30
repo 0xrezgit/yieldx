@@ -13,6 +13,9 @@ import { loadScenario, normalizeScenarioData, useScenarios } from '../../hooks/u
 import { useAlerts } from '../../hooks/useAlerts';
 import { useMarketData } from '../../hooks/useMarketData';
 import { fieldMessages } from '../forms/messages';
+import protocolsConfig from '../../config/protocols.json';
+
+const isProtocolId = (x: string): x is ProtocolId => Object.prototype.hasOwnProperty.call(protocolsConfig, x);
 
 const AUTO_REFRESH_MS = 5 * 60_000;
 
@@ -41,10 +44,21 @@ export function useDashboard() {
   const md = useMarketData(p?.protocol ?? 'exponent');
   const pRef = useRef<ScenarioParams | null>(null);
   pRef.current = p;
+  /** A market opened from the market analysis (?protocol=…&market=…), loaded once its protocol is active. */
+  const [linked, setLinked] = useState<{ protocol: ProtocolId; marketId: string } | null>(null);
 
-  // Load ?scenario=<id>, else the last draft. Client-only: avoids SSR/Date.now mismatches.
+  // Load ?scenario=<id>, or ?protocol=&market= from a ranking row, else the last draft. Client-only: avoids SSR/Date.now mismatches.
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('scenario');
+    const q = new URLSearchParams(window.location.search);
+    const id = q.get('scenario');
+    const lp = q.get('protocol');
+    const lm = q.get('market');
+    if (!id && lp && lm && isProtocolId(lp)) {
+      const base = normalizeScenarioData(readLocal(STORAGE_KEYS.draft, null) ?? defaultScenario());
+      setP({ ...clearMarket(base), protocol: lp, marketId: lm, marketName: q.get('name') ?? '', maturity: (q.get('maturity') ?? '').slice(0, 10) });
+      setLinked({ protocol: lp, marketId: lm });
+      return;
+    }
     (async () => {
       if (id) {
         const s = await loadScenario(id);
@@ -78,6 +92,12 @@ export function useDashboard() {
     },
     [md],
   );
+
+  useEffect(() => {
+    if (!linked || p?.protocol !== linked.protocol) return;
+    setLinked(null);
+    void fetchInto(linked.protocol, linked.marketId, false);
+  }, [linked, p?.protocol, fetchInto]);
 
   /**
    * Pick a market: the previous market's numbers and assumptions are cleared right

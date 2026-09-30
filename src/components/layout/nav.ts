@@ -1,15 +1,15 @@
-import { BookOpen, ChartCandlestick, FlaskConical, Radar, Wallet } from 'lucide-react';
+import { ChartCandlestick, Wallet } from 'lucide-react';
 
 /**
- * The app's destinations, shared by the desktop header and the mobile bottom bar
- * (five at most). Routes are unchanged; only labels are task-oriented.
+ * The app's two sections, shared by the desktop header and the mobile bottom bar.
+ * `also`: paths that belong to a section (its tools, calculators, old addresses).
  */
 export const NAV = [
-  { href: '/opportunities', label: 'فرصت‌ها', short: 'فرصت‌ها', icon: Radar },
-  { href: '/dashboard', label: 'تحلیل بازار', short: 'تحلیل', icon: ChartCandlestick },
-  { href: '/portfolio', label: 'پرتفوی من', short: 'پرتفوی', icon: Wallet },
-  { href: '/history', label: 'سناریوها', short: 'سناریوها', icon: FlaskConical },
-  { href: '/guide', label: 'راهنما', short: 'راهنما', icon: BookOpen },
+  { href: '/', label: 'تحلیل بازار', short: 'تحلیل بازار', icon: ChartCandlestick, also: ['/tools', '/dashboard', '/history', '/guide', '/opportunities'] },
+  { href: '/portfolio', label: 'پرتفوی من', short: 'پرتفوی من', icon: Wallet, also: [] as string[] },
 ] as const;
 
-export const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + '/');
+const under = (pathname: string, href: string) => pathname === href || pathname.startsWith(href + '/');
+
+export const isActive = (pathname: string, item: { href: string; also: readonly string[] }) =>
+  item.href === '/' ? pathname === '/' || item.also.some((a) => under(pathname, a)) : under(pathname, item.href) || item.also.some((a) => under(pathname, a));

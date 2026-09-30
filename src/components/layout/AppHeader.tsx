@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Download, Sparkles } from 'lucide-react';
+import { CircleHelp, Download, Sparkles } from 'lucide-react';
 import { useShell } from './AppShell';
 import { isActive, NAV } from './nav';
 
 export function Logo() {
   return (
-    <Link href="/opportunities" className="flex items-center gap-2 shrink-0 min-h-11" aria-label="YieldX — صفحه‌ی فرصت‌ها">
+    <Link href="/" className="flex items-center gap-2 shrink-0 min-h-11" aria-label="YieldX — تحلیل بازار">
       <span className="grid place-items-center size-8 rounded-lg bg-brand text-white">
         <Sparkles size={16} aria-hidden />
       </span>
@@ -29,8 +29,9 @@ export function AppHeader() {
       <div className="max-w-matrix mx-auto px-[var(--space-page-x)] h-14 flex items-center justify-between gap-3">
         <Logo />
         <nav className="hidden lg:flex items-stretch h-full gap-1" aria-label="ناوبری اصلی">
-          {NAV.map(({ href, label, icon: Icon }) => {
-            const active = isActive(pathname, href);
+          {NAV.map((item) => {
+            const { href, label, icon: Icon } = item;
+            const active = isActive(pathname, item);
             return (
               <Link
                 key={href}
@@ -45,6 +46,9 @@ export function AppHeader() {
           })}
         </nav>
         <div className="flex items-center gap-2 min-w-[5rem] justify-end">
+          <Link href="/guide" className="tap grid place-items-center size-10 rounded-lg text-secondary hover:text-primary" aria-label="راهنما">
+            <CircleHelp size={18} aria-hidden />
+          </Link>
           {install && (
             <button type="button" onClick={install} className="tap flex items-center gap-1.5 rounded-lg border border-accent/60 px-3 min-h-9 text-sm text-primary">
               <Download size={15} aria-hidden /> نصب اپ
