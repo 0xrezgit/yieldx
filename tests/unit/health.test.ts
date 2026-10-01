@@ -5,9 +5,9 @@ const days = (values: number[], implied?: number[]): BaseHistoryPoint[] =>
   values.map((v, i) => ({ t: new Date(Date.UTC(2026, 8, 1 + i)).toISOString(), basePct: v, ...(implied ? { impliedPct: implied[i] } : {}) }));
 
 describe('base yield health', () => {
-  it('superWETH: 27% against a 2–13% range after a one-day jump from ~1% is broken', () => {
+  it('without on-chain evidence, 27% against a 2–13% range after a recent jump is suspect — guesses never break a market', () => {
     const h = assessBase({ basePct: 27.3, interestPct: 23.86, rewardPct: 3.44, range: { min: 2, max: 13 }, history: days([...Array(25).fill(1.31), 25.17, 25.17, 27.3]), categories: ['eth'] });
-    expect(h.status).toBe('broken');
+    expect(h.status).toBe('suspect');
     expect(h.reasons.join()).toContain('بازه');
     expect(h.reasons.join()).toContain('ناگهان');
   });
@@ -35,15 +35,16 @@ describe('base yield health', () => {
 });
 
 describe('base yield against what the chain delivered (30 days)', () => {
-  it('superWETH: 27% published, 4.5% realized — broken, whatever the other checks say', () => {
-    const h = assessBase({ basePct: 27.16, range: { min: 2, max: 30 }, categories: [], realized: { d7: 19, d30: 4.49 } });
+  it('superWETH: 27% published; the week grew in one step (steady pace 1.8%), the month 4.5% — broken', () => {
+    const h = assessBase({ basePct: 27.16, range: { min: 2, max: 30 }, categories: [], realized: { d7: 1.8, d30: 4.49, lumpy: true } });
     expect(h.status).toBe('broken');
+    expect(h.reasons[0]).toContain('یک‌جا');
     expect(h.realizedPct).toBe(4.49);
     expect(h.reasons[0]).toContain('روی زنجیره');
   });
 
   it('sBOLD: 8.7% published, 5.0% realized — suspect, ranked on the realized yield', () => {
-    expect(assessBase({ basePct: 8.66, categories: [], realized: { d7: 5, d30: 4.97 } })).toMatchObject({ status: 'suspect', conservativePct: 4.97 });
+    expect(assessBase({ basePct: 8.66, categories: [], realized: { d7: 5, d30: 4.97 } })).toMatchObject({ status: 'suspect', conservativePct: 5 });
   });
 
   it('sUSDat: 44% published outside its range after a jump, but 49.6% realized — the chain confirms it', () => {
@@ -51,8 +52,22 @@ describe('base yield against what the chain delivered (30 days)', () => {
     expect(h).toMatchObject({ status: 'ok', reasons: [], conservativePct: 44.11 });
   });
 
-  it('no measurement: the heuristics decide as before', () => {
-    expect(assessBase({ basePct: 27.3, range: { min: 2, max: 13 }, categories: [], realized: { d7: null, d30: null } }).status).toBe('broken');
+  it('no measurement: the heuristics decide, and stop at suspect', () => {
+    expect(assessBase({ basePct: 27.3, range: { min: 2, max: 13 }, categories: [], realized: { d7: null, d30: null } }).status).toBe('suspect');
+    expect(assessBase({ basePct: 900, categories: [] }).status).toBe('broken');
+  });
+
+  it('a real, steady rise: the week delivers the new figure though the month still lags — ok', () => {
+    expect(assessBase({ basePct: 12, range: { min: 2, max: 8 }, categories: [], realized: { d7: 12.4, d30: 6, lumpy: false } })).toMatchObject({ status: 'ok', reasons: [] });
+  });
+
+  it('only the month measured, far below: suspect, not broken (one window is not enough)', () => {
+    expect(assessBase({ basePct: 27, categories: [], realized: { d7: null, d30: 4 } }).status).toBe('suspect');
+  });
+
+  it('a jump older than a week is a new level the market kept: not flagged', () => {
+    const h = assessBase({ basePct: 11, range: { min: 2, max: 13 }, history: days([...Array(5).fill(4), ...Array(10).fill(11)]), categories: [] });
+    expect(h.status).toBe('ok');
   });
 });
 

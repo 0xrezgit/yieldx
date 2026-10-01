@@ -239,7 +239,13 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   let incomeRate = rateAfterEntry;
   let spikeRate: number | null = null;
   const avg7d = o.rate.avg7d;
-  if (incomeRate !== null && avg7d != null && Number.isFinite(avg7d) && incomeRate > avg7d && (o.family === 'lend' || o.family === 'vault')) {
+  const avg1d = o.rate.avg1d;
+  // A high rate that held over the last day and covered most of the week is the market's new level, not a spike.
+  const sustained = avg7d != null && avg1d != null && incomeRate !== null && avg1d >= incomeRate * SUSTAINED.dayShare && avg7d >= incomeRate * SUSTAINED.weekShare;
+  if (sustained && incomeRate !== null && incomeRate > (avg1d as number) && (o.family === 'lend' || o.family === 'vault')) {
+    assumptions.push(`نرخ بالا ماندگار است؛ با میانگین یک روز (${formatPercent(avg1d as number, 2)}) حساب شد.`);
+    incomeRate = avg1d as number;
+  } else if (!sustained && incomeRate !== null && avg7d != null && Number.isFinite(avg7d) && incomeRate > avg7d && (o.family === 'lend' || o.family === 'vault')) {
     if (incomeRate > SPIKE.ratio * avg7d && incomeRate - avg7d > SPIKE.minPp) {
       spikeRate = incomeRate;
       assumptions.push(`نرخ امروز (${formatPercent(incomeRate, 2)}) جهشی است و بیش از دو برابر میانگین ۷ روز (${formatPercent(avg7d, 2)})؛ سود با میانگین ۷ روز رتبه گرفت.`);
@@ -381,6 +387,8 @@ export const volatileReason = (symbol: string) => `سپرده ${symbol} پرنو
 
 /** Today's rate counts as a spike above this multiple of its 7-day average and this many points over it. */
 export const SPIKE = { ratio: 2, minPp: 5 } as const;
+/** Today's rate counts as sustained when the last day kept 90% of it and the week 70%. */
+export const SUSTAINED = { dayShare: 0.9, weekShare: 0.7 } as const;
 
 /** A YT on a points market whose token earns nothing itself: it pays in points only. */
 export const POINTS_ONLY = 'این توکن خودش بازده ندارد و YT آن فقط پوینت می‌دهد؛ سود دلاری ساخته نمی‌شود.';

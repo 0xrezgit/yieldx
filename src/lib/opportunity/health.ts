@@ -15,7 +15,10 @@ export type { BaseHealth, BaseHealthStatus, ImpliedHealth };
  *   zero     — 0% without a points program (missing data rather than no yield)
  *
  * «suspect»: the estimate uses a conservative base (the lower of today's figure and the
- * last 30 days' median) and shows a range. «broken»: no dollar figure at all.
+ * last 30 days' median) and shows a range. «broken»: no dollar figure at all — only on
+ * evidence: the chain delivered far less over both the last week and the last month, or
+ * the figure is impossible. Guesses (range, jumps, stale figures) stop at «suspect»,
+ * because a base yield rises and falls with its market for real.
  * A 0% base on a points market is normal: its YT pays in points, never in dollars.
  */
 
@@ -29,13 +32,13 @@ export interface BaseHistoryPoint {
 }
 
 export const HEALTH_RULES = {
-  /** A day-to-day move at least this large in the last `jumpDays` days, points. */
+  /** A day-to-day move at least this large in the last `jumpDays` days, points; a level held longer is accepted. */
   jumpPp: 5,
-  jumpDays: 14,
+  jumpDays: 7,
+  /** A published base above this, % a year, is impossible. */
+  impossiblePct: 200,
   /** Above the protocol's range by this many points makes it suspect… */
   aboveRangePp: 1,
-  /** …and by more than this many points and twice the range's top, broken. */
-  farAbovePp: 5,
   /** A reward-only figure unchanged this many days is a configured rate. */
   staleDays: 14,
   medianDays: 30,
@@ -61,8 +64,8 @@ export function assessBase(p: {
   /** Daily base yield, oldest first; null when the protocol gives no history. */
   history?: BaseHistoryPoint[] | null;
   categories: string[];
-  /** Base yield realized on-chain over the last 7 and 30 days, %; overrides the heuristics. */
-  realized?: { d7: number | null; d30: number | null } | null;
+  /** Base yield realized on-chain (7 days without a one-step jump, and 30 days), %; overrides the heuristics. */
+  realized?: { d7: number | null; d30: number | null; lumpy?: boolean } | null;
 }): BaseHealth {
   const R = HEALTH_RULES;
   const reasons: string[] = [];
@@ -78,10 +81,27 @@ export function assessBase(p: {
     return { status: 'suspect', reasons: ['بازده پایه صفر گزارش شده و بازار پوینتی هم نیست؛ احتمالاً داده گم شده است.'], conservativePct: 0, pointsOnly: false };
   }
 
+  if (base > R.impossiblePct) return { status: 'broken', reasons: [`بازده پایه‌ی ${formatPercent(base, 0)} ممکن نیست.`], conservativePct: null, pointsOnly: false };
+
+  // Measured on-chain: the delivered yield is the evidence, ahead of every guess below.
+  const real = p.realized;
+  if (real && (real.d7 != null || real.d30 != null)) {
+    const d7 = real.d7 ?? null;
+    const d30 = real.d30 ?? null;
+    const realizedPct = d30 ?? d7;
+    // A steady (not one-step) week that delivers the published figure: a real rise, even if the month lags.
+    if (d7 !== null && !real.lumpy && d7 >= base - R.realizedSuspectPp) return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct };
+    const best = Math.max(...[d7, d30].filter((x): x is number => x !== null));
+    const both = d7 !== null && d30 !== null;
+    const msg = `بازده واقعی روی زنجیره ${formatPercent(best, 2)} است، نه ${formatPercent(base, 1)}${real.lumpy ? ' (رشد هفته یک‌جا آمده، نه پیوسته)' : ''}.`;
+    if (both && base > 2 * Math.max(best, 0.5) && base - best > R.realizedGapPp) return { status: 'broken', reasons: [msg], conservativePct: best, pointsOnly: false, realizedPct };
+    if (base - best > R.realizedSuspectPp) return { status: 'suspect', reasons: [msg], conservativePct: best, pointsOnly: false, realizedPct };
+    return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct };
+  }
+
   const above = p.range ? base - p.range.max : -Infinity;
   if (p.range && above > R.aboveRangePp) {
-    const far = above > R.farAbovePp && base > 2 * p.range.max;
-    worse(far ? 'broken' : 'suspect');
+    worse('suspect');
     reasons.push(`بازده پایه‌ی ${formatPercent(base, 1)} بیرون از بازه‌ی مورد انتظار خود پروتکل (${formatPercent(p.range.min, 1)} تا ${formatPercent(p.range.max, 1)}) است.`);
   }
 
@@ -98,8 +118,7 @@ export function assessBase(p: {
       }
     }
     if (jump >= R.jumpPp) {
-      // A jump that lands outside the protocol's own range is a data break, not a market move.
-      worse(p.range && above > R.aboveRangePp ? 'broken' : 'suspect');
+      worse('suspect');
       reasons.push(`بازده پایه در ${formatDate(at)} ناگهان ${formatNumber(jump, 1)} واحد درصد جابه‌جا شد.`);
     }
     let same = 0;
@@ -108,20 +127,6 @@ export function assessBase(p: {
       worse('suspect');
       reasons.push(`بازده پایه ${formatNumber(same, 0)} روز بدون تغییر مانده و فقط نرخ پاداش اعلامی است، نه بازده اندازه‌گیری‌شده.`);
     }
-  }
-
-  // Measured on-chain over 30 days: the delivered yield is the evidence, ahead of every heuristic.
-  // Thirty days, not seven: yield can arrive in lumps (a catch-up harvest makes one week look huge).
-  const real = p.realized?.d30;
-  if (real != null && Number.isFinite(real)) {
-    if (base > 2 * Math.max(real, 0.5) && base - real > R.realizedGapPp) {
-      return { status: 'broken', reasons: [`بازده واقعی ۳۰ روز گذشته روی زنجیره ${formatPercent(real, 2)} است، نه ${formatPercent(base, 1)}.`], conservativePct: real, pointsOnly: false, realizedPct: real };
-    }
-    if (base - real > R.realizedSuspectPp) {
-      return { status: 'suspect', reasons: [`بازده واقعی ۳۰ روز گذشته روی زنجیره ${formatPercent(real, 2)} است؛ عدد اعلامی ${formatPercent(base, 1)}.`], conservativePct: real, pointsOnly: false, realizedPct: real };
-    }
-    // The chain confirms the published figure: the heuristics' doubts do not stand.
-    return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct: real };
   }
 
   const med = median(h.slice(-R.medianDays).map((x) => x.basePct));

@@ -87,6 +87,11 @@ describe('lending rate spikes', () => {
     const mild = run([lend('m', { rate: { value: 9, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
     expect(mild.net).toBeCloseTo(calm.net!, 6);
     expect(mild.confidence).toBeUndefined();
+    // High for most of the week and still there today: the new level, ranked on the last day, not marked.
+    const held = run([lend('h', { rate: { value: 30, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 24, avg1d: 29 } })], 10_000).rows[0].byHorizon[90];
+    const at29 = run([lend('x', { rate: { value: 29, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT } })], 10_000).rows[0].byHorizon[90];
+    expect(held.net).toBeCloseTo(at29.net!, 6);
+    expect(held.confidence).toBeUndefined();
     // Below its average: today's rate stands.
     const low = run([lend('l', { rate: { value: 5, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
     expect(low.net!).toBeLessThan(calm.net!);

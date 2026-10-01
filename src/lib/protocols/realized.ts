@@ -51,9 +51,15 @@ async function rpc(chainId: number, method: string, params: unknown[]): Promise<
 }
 
 export interface Realized {
-  /** Realized APY over the last 7 and 30 days, %; null when not measurable. */
+  /**
+   * Realized APY over the last 7 days, %, with a one-step jump taken out: when nearly all of
+   * the week's growth came in one of its three stretches, the steady pace of the others.
+   */
   d7: number | null;
+  /** Realized APY over the last 30 days, %. */
   d30: number | null;
+  /** The week's growth came in a single step (a catch-up harvest), not steadily. */
+  lumpy: boolean;
   at: number;
 }
 
@@ -97,14 +103,41 @@ async function measure(chainId: number, sy: string): Promise<Realized | null> {
   const c = await chainClock(chainId);
   if (!c) return null;
   const blockAgo = (days: number) => Math.max(1, Math.round(c.head - (days * DAY) / c.secPerBlock));
-  const [now, w, m] = await Promise.all([rateAt(chainId, sy, c.head), rateAt(chainId, sy, blockAgo(7)), rateAt(chainId, sy, blockAgo(30))]);
+  // Now, 1, 3, 7 and 30 days ago: three stretches inside the week tell a step from a slope.
+  const [now, r1, r3, r7, r30] = await Promise.all([rateAt(chainId, sy, c.head), rateAt(chainId, sy, blockAgo(1)), rateAt(chainId, sy, blockAgo(3)), rateAt(chainId, sy, blockAgo(7)), rateAt(chainId, sy, blockAgo(30))]);
   if (now === null) return null;
-  // A failed read is unknown; a flat stretch is 0%.
-  const apy = (past: number | null, days: number) => (past === null || !(past > 0) ? null : past === now ? 0 : (Math.pow(now / past, 365 / days) - 1) * 100);
+  const annual = (to: number, from: number, days: number) => (Math.pow(to / from, 365 / days) - 1) * 100;
   // A rate that never moved measures nothing (the yield is paid another way).
-  const moved = (w !== null && w !== now) || (m !== null && m !== now);
-  return { d7: moved ? apy(w, 7) : null, d30: moved ? apy(m, 30) : null, at: Date.now() };
+  const moved = [r1, r3, r7, r30].some((x) => x !== null && x !== now);
+  if (!moved) return { d7: null, d30: null, lumpy: false, at: Date.now() };
+  const d30 = r30 !== null && r30 > 0 ? annual(now, r30, 30) : null;
+  let d7 = r7 !== null && r7 > 0 ? annual(now, r7, 7) : null;
+  let lumpy = false;
+  if (r1 !== null && r3 !== null && r7 !== null && r7 > 0 && now > r7) {
+    const stretches = [
+      { g: Math.log(r3 / r7), days: 4 },
+      { g: Math.log(r1 / r3), days: 2 },
+      { g: Math.log(now / r1), days: 1 },
+    ];
+    const total = Math.log(now / r7);
+    const top = stretches.reduce((a, b) => (b.g > a.g ? b : a));
+    if (top.g > LUMP.share * total) {
+      // Nearly all of the week in one stretch: the others give the steady pace.
+      const rest = stretches.filter((x) => x !== top);
+      const restDays = rest.reduce((a, x) => a + x.days, 0);
+      const restG = rest.reduce((a, x) => a + x.g, 0);
+      const pace = (Math.exp((restG * 365) / restDays) - 1) * 100;
+      if ((top.g * 365) / top.days > LUMP.paceRatio * Math.max((restG * 365) / restDays, 1e-9)) {
+        lumpy = true;
+        d7 = pace;
+      }
+    }
+  }
+  return { d7, d30, lumpy, at: Date.now() };
 }
+
+/** A stretch holding more than `share` of the week's growth at over `paceRatio` times the others' pace is a step. */
+const LUMP = { share: 0.8, paceRatio: 5 } as const;
 
 /** The cached measurement for one SY; starts one in the background when missing or old. Never waits. */
 export function cachedRealized(chainId: number, sy: string | null | undefined): Realized | null {

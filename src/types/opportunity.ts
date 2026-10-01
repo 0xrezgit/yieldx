@@ -39,6 +39,8 @@ export interface RateQuote {
   at: string | null;
   /** The same rate averaged over the last 7 days, when the source publishes it (same kind). */
   avg7d?: number | null;
+  /** …and over the last day. */
+  avg1d?: number | null;
 }
 
 /** An incentive paid on top of the base rate. The key identifies the campaign across sources. */
