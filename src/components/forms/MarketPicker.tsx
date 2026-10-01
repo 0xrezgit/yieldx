@@ -240,7 +240,7 @@ export function MarketPicker({ open, onClose, markets, loading, selectedId, onSe
                 </button>
               )}
             </span>
-            <div className="flex gap-1 p-1 rounded-lg bg-elevated border border-default" role="radiogroup" aria-label="مرتب‌سازی">
+            <div className="seg" role="radiogroup" aria-label="مرتب‌سازی">
               {SORTS.map((s) => (
                 <button
                   key={s.id}
@@ -248,7 +248,7 @@ export function MarketPicker({ open, onClose, markets, loading, selectedId, onSe
                   role="radio"
                   aria-checked={sort === s.id}
                   onClick={() => setSort(s.id)}
-                  className={`tap rounded-md px-3 min-h-9 ${sort === s.id ? 'bg-surface text-primary ring-1 ring-accent/60' : 'text-secondary'}`}
+                  className="tap px-3 min-h-9"
                 >
                   {s.label}
                 </button>
@@ -295,7 +295,7 @@ function ChipRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
       <span className="text-xs text-muted shrink-0 w-10">{label}</span>
-      <div className="flex gap-1.5 overflow-x-auto pb-0.5 min-w-0" role="group" aria-label={label}>
+      <div className="strip flex gap-1.5 min-w-0" role="group" aria-label={label}>
         {children}
       </div>
     </div>
@@ -326,7 +326,7 @@ function MarketRow({ m, selected, dup, showProtocol, onPick }: { m: Row; selecte
       disabled={m.expired}
       aria-current={selected || undefined}
       className={`w-full flex items-center gap-3 rounded-lg p-3 min-h-[72px] text-right transition-colors ${
-        selected ? 'bg-accent/12 ring-1 ring-accent/60' : 'hover:bg-elevated'
+        selected ? 'bg-accent/12 ring-1 ring-accent/50' : 'hover:bg-hover'
       } ${m.expired ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       <LogoWithNetwork icon={m.icon} name={m.name} chain={m.chain} size={32} />

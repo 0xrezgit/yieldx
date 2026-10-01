@@ -138,7 +138,10 @@ export function YtBoard({
           mobile={(r) => ({
             meta: (
               <>
-                <ProtocolCell m={r.m} /> · سررسید {formatDate(r.m.maturity)} · <Num>{formatNumber(r.m.daysToMaturity, 0)}</Num> روز
+                <span>سررسید {formatDate(r.m.maturity)}</span>
+                <span>
+                  <Num>{formatNumber(r.m.daysToMaturity, 0)}</Num> روز مانده
+                </span>
               </>
             ),
             result: <Num className={`text-lg font-semibold ${r.cashPercent >= 0 ? 'text-success' : r.zone === 'budget' ? 'text-warning' : 'text-danger'}`}>{signedPct(r.cashPercent)}</Num>,

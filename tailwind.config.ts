@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * YieldX theme — every colour points at a CSS variable defined once in
+ * YieldX theme (docs/DESIGN.md) — every colour points at a CSS variable defined once in
  * src/app/globals.css (with measured contrast ratios). Older names (sx-*, brand2…)
  * map to the same tokens so the whole app shares one palette.
  * Extend the variables instead of adding ad-hoc colours in TSX.
@@ -17,6 +17,7 @@ export default {
         canvas: v('bg'),
         surface: v('surface'),
         elevated: v('raised'),
+        hover: v('hover'),
         // Borders
         default: v('border'),
         strong: v('border-strong'),
@@ -56,7 +57,7 @@ export default {
       },
       fontFamily: {
         sans: ['Vazirmatn', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Tahoma', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        mono: ['Vazirmatn Latin', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
     },
   },

@@ -2,12 +2,40 @@
 @config '../../tailwind.config.ts';
 
 /*
+ * YieldX design system — adapted from Linear's DESIGN.md (open-design, design-systems/linear-app)
+ * for a right-to-left Persian app. The rules are in docs/DESIGN.md; this file is their only
+ * implementation: tokens, fonts and the shared component classes.
+ */
+
+/*
  * Vazirmatn v33.0.3 (SIL OFL 1.1 — public/fonts/Vazirmatn-OFL.txt), hosted locally:
- * no third-party request, and it works offline in the PWA. Its `tnum` feature maps
- * Persian digits to one width (1349 units), so .num columns line up.
+ * no third-party request, and it works offline in the PWA.
+ *
+ * Two faces under one family name. Vazirmatn-FD-Digits is a subset of the same font
+ * whose 0–9 are drawn as ۰–۹ (built with fontTools from the variable font), so every
+ * number on screen is Persian — also digits inside API text (symbols, dates, versions)
+ * — while the characters stay Latin: copying a figure or an address still pastes 0–9.
+ * Technical strings that must read in Latin digits (contract addresses) use `.latin`.
  */
 @font-face {
   font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-FD-Digits.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0030-0039;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-002F, U+003A-10FFFF;
+}
+/* The full font, Latin digits included — for `.latin` only. */
+@font-face {
+  font-family: 'Vazirmatn Latin';
   src: url('/fonts/Vazirmatn-Variable.woff2') format('woff2');
   font-weight: 100 900;
   font-style: normal;
@@ -16,59 +44,65 @@
 
 @theme {
   --font-sans: 'Vazirmatn', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --container-matrix: 1280px;
+  --font-mono: 'Vazirmatn Latin', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --container-matrix: 1200px;
+  /* Linear's radius scale: 6 controls · 8 cards · 12 panels · pill chips. */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 10px;
   --radius-2xl: 12px;
   --radius-3xl: 16px;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 600;
-  --font-weight-extrabold: 700;
+  /* Linear's three weights (400 / 510 / 590); Vazirmatn is variable, so they are exact. */
+  --font-weight-medium: 510;
+  --font-weight-semibold: 590;
+  --font-weight-bold: 590;
+  --font-weight-extrabold: 650;
 }
 
 /*
- * Design tokens — the only place colours are defined. Contrast measured (WCAG 2.x):
- *   text      #F3F5F9  16.3:1 on surface     secondary #B0BACB 9.1:1
- *   muted     #8B96A8   5.9:1 on surface, 5.4:1 on raised (never below 4.5:1)
- *   accent    #8B7CFF   5.4:1 on surface (selection, links — not a text-on-fill colour)
- *   brand     #6A58F0   white text on it 4.9:1 (primary buttons)
- *   success   #34D399 9.2:1 · danger #FB7185 6.6:1 · warning #FBBF24 10.6:1 · info #60A5FA 7.0:1
- *   control-border #64728C 3.3:1 on raised (non-text UI boundary ≥ 3:1)
+ * Tokens — the only place colours are defined. Dark-first, depth by luminance stacking
+ * (bg → surface → raised → hover), never by drop shadows. Contrast measured (WCAG 2.x):
+ *   text      #F7F8F8  17.9:1 on surface   secondary #D0D6E0 13.0:1
+ *   muted     #8A8F98   5.9:1 on surface, 5.4:1 on raised (never below 4.5:1)
+ *   accent    #8A89FF   6.4:1 on surface (selection, links, focus — not a fill for text)
+ *   brand     #5E6AD2   white text on it 4.7:1 (the one primary action)
+ *   success #3ECF8E 9.5:1 · danger #F0636B 6.1:1 · warning #F2C94C 12.0:1 · info #4EA7FC 7.5:1
+ *   control-border #62666D 3.0:1 on raised (non-text boundary ≥ 3:1)
  */
 :root {
   color-scheme: dark;
-  --c-bg: #0b0d12;
-  --c-surface: #141821;
-  --c-raised: #1b2130;
-  --c-border: #2b3445;
-  --c-border-strong: #3a4558;
-  --c-control-border: #64728c;
-  --c-text: #f3f5f9;
-  --c-secondary: #b0bacb;
-  --c-muted: #8b96a8;
-  --c-accent: #8b7cff;
-  --c-brand: #6a58f0;
-  --c-success: #34d399;
-  --c-danger: #fb7185;
-  --c-warning: #fbbf24;
-  --c-info: #60a5fa;
-  --c-st-pt: #60a5fa;
-  --c-st-loop: #a78bfa;
-  --c-st-yt: #22d3ee;
-  --c-st-clmm: #e879f9;
+  --c-bg: #08090a;
+  --c-surface: #0f1011;
+  --c-raised: #18191b;
+  --c-hover: #222327;
+  --c-border: #202226;
+  --c-border-strong: #2e3036;
+  --c-control-border: #62666d;
+  --c-text: #f7f8f8;
+  --c-secondary: #d0d6e0;
+  --c-muted: #8a8f98;
+  --c-accent: #8a89ff;
+  --c-brand: #5e6ad2;
+  --c-success: #3ecf8e;
+  --c-danger: #f0636b;
+  --c-warning: #f2c94c;
+  --c-info: #4ea7fc;
+  --c-st-pt: #4ea7fc;
+  --c-st-loop: #a594ff;
+  --c-st-yt: #2fd2e8;
+  --c-st-clmm: #e27ff5;
 
   --space-page-x: 1rem;
-  --header-h: 3.5rem;
+  --header-h: 3.25rem;
   --bottom-nav-h: 4rem;
-  --focus-ring: 0 0 0 3px rgb(139 124 255 / 0.55);
+  --focus-ring: 0 0 0 2px var(--c-bg), 0 0 0 4px rgb(138 137 255 / 0.7);
 }
 
 @media (min-width: 1024px) {
   :root {
     --space-page-x: 2rem;
+    --header-h: 3.5rem;
   }
 }
 
@@ -83,7 +117,9 @@ body {
   color: var(--c-text);
   font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.7;
+  line-height: 1.75;
+  /* Persian joins letters: never negative tracking (Linear tightens Latin display type only). */
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   text-size-adjust: 100%;
@@ -94,13 +130,18 @@ body {
   color: #ffffff;
 }
 
-/* Numbers: fixed-width digits (Persian too — see @font-face), isolated from RTL text. */
+/* Numbers: fixed-width digits (Persian too — the font's tnum), isolated from RTL text. */
 .num {
   font-variant-numeric: tabular-nums;
   unicode-bidi: isolate;
 }
 
-/* Primary fill: a solid brand colour, no decorative gradient. */
+/* Text that must keep Latin digits (contract addresses, hashes). */
+.latin {
+  font-family: 'Vazirmatn Latin', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Primary fill: the brand colour, no decorative gradient. */
 .brand-gradient {
   background: var(--c-brand);
 }
@@ -112,12 +153,21 @@ body {
 .bottom-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+/* Installed PWA (status bar is translucent): the header starts below the notch. */
+.top-safe {
+  padding-top: env(safe-area-inset-top);
+}
+/* Sticky bars under the header (whatever its height and the notch). */
+.below-header {
+  top: calc(var(--header-h) + env(safe-area-inset-top));
+}
 
 input,
 select,
 textarea,
 button {
   font: inherit;
+  letter-spacing: inherit;
 }
 
 input::placeholder,
@@ -181,8 +231,9 @@ details > summary::-webkit-details-marker {
 }
 
 /*
- * Shared control and surface styles (.sx is on <body>, so they apply app-wide).
- * Unlayered, so they win over utility classes of the form controls.
+ * Form controls (.sx is on <body>, so they apply app-wide). Unlayered, so they win
+ * over utility classes of the controls. Linear inputs: a near-transparent fill one
+ * step above the surface, 6px radius, the accent on focus.
  */
 .sx {
   font-weight: 400;
@@ -196,72 +247,140 @@ details > summary::-webkit-details-marker {
   color: var(--c-text);
   font-weight: 400;
   min-height: 44px;
-  transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+  transition: border-color 120ms ease-out, box-shadow 120ms ease-out, background-color 120ms ease-out;
 }
 .sx input:not([type='checkbox']):not([type='radio']):hover,
 .sx select:hover,
 .sx textarea:hover {
-  border-color: #7a88a3;
+  border-color: #7c8089;
 }
 .sx input:not([type='checkbox']):not([type='radio']):focus,
 .sx select:focus,
 .sx textarea:focus {
   border-color: var(--c-accent);
-  box-shadow: var(--focus-ring);
+  box-shadow: 0 0 0 3px rgb(138 137 255 / 0.25);
 }
 .sx input[aria-invalid='true'] {
   border-color: var(--c-danger);
 }
+.sx select option {
+  background: var(--c-raised);
+  color: var(--c-text);
+}
+
+/* Checkbox and radio: drawn, not the platform default (iOS paints an empty black square). */
 .sx input[type='checkbox'],
 .sx input[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  background: var(--c-raised);
+  border: 1.5px solid var(--c-control-border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+.sx input[type='radio'] {
+  border-radius: 9999px;
+}
+.sx input[type='checkbox']::after {
+  content: '';
+  width: 11px;
+  height: 6px;
+  border: solid #ffffff;
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg) scale(0);
+  transition: transform 120ms ease-out;
+}
+.sx input[type='radio']::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #ffffff;
+  transform: scale(0);
+  transition: transform 120ms ease-out;
+}
+.sx input[type='checkbox']:checked,
+.sx input[type='radio']:checked {
+  background: var(--c-brand);
+  border-color: var(--c-brand);
+}
+.sx input[type='checkbox']:checked::after {
+  transform: translateY(-1px) rotate(-45deg) scale(1);
+}
+.sx input[type='radio']:checked::after {
+  transform: scale(1);
+}
+.sx input[type='checkbox']:disabled,
+.sx input[type='radio']:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.sx input[type='range'] {
   accent-color: var(--c-brand);
-  width: 18px;
-  height: 18px;
 }
 .sx label {
   font-weight: 400;
   color: var(--c-secondary);
 }
+
+/* Surfaces: a step of luminance and a hairline border — no shadow on dark. */
 .sx-card {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 .sx-lift {
   transition: border-color 150ms ease-out, background-color 150ms ease-out;
 }
 .sx-lift:hover {
   border-color: var(--c-border-strong);
+  background-color: var(--c-raised);
 }
+/* Floating layers (dialogs, sheets, menus): the only place a shadow is used. */
 .sx-pop {
-  box-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.6);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.04),
+    0 8px 16px -4px rgb(0 0 0 / 0.5),
+    0 24px 48px -12px rgb(0 0 0 / 0.6);
 }
 /* Summary band: a plain surface; hierarchy comes from type, not decoration. */
 .sx-hero {
   position: relative;
   background: var(--c-surface);
   border: 1px solid var(--c-border);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
 /* Page title row: same position and spacing on every page. */
 .page-title {
-  font-size: 1.625rem;
-  line-height: 1.3;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 1.5rem;
+  line-height: 1.35;
+  font-weight: 590;
   color: var(--c-text);
 }
 @media (min-width: 1024px) {
   .page-title {
-    font-size: 1.875rem;
+    font-size: 1.75rem;
   }
+}
+/* Small grey line under a page title. */
+.page-sub {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-muted);
 }
 /* The one headline number of a page. */
 .hero-num {
   font-size: 1.75rem;
   line-height: 1.2;
-  font-weight: 500;
+  font-weight: 510;
   font-variant-numeric: tabular-nums;
 }
 @media (min-width: 1024px) {
@@ -269,15 +388,118 @@ details > summary::-webkit-details-marker {
     font-size: 2.25rem;
   }
 }
+/* Section label above a group (Linear's 12–13px caption). */
+.eyebrow {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  font-weight: 510;
+  color: var(--c-muted);
+}
 
-/* A one-line horizontal strip (paths, chips) that scrolls instead of wrapping. */
+/* A one-line horizontal strip (paths, chips, tabs) that scrolls instead of wrapping. */
 .strip {
+  overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
 }
 .strip::-webkit-scrollbar {
   display: none;
+}
+
+/*
+ * Segmented control: a recessed track, the selected segment one luminance step up.
+ * `.seg-fit`: equal columns whose labels may wrap (≤ 4 options) — never clipped or
+ * overlapping on a narrow phone. `.seg-scroll`: a scrolling strip for longer lists.
+ */
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border);
+}
+.seg-fit {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+}
+.seg > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-width: 0;
+  border-radius: 6px;
+  padding-inline: 0.625rem;
+  color: var(--c-muted);
+  font-weight: 510;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.seg-scroll > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.seg > button:hover {
+  color: var(--c-text);
+}
+.seg > button[aria-checked='true'],
+.seg > button[aria-selected='true'] {
+  background: var(--c-hover);
+  color: var(--c-text);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06);
+}
+
+/* Underline tabs: the indicator sits inside the strip, so it never makes it scroll. */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--c-border);
+}
+.tabs > button {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding-inline: 0.75rem;
+  min-height: 44px;
+  white-space: nowrap;
+  color: var(--c-muted);
+  font-weight: 510;
+  transition: color 120ms ease-out;
+}
+.tabs > button:hover {
+  color: var(--c-text);
+}
+.tabs > button[aria-selected='true'] {
+  color: var(--c-text);
+}
+.tabs > button[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0.5rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--c-accent);
+}
+
+/* A list of short facts in one line that wraps between items, never inside one. */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.875rem;
+}
+.meta > * {
+  white-space: nowrap;
+  unicode-bidi: isolate;
 }
 
 /*

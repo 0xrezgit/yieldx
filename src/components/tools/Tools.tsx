@@ -170,7 +170,7 @@ export default function Tools() {
         </button>
       </header>
 
-      <div className="sticky top-14 z-20 -mx-[var(--space-page-x)] px-[var(--space-page-x)] py-2 bg-canvas/95 backdrop-blur">
+      <div className="sticky below-header z-20 -mx-[var(--space-page-x)] px-[var(--space-page-x)] py-2 bg-canvas/95 backdrop-blur">
         <Segmented
           value={tab}
           onChange={(t) => patch({ tab: t })}

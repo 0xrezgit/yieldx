@@ -36,7 +36,7 @@ export function SensitivityPanel({ p, days }: { p: ScenarioParams; days: number 
 
   return (
     <Collapsible title="اگر فرض‌ها غلط باشد" icon={<Grid3x3 size={18} />}>
-      <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label="FDV">
+      <div className="seg seg-scroll strip" role="tablist" aria-label="FDV">
         {FDV_FACTORS.map((f, i) => (
           <button
             key={f}
@@ -44,9 +44,7 @@ export function SensitivityPanel({ p, days }: { p: ScenarioParams; days: number 
             role="tab"
             aria-selected={i === fdvIndex}
             onClick={() => setFdvIndex(i)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-sm border transition-colors ${
-              i === fdvIndex ? 'border-accent bg-accent/20 text-primary' : 'border-strong text-secondary'
-            }`}
+            className="min-h-9 text-sm"
           >
             FDV <Num>{formatUSDCompact(p.fdv * f)}</Num>
           </button>

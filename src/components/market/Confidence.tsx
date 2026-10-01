@@ -12,7 +12,7 @@ const money = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
  */
 export function Confidence({ confidence, range, why }: { confidence?: 'executable' | 'suspect'; range?: { low: number; high: number } | null; why?: string[] }) {
   const label = confidence === 'executable' ? 'قیمت اجرایی' : confidence === 'suspect' ? 'داده‌ی مشکوک' : 'برآورد';
-  const tone = confidence === 'executable' ? 'bg-success/12 text-success' : confidence === 'suspect' ? 'bg-warning/12 text-warning' : 'bg-elevated text-muted';
+  const tone = confidence === 'executable' ? 'bg-success/12 text-success' : confidence === 'suspect' ? 'bg-warning/12 text-warning' : 'bg-hover text-muted';
   const title = why?.length ? why.join(' ') : undefined;
   return (
     <span className="inline-flex flex-col items-end gap-0.5">

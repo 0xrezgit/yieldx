@@ -58,14 +58,14 @@ export function ExitChart({ plan, days, now = Date.now() }: { plan: ExitPlan; da
 
   return (
     <figure className="flex flex-col gap-2">
-      <div className="flex gap-1 p-1 rounded-lg bg-elevated border border-default self-start" role="radiogroup" aria-label="نوع نتیجه در نمودار">
+      <div className="seg self-start" role="radiogroup" aria-label="نوع نتیجه در نمودار">
         {(
           [
             ['cash', 'نتیجه‌ی نقدی'],
             ['total', 'با ایردراپ فرضی'],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} type="button" role="radio" aria-checked={mode === id} onClick={() => setMode(id)} className={`tap rounded-md px-3 min-h-9 text-sm ${mode === id ? 'bg-surface text-primary ring-1 ring-accent' : 'text-secondary'}`}>
+          <button key={id} type="button" role="radio" aria-checked={mode === id} onClick={() => setMode(id)} className="tap px-3 min-h-9 text-sm">
             {label}
           </button>
         ))}

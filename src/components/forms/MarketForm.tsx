@@ -62,7 +62,7 @@ export function MarketForm({ d }: { d: ReadyDashboard }) {
       {/* Protocol — single choice */}
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm text-secondary mb-2">پروتکل معامله</legend>
-        <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-elevated border border-default" role="radiogroup" aria-label="پروتکل معامله">
+        <div className="seg seg-fit" role="radiogroup" aria-label="پروتکل معامله">
           {PROTOCOL_IDS.map((id) => {
             const on = p.protocol === id;
             return (
@@ -72,7 +72,7 @@ export function MarketForm({ d }: { d: ReadyDashboard }) {
                 role="radio"
                 aria-checked={on}
                 onClick={() => d.setProtocol(id)}
-                className={`tap flex items-center justify-center gap-1.5 rounded-md min-h-10 text-sm transition-colors ${on ? 'bg-surface text-primary font-semibold ring-1 ring-accent' : 'text-secondary hover:text-primary'}`}
+                className="tap min-h-10 text-sm"
               >
                 <TokenLogo src={PROTOCOLS[id].logo} name={PROTOCOLS[id].name} size={16} square />
                 <bdi dir="ltr">{PROTOCOLS[id].name}</bdi>

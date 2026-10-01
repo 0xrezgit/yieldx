@@ -121,7 +121,7 @@ export function StatGrid({ children, cols = 4 }: { children: ReactNode; cols?: 2
 /** Section surface. */
 export function Panel({ title, subtitle, icon, actions, children, className = '' }: { title?: string; subtitle?: ReactNode; icon?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={`sx-card p-5 md:p-7 min-w-0 flex flex-col gap-5 ${className}`}>
+    <section className={`sx-card p-4 md:p-6 min-w-0 flex flex-col gap-4 ${className}`}>
       {(title || actions) && (
         <header className="flex items-start justify-between gap-3 min-w-0">
           <div className="min-w-0">
@@ -144,7 +144,7 @@ export function Panel({ title, subtitle, icon, actions, children, className = ''
 export function Disclosure({ title, icon, badge, defaultOpen = false, children }: { title: string; icon?: ReactNode; badge?: ReactNode; defaultOpen?: boolean; children: ReactNode }) {
   return (
     <details open={defaultOpen} className="group sx-card min-w-0">
-      <summary className="flex items-center justify-between gap-3 px-5 md:px-7 py-4 min-h-14">
+      <summary className="flex items-center justify-between gap-3 px-4 md:px-6 py-3.5 min-h-13 rounded-2xl hover:bg-raised/50 transition-colors">
         <span className="text-[15px] font-medium text-sx-text flex items-center gap-2 min-w-0">
           {icon && <span className="shrink-0 text-sx-accent">{icon}</span>}
           <span className="truncate">{title}</span>
@@ -152,14 +152,14 @@ export function Disclosure({ title, icon, badge, defaultOpen = false, children }
         </span>
         <ChevronDown size={18} className="text-sx-muted transition-transform group-open:rotate-180 shrink-0" />
       </summary>
-      <div className="px-5 md:px-7 pb-6 pt-1 flex flex-col gap-5">{children}</div>
+      <div className="px-4 md:px-6 pb-5 pt-1 flex flex-col gap-4">{children}</div>
     </details>
   );
 }
 
 export function Segmented<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { id: T; label: ReactNode }[]; label: string }) {
   return (
-    <div className="flex p-1 gap-1 rounded-lg bg-sx-surface border border-sx-border" role="radiogroup" aria-label={label}>
+    <div className="seg seg-fit" role="radiogroup" aria-label={label}>
       {options.map((o) => (
         <button
           key={o.id}
@@ -167,9 +167,7 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
           role="radio"
           aria-checked={value === o.id}
           onClick={() => onChange(o.id)}
-          className={`flex-1 h-9 flex items-center justify-center gap-1.5 rounded-md text-sm transition-colors ${
-            value === o.id ? 'bg-sx-raised text-sx-text font-normal shadow-sm' : 'text-sx-muted hover:text-sx-text'
-          }`}
+          className="tap min-h-9 text-sm"
         >
           {o.label}
         </button>

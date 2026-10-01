@@ -262,7 +262,7 @@ export function ResultSections({ d }: { d: ReadyDashboard }) {
   ];
   return (
     <section className="flex flex-col gap-4 min-w-0" id="details">
-      <div role="tablist" aria-label="جزئیات" className="flex gap-1 border-b border-default overflow-x-auto">
+      <div role="tablist" aria-label="جزئیات" className="tabs strip -mx-[var(--space-page-x)] px-[var(--space-page-x)] lg:mx-0 lg:px-0">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -279,10 +279,9 @@ export function ResultSections({ d }: { d: ReadyDashboard }) {
               if (e.key === 'ArrowRight') setTab(tabs[(i - 1 + tabs.length) % tabs.length].id);
             }}
             tabIndex={tab === t.id ? 0 : -1}
-            className={`tap relative shrink-0 inline-flex items-center gap-1.5 px-4 min-h-11 text-[15px] ${tab === t.id ? 'text-primary font-semibold' : 'text-secondary hover:text-primary'}`}
+            className="tap text-[15px]"
           >
             {t.label}
-            {tab === t.id && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-accent" aria-hidden />}
           </button>
         ))}
       </div>
