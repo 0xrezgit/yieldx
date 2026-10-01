@@ -269,3 +269,52 @@ details > summary::-webkit-details-marker {
     font-size: 2.25rem;
   }
 }
+
+/* A one-line horizontal strip (paths, chips) that scrolls instead of wrapping. */
+.strip {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.strip::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Ranking rows: stacked on a phone, three columns once their list is wide —
+ * identity and path | figures | profit and actions. A container query (the list
+ * is the container), so a row in a half-width column stays stacked.
+ */
+.rank-list {
+  container-type: inline-size;
+}
+.rank-row {
+  display: grid;
+  gap: 0.75rem 1rem;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'id pnl' 'stats stats' 'path path' 'facts facts' 'act act';
+}
+.rank-row.no-facts {
+  grid-template-areas: 'id pnl' 'stats stats' 'path path' 'act act';
+}
+.rank-row > .a-id { grid-area: id; }
+.rank-row > .a-pnl { grid-area: pnl; }
+.rank-row > .a-stats { grid-area: stats; }
+.rank-row > .a-path { grid-area: path; }
+.rank-row > .a-facts { grid-area: facts; }
+.rank-row > .a-act { grid-area: act; }
+@container (min-width: 46rem) {
+  .rank-row {
+    gap: 0.75rem 1.5rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 21rem) 11rem;
+    grid-template-areas: 'id stats pnl' 'path facts act';
+  }
+  .rank-row.no-facts {
+    grid-template-areas: 'id stats pnl' 'path stats act';
+  }
+  .rank-row > .a-act {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

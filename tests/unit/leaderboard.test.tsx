@@ -316,6 +316,6 @@ describe('entry links', () => {
     const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
     const html = renderToString(<LeaderRanking markets={[listing({ name: 'thinYT', impliedAPY: 1, baseAPY: 5, liquidity: 200_000 })]} capital={1000} strategy="yt" />);
     expect(html).toContain('نیازمند قیمت اجرایی');
-    expect(html).toContain('بیشترین سود<span class="text-xs text-muted font-normal">(<bdi dir="ltr" class="num ">۰</bdi>)');
+    expect(html).toMatch(/بیشترین سود<\/span><span class="[^"]*"><bdi dir="ltr" class="num ">۰<\/bdi>/);
   });
 });
