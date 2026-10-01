@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, ExternalLink, Gift, HandCoins, Hourglass, Landmark, Lock, Repeat, ShoppingCart, Undo2, type LucideIcon } from 'lucide-react';
+import { Activity, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, ChevronLeft, ExternalLink, Gift, HandCoins, Hourglass, Landmark, Lock, Repeat, ShoppingCart, Undo2, type LucideIcon } from 'lucide-react';
 import type { Step, StepKind } from '../../lib/market/steps';
 import { formatNumber } from '../../lib/utils/formatting';
 
@@ -19,21 +19,17 @@ const ICON: Record<StepKind, LucideIcon> = {
   sell: HandCoins,
 };
 
-/** The path in one line: an icon and a word per step, read right to left. */
+/** The path in one line: an icon and a word per step, read right to left; scrolls sideways instead of wrapping. */
 export function StepStrip({ steps }: { steps: Step[] }) {
   return (
-    <ol className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[11px] text-secondary" aria-label="مسیر">
+    <ol className="strip flex flex-nowrap items-center gap-1 overflow-x-auto text-xs text-secondary rounded-lg bg-elevated/60 px-2 py-1.5" aria-label="مسیر">
       {steps.map((s, i) => {
         const Icon = ICON[s.kind];
         return (
-          <li key={i} className="inline-flex items-center gap-1">
-            {i > 0 && (
-              <span className="text-muted" aria-hidden>
-                ‹
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 rounded-full bg-elevated px-2 py-0.5">
-              <Icon size={11} aria-hidden className={s.kind === 'wait' || s.kind === 'watch' ? 'text-warning' : 'text-accent'} />
+          <li key={i} className="inline-flex shrink-0 items-center gap-1">
+            {i > 0 && <ChevronLeft size={12} className="text-muted" aria-hidden />}
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
+              <Icon size={13} aria-hidden className={s.kind === 'wait' || s.kind === 'watch' ? 'text-warning' : 'text-accent'} />
               {s.short}
             </span>
           </li>

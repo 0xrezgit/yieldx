@@ -21,6 +21,7 @@ import { OpportunityDetails, usd } from './OpportunityDetails';
 import { Coverage } from './Coverage';
 import { LeaderRanking } from './LeaderRanking';
 import { StepStrip } from './ActionPlan';
+import { primaryAction, Rank, secondaryAction, Stats, Tags } from './RowParts';
 import { Confidence } from './Confidence';
 import { stepsFor } from '../../lib/market/steps';
 
@@ -71,15 +72,42 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
   // Serious Merkl risk flags (memecoin, hack history, access rules) come first, in red.
   const danger = [...new Set(row.merkl.flatMap((m) => flags(m).filter((f) => f.tone === 'danger').map((f) => f.label)))].slice(0, 1);
   const steps = stepsFor(row.o, e);
+  const loss = e.net !== null && e.net < 0;
   return (
-    <li className="flex flex-col">
-      <button type="button" onClick={onToggle} aria-expanded={open} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 py-3 px-1 text-right rounded-lg hover:bg-elevated/60 transition-colors">
-        <span className={`grid place-items-center size-7 mt-1 rounded-full text-xs font-semibold num ${rank <= 3 ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>{formatNumber(rank, 0)}</span>
-        <span className="min-w-0 flex flex-col gap-2">
-          <Identity row={row} />
+    <li className="py-4">
+      <div className="rank-row no-facts">
+        <button type="button" onClick={onToggle} aria-expanded={open} className="a-id flex items-start gap-2.5 min-w-0 text-right rounded-lg">
+          <span className="mt-1.5">
+            <Rank n={rank} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <Identity row={row} />
+          </span>
+        </button>
+        <div className="a-pnl flex flex-col items-end gap-1">
+          <span className={`text-xl font-bold leading-tight ${loss ? 'text-danger' : 'text-success'}`}>{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
+          <Confidence confidence={e.confidence} why={e.confidence === 'suspect' ? e.assumptions.slice(0, 1) : undefined} />
+        </div>
+
+        <div className="a-stats flex flex-col gap-1.5">
+          <Stats
+            items={[
+              { label: 'بازده دوره', value: e.netPct === null ? '—' : <Num>{formatPercent(e.netPct, 2)}</Num>, tone: loss ? 'text-danger' : 'text-success' },
+              { label: 'خروج', value: exitShort(e, row.o) },
+              { label: 'افق', value: <><Num>{formatNumber(days, 0)}</Num> روز</> },
+            ]}
+          />
+          {e.range && Math.abs(e.range.high - e.range.low) >= 0.5 && (
+            <p className="text-xs text-muted">
+              بازه <Num>{usd(e.range.low)}</Num> تا <Num>{usd(e.range.high)}</Num>
+            </p>
+          )}
+        </div>
+
+        <div className="a-path flex flex-col gap-2.5 min-w-0">
           <StepStrip steps={steps} />
           {(danger.length > 0 || tags.length > 0) && (
-            <span className="flex flex-wrap items-center gap-1">
+            <Tags>
               {danger.map((t) => (
                 <Pill key={t} tone="danger">
                   {t}
@@ -90,24 +118,25 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
                   {t}
                 </Pill>
               ))}
-            </span>
+            </Tags>
           )}
-        </span>
-        <span className="flex flex-col items-end gap-0.5 text-left">
-          <span className={`font-bold text-lg leading-tight ${e.net !== null && e.net < 0 ? 'text-danger' : 'text-success'}`}>{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
-          <span className="text-xs text-secondary">{e.netPct === null ? '—' : <Num>{formatPercent(e.netPct, 2)}</Num>}</span>
-          <Confidence confidence={e.confidence} range={e.range} why={e.confidence === 'suspect' ? e.assumptions.slice(0, 1) : undefined} />
-          <span className="text-[11px] text-muted">{exitShort(e, row.o)}</span>
-          <ChevronDown size={16} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
-        </span>
-      </button>
-      {row.o.url && (
-        <a href={row.o.url} target="_blank" rel="noopener noreferrer" className="tap self-start ms-11 -mt-1 mb-2 inline-flex items-center gap-1 rounded-md border border-accent/60 px-2 min-h-8 text-xs text-primary hover:bg-elevated">
-          <ExternalLink size={12} aria-hidden /> {isAppRoot(row.o.url) ? <>اپ <bdi dir="ltr">{row.o.protocol.name}</bdi></> : 'ورود به بازار'}
-        </a>
-      )}
+        </div>
+
+        <div className="a-act flex items-center gap-2">
+          {row.o.url && (
+            <a href={row.o.url} target="_blank" rel="noopener noreferrer" className={`${primaryAction} flex-1`}>
+              <ExternalLink size={15} aria-hidden /> {isAppRoot(row.o.url) ? <>اپ <bdi dir="ltr">{row.o.protocol.name}</bdi></> : 'ورود به بازار'}
+            </a>
+          )}
+          <button type="button" onClick={onToggle} aria-expanded={open} className={`${secondaryAction} ${row.o.url ? '' : 'flex-1'}`}>
+            جزئیات
+            <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+          </button>
+        </div>
+      </div>
+
       {open && (
-        <div className="px-1 pb-4 pt-3 border-t border-default">
+        <div className="mt-3 rounded-xl border border-default bg-elevated/30 p-3">
           <OpportunityDetails row={row} days={days} modelVersion={modelVersion} />
         </div>
       )}
@@ -209,16 +238,18 @@ export default function MarketAnalysis() {
       ) : !top.length ? (
         <Empty>برای این سرمایه و افق فرصت سودده‌ای پیدا نشد.</Empty>
       ) : (
-        <section aria-label="رتبه‌بندی" aria-busy={m.pending} className={`sx-card p-2 sm:p-3 transition-opacity ${m.pending ? 'opacity-60' : ''}`}>
-          <h2 className="text-sm text-secondary px-1 pb-2 flex flex-wrap items-center justify-between gap-2">
-            <span>
-              سود خالص قابل برآورد در <Num>{formatNumber(days, 0)}</Num> روز · <Num>{formatNumber(top.length, 0)}</Num> فرصت برتر {view?.narrowed ? 'در همین دامنه' : 'بین بازارهای بررسی‌شده'}
-            </span>
-            <span className="text-xs text-muted">
-              حداکثر <Num>{formatNumber(TOP_LIMIT, 0)}</Num>
+        <section aria-label="رتبه‌بندی" aria-busy={m.pending} className={`sx-card px-3 pt-3 sm:px-4 sm:pt-4 pb-1 transition-opacity ${m.pending ? 'opacity-60' : ''}`}>
+          <h2 className="flex items-start justify-between gap-3 pb-1">
+            <span className="flex flex-col gap-0.5">
+              <span className="font-semibold text-primary">
+                سود خالص <Num>{formatNumber(days, 0)}</Num> روزه
+              </span>
+              <span className="text-xs text-secondary">
+                <Num>{formatNumber(top.length, 0)}</Num> فرصت برتر {view?.narrowed ? 'در همین دامنه' : 'بین بازارهای بررسی‌شده'} · حداکثر <Num>{formatNumber(TOP_LIMIT, 0)}</Num>
+              </span>
             </span>
           </h2>
-          <ol className="flex flex-col divide-y divide-default">
+          <ol className="rank-list flex flex-col divide-y divide-default">
             {shown.map((e, i) => {
               const row = m.analysis!.rowByKey.get(e.key);
               return row ? <RankingRow key={e.key} row={row} rank={page * PAGE_SIZE + i + 1} days={days} open={open === e.key} onToggle={() => setOpen(open === e.key ? null : e.key)} modelVersion={m.analysis!.modelVersion} /> : null;
