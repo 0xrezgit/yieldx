@@ -11,6 +11,8 @@ import { earnFromOpportunity } from '../../lib/portfolio/earn';
 import { isAppRoot } from '../../lib/market/links';
 import { formatAgo, formatDate, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
+import { StepList } from './ActionPlan';
+import { stepsFor } from '../../lib/market/steps';
 
 export const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : Math.abs(x) >= 1 ? 2 : 4);
 
@@ -91,6 +93,12 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
     <div className="flex flex-col gap-4 text-sm">
       <Horizons row={row} active={days} />
       {e.reason && e.placement !== 'ranked' && <p className="text-secondary">{e.reason}</p>}
+      <section className="rounded-xl border border-default p-3" aria-labelledby={`steps-${o.key}`}>
+        <h3 id={`steps-${o.key}`} className="text-xs text-muted mb-3">
+          قدم‌به‌قدم تا سود دلاری
+        </h3>
+        <StepList steps={stepsFor(o, e)} />
+      </section>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <section className="flex flex-col">
           <Line label="سرمایه">{money(e.capital)}</Line>

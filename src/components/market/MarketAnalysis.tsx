@@ -20,6 +20,8 @@ import { Empty, Pill, Segmented } from '../opportunities/parts';
 import { OpportunityDetails, usd } from './OpportunityDetails';
 import { Coverage } from './Coverage';
 import { LeaderRanking } from './LeaderRanking';
+import { StepStrip } from './ActionPlan';
+import { stepsFor } from '../../lib/market/steps';
 
 type View = 'all' | 'yt' | 'loop';
 
@@ -67,29 +69,33 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
   const tags = badgesOf(e, row.o);
   // Serious Merkl risk flags (memecoin, hack history, access rules) come first, in red.
   const danger = [...new Set(row.merkl.flatMap((m) => flags(m).filter((f) => f.tone === 'danger').map((f) => f.label)))].slice(0, 1);
+  const steps = stepsFor(row.o, e);
   return (
     <li className="flex flex-col">
-      <button type="button" onClick={onToggle} aria-expanded={open} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3 px-1 text-right rounded-lg hover:bg-elevated transition-colors">
-        <span className="grid place-items-center size-7 rounded-full bg-elevated text-xs font-semibold text-secondary num">{formatNumber(rank, 0)}</span>
-        <span className="min-w-0 flex flex-col gap-1.5">
+      <button type="button" onClick={onToggle} aria-expanded={open} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 py-3 px-1 text-right rounded-lg hover:bg-elevated/60 transition-colors">
+        <span className={`grid place-items-center size-7 mt-1 rounded-full text-xs font-semibold num ${rank <= 3 ? 'bg-accent/15 text-accent' : 'bg-elevated text-secondary'}`}>{formatNumber(rank, 0)}</span>
+        <span className="min-w-0 flex flex-col gap-2">
           <Identity row={row} />
-          <span className="flex flex-wrap items-center gap-1">
-            <Pill>{exitShort(e, row.o)}</Pill>
-            {danger.map((t) => (
-              <Pill key={t} tone="danger">
-                {t}
-              </Pill>
-            ))}
-            {tags.map((t) => (
-              <Pill key={t} tone="warning">
-                {t}
-              </Pill>
-            ))}
-          </span>
+          <StepStrip steps={steps} />
+          {(danger.length > 0 || tags.length > 0) && (
+            <span className="flex flex-wrap items-center gap-1">
+              {danger.map((t) => (
+                <Pill key={t} tone="danger">
+                  {t}
+                </Pill>
+              ))}
+              {tags.map((t) => (
+                <Pill key={t} tone="warning">
+                  {t}
+                </Pill>
+              ))}
+            </span>
+          )}
         </span>
-        <span className="flex flex-col items-end gap-0.5">
-          <span className="font-bold text-lg leading-tight text-success">{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
+        <span className="flex flex-col items-end gap-0.5 text-left">
+          <span className={`font-bold text-lg leading-tight ${e.net !== null && e.net < 0 ? 'text-danger' : 'text-success'}`}>{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
           <span className="text-xs text-secondary">{e.netPct === null ? '—' : <Num>{formatPercent(e.netPct, 2)}</Num>}</span>
+          <span className="text-[11px] text-muted">{exitShort(e, row.o)}</span>
           <ChevronDown size={16} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
         </span>
       </button>

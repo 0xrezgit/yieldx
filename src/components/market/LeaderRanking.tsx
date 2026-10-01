@@ -10,6 +10,8 @@ import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/oppo
 import thresholds from '../../config/thresholds.json';
 import { isStable } from '../../lib/risk/opportunities';
 import { listingLink, marketAddress } from '../../lib/market/links';
+import { loopLeaderSteps, ytLeaderSteps } from '../../lib/market/steps';
+import { StepList, StepStrip } from './ActionPlan';
 import protocols from '../../config/protocols.json';
 import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { NumberField } from '../ui/field';
@@ -55,14 +57,33 @@ export function EntryLink({ m, strategy }: { m: OpportunityListing; strategy: Le
 
 const calcHref = (m: OpportunityListing) => `/dashboard?${new URLSearchParams({ protocol: m.protocol, market: m.id, name: m.name, maturity: m.maturity })}`;
 
+const leaderSteps = (row: LeaderRow, strategy: LeaderStrategy) => {
+  const { m } = row;
+  if (strategy === 'yt')
+    return ytLeaderSteps({ asset: m.asset?.symbol ?? m.name, protocol: protocols[m.protocol].name, url: listingLink(m.protocol, m, 'yt').url, days: row.days, toMaturity: row.days >= m.daysToMaturity, maturity: m.maturity });
+  return loopLeaderSteps({
+    pt: m.ptToken?.symbol ?? `PT-${m.name}`,
+    ptUrl: listingLink(m.protocol, m, 'pt').url,
+    lender: row.lender?.protocol ?? '—',
+    lenderUrl: row.lender?.url ?? null,
+    debt: row.lender?.debtSymbol ?? '—',
+    leverage: row.leverage ?? 1,
+    health: row.health ?? null,
+    days: row.days,
+    maturity: m.maturity,
+  });
+};
+
 function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: LeaderStrategy }) {
   const { m } = row;
   const v = VERDICT[row.verdict];
+  const steps = leaderSteps(row, strategy);
   return (
     <div className="w-full flex items-center gap-3 py-2.5 min-h-14 text-right rounded-lg px-1">
       <span className="grid place-items-center size-6 rounded-full bg-elevated text-xs text-secondary shrink-0 num">{formatNumber(rank, 0)}</span>
       <div className="min-w-0 flex-1 flex flex-col gap-1">
         <AssetIdentity symbol={m.name} icon={m.icon} chain={m.chain} protocol={m.protocol} maturity={m.maturity} size={24} />
+        <StepStrip steps={steps} />
         <div className="flex flex-wrap items-center gap-1 mt-1">
           <Pill tone={v.tone}>{v.label}</Pill>
           {strategy === 'yt' ? (
@@ -122,6 +143,12 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
             <Calculator size={12} aria-hidden /> محاسبه‌گر
           </Link>
         </div>
+        <details className="group mt-1">
+          <summary className="cursor-pointer select-none text-xs text-secondary hover:text-primary w-fit">قدم‌به‌قدم</summary>
+          <div className="mt-3 rounded-xl border border-default p-3">
+            <StepList steps={steps} />
+          </div>
+        </details>
       </div>
       <div className="text-left shrink-0">
         <div className={`font-semibold text-lg leading-tight ${row.pnl >= 0 ? 'text-success' : 'text-danger'}`}>

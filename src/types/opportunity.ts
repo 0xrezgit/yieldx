@@ -179,6 +179,8 @@ export interface LoopSpec {
   pairClass: 'usd' | 'eth' | 'btc';
   /** PT loops: false when the PT's dollar peg rests only on its name. */
   pegVerified?: boolean;
+  /** PT loops: where the PT is bought (the PT market's own page). */
+  entryUrl?: string | null;
 }
 
 /** What an amount of the chain's USDC buys of a PT or YT right now, from the protocol's router. */

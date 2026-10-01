@@ -176,7 +176,7 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
         supplyCurve: null,
         book: null,
         borrow: null,
-        loop: { collateral: { token, yield: { pct: p.rate.value as number, kind: 'apy', source: `Implied APY امروز ${p.protocol.name} تا سررسید` } }, debt: { token: debt, side }, maxLtv: c.maxLtv, pairClass: debtClass as 'usd' | 'eth' | 'btc', pegVerified: !unverified },
+        loop: { collateral: { token, yield: { pct: p.rate.value as number, kind: 'apy', source: `Implied APY امروز ${p.protocol.name} تا سررسید` } }, debt: { token: debt, side }, maxLtv: c.maxLtv, pairClass: debtClass as 'usd' | 'eth' | 'btc', pegVerified: !unverified, entryUrl: p.url ?? null },
         poolLiquidityUsd: p.poolLiquidityUsd ?? null,
         quality: worst,
         sources: [...o.sources, ...p.sources],
