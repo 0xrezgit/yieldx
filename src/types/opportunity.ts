@@ -177,6 +177,25 @@ export interface LoopSpec {
   debt: { token: TokenRef; side: BorrowSide };
   maxLtv: number;
   pairClass: 'usd' | 'eth' | 'btc';
+  /** PT loops: false when the PT's dollar peg rests only on its name. */
+  pegVerified?: boolean;
+  /** PT loops: where the PT is bought (the PT market's own page). */
+  entryUrl?: string | null;
+}
+
+/** What an amount of the chain's USDC buys of a PT or YT right now, from the protocol's router. */
+export interface ExecQuote {
+  side: 'pt' | 'yt';
+  /** Dollars in (USDC). */
+  usd: number;
+  /** PT or YT received. */
+  units: number;
+  /** USD value of the asset one PT redeems for at maturity (one YT's yield is on one such unit). */
+  unitUsd: number;
+  /** Price impact the router reports, %; null when it reports none. */
+  priceImpactPct: number | null;
+  at: string;
+  source: 'Pendle';
 }
 
 export type DataQuality = 'current' | 'stale' | 'partial' | 'insufficient';
@@ -234,6 +253,8 @@ export interface Opportunity {
   ptClass?: { class: 'usd' | 'eth' | 'btc'; pegVerified: boolean } | null;
   /** AMM depth behind a PT, USD; without an executable quote the amount must stay a small share of it. */
   poolLiquidityUsd?: number | null;
+  /** PT/YT: an executable entry quote for one amount (Pendle's router), when one was asked for. */
+  quote?: ExecQuote | null;
   /** The source's field meanings come from a third-party client, not the protocol's own documentation. */
   unofficialSource?: boolean;
   /**
@@ -316,6 +337,8 @@ export interface LeverageResult {
   maxSafe: number;
   /** The leverage policy that chose it (versioned). */
   policy: string;
+  /** PT loops: why this leverage, in Persian (e.g. «سررسید طولانی»). */
+  reason?: string;
   /** Own money in, total collateral and debt, USD. */
   equity: number;
   gross: number;

@@ -180,20 +180,35 @@ describe('Midnight adapter', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       calls.push(String(url));
       const json = (x: unknown) => new Response(JSON.stringify(x), { status: 200 });
-      if (String(url).includes('/books?')) return json({ cursor: null, data: [rawBook(), rawBook({ market_id: '0xOLD', maturity: Math.floor(NOW / 1000) - 10 })] });
+      if (String(url).includes('/books?')) {
+        // Only Base has books here; an unquoted book and one past the longest horizon get no row.
+        if (new URL(String(url)).searchParams.get('chain_ids') !== '8453') return json({ cursor: null, data: [] });
+        return json({
+          cursor: null,
+          data: [
+            rawBook(),
+            rawBook({ market_id: '0xOLD', maturity: Math.floor(NOW / 1000) - 10 }),
+            rawBook({ market_id: '0xEMPTY', asks: [], bids: [] }),
+            rawBook({ market_id: '0xFAR', maturity: Math.floor((NOW + 400 * 86_400_000) / 1000) }),
+          ],
+        });
+      }
       if (String(url).endsWith('/asks?depth=100')) return json({ data: [level(0.99, 1000), level(0.995, 5000)] });
       if (String(url).endsWith('/bids?depth=100')) return json({ data: [level(0.98, 1000)] });
       if (String(url).includes('graphql')) {
-        expect(String(init?.body)).toContain('assetByAddress');
-        return json({ data: { t0: { address: USDC, symbol: 'USDC', decimals: 6, priceUsd: 1, logoURI: null }, t1: { address: WBTC, symbol: 'WBTC', decimals: 8, priceUsd: 1e5, logoURI: null } } });
+        // One filtered list per chain; a token Morpho does not know is simply missing from it.
+        expect(JSON.parse(String(init?.body)).variables).toMatchObject({ chain: 8453 });
+        return json({ data: { assets: { items: [{ address: USDC, symbol: 'USDC', decimals: 6, price: { usd: 1 }, logoURI: null }, { address: WBTC, symbol: 'WBTC', decimals: 8, price: { usd: 1e5 }, logoURI: null }] } } });
       }
       return new Response('{}', { status: 404 });
     }));
     const list = await fetchMidnight(AT, NOW);
     expect(list).toHaveLength(1);
     expect(list[0].book!.asks).toHaveLength(2);
-    expect(calls[0]).toContain('chain_ids=1%2C8453');
-    expect(calls.some((c) => c.includes('0xOLD'))).toBe(false);
+    // One chain per request, 20 books per page (the API's limits).
+    expect(calls.filter((c) => c.includes('/books?')).map((c) => new URL(c).searchParams.get('chain_ids')).sort()).toEqual(['1', '8453']);
+    expect(calls.every((c) => !c.includes('/books?') || new URL(c).searchParams.get('limit') === '20')).toBe(true);
+    for (const id of ['0xOLD', '0xEMPTY', '0xFAR']) expect(calls.some((c) => c.includes(id))).toBe(false);
   });
 });
 

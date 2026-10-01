@@ -5,10 +5,13 @@ import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, TrendingUp } from 'lucide-react';
 import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import type { Opportunity } from '../../types/opportunity';
-import { defaultLoopSettings, defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
+import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
+import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/opportunity/policy';
 import thresholds from '../../config/thresholds.json';
 import { isStable } from '../../lib/risk/opportunities';
 import { listingLink, marketAddress } from '../../lib/market/links';
+import { loopLeaderSteps, ytLeaderSteps } from '../../lib/market/steps';
+import { StepList, StepStrip } from './ActionPlan';
 import protocols from '../../config/protocols.json';
 import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { NumberField } from '../ui/field';
@@ -32,8 +35,8 @@ const MIN_HEALTH = thresholds.opportunities.loopMinHealth;
 
 const money = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
-/** Base yield far above the implied rate usually means a temporary boost. */
-const temporaryBase = (m: OpportunityListing) => m.baseAPY !== null && m.baseAPY - m.impliedAPY > 5 && m.baseAPY > 2 * m.impliedAPY;
+/** Base yield far above the implied rate usually means a temporary boost (shared rule). */
+const temporaryBase = (m: OpportunityListing) => isTemporaryBase(m.baseAPY, m.impliedAPY);
 
 /** «ورود به بازار»: the market's own page when its format is known, else the protocol's app and the address to search. */
 export function EntryLink({ m, strategy }: { m: OpportunityListing; strategy: LeaderStrategy }) {
@@ -54,14 +57,33 @@ export function EntryLink({ m, strategy }: { m: OpportunityListing; strategy: Le
 
 const calcHref = (m: OpportunityListing) => `/dashboard?${new URLSearchParams({ protocol: m.protocol, market: m.id, name: m.name, maturity: m.maturity })}`;
 
+const leaderSteps = (row: LeaderRow, strategy: LeaderStrategy) => {
+  const { m } = row;
+  if (strategy === 'yt')
+    return ytLeaderSteps({ asset: m.asset?.symbol ?? m.name, protocol: protocols[m.protocol].name, url: listingLink(m.protocol, m, 'yt').url, days: row.days, toMaturity: row.days >= m.daysToMaturity, maturity: m.maturity });
+  return loopLeaderSteps({
+    pt: m.ptToken?.symbol ?? `PT-${m.name}`,
+    ptUrl: listingLink(m.protocol, m, 'pt').url,
+    lender: row.lender?.protocol ?? '—',
+    lenderUrl: row.lender?.url ?? null,
+    debt: row.lender?.debtSymbol ?? '—',
+    leverage: row.leverage ?? 1,
+    health: row.health ?? null,
+    days: row.days,
+    maturity: m.maturity,
+  });
+};
+
 function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: LeaderStrategy }) {
   const { m } = row;
   const v = VERDICT[row.verdict];
+  const steps = leaderSteps(row, strategy);
   return (
     <div className="w-full flex items-center gap-3 py-2.5 min-h-14 text-right rounded-lg px-1">
       <span className="grid place-items-center size-6 rounded-full bg-elevated text-xs text-secondary shrink-0 num">{formatNumber(rank, 0)}</span>
       <div className="min-w-0 flex-1 flex flex-col gap-1">
         <AssetIdentity symbol={m.name} icon={m.icon} chain={m.chain} protocol={m.protocol} maturity={m.maturity} size={24} />
+        <StepStrip steps={steps} />
         <div className="flex flex-wrap items-center gap-1 mt-1">
           <Pill tone={v.tone}>{v.label}</Pill>
           {strategy === 'yt' ? (
@@ -90,6 +112,11 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
               وام <bdi dir="ltr">{row.lender.debtSymbol}</bdi> از <bdi dir="ltr">{row.lender.protocol}</bdi> · بهره <Num>{formatPercent(row.lender.borrowPct, 2)}</Num> · LLTV <Num>{formatPercent(row.lender.lltvPct, 1)}</Num>
             </Pill>
           )}
+          {row.leverage != null && (
+            <Pill tone={row.leverage < PT_LOOP_POLICY.maxLeverage ? 'warning' : 'muted'}>
+              اهرم <Num>{formatNumber(row.leverage, 1)}</Num>×{row.leverageReason && <span className="text-muted"> · {row.leverageReason}</span>}
+            </Pill>
+          )}
           {strategy === 'loop' && row.health != null && (
             <Pill tone={row.health < MIN_HEALTH ? 'warning' : 'muted'}>
               سلامت <Num>{formatNumber(row.health, 2)}</Num>
@@ -116,6 +143,12 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
             <Calculator size={12} aria-hidden /> محاسبه‌گر
           </Link>
         </div>
+        <details className="group mt-1">
+          <summary className="cursor-pointer select-none text-xs text-secondary hover:text-primary w-fit">قدم‌به‌قدم</summary>
+          <div className="mt-3 rounded-xl border border-default p-3">
+            <StepList steps={steps} />
+          </div>
+        </details>
       </div>
       <div className="text-left shrink-0">
         <div className={`font-semibold text-lg leading-tight ${row.pnl >= 0 ? 'text-success' : 'text-danger'}`}>
@@ -217,14 +250,13 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   const [fee, setFee] = useState(defaultScreenSettings.feePercent);
   const [by, setBy] = useState<RankBy>('total');
   const [pointsOnly, setPointsOnly] = useState(false);
-  const [leverage, setLeverage] = useState(defaultLoopSettings.leverage);
   const [hurdle, setHurdle] = useState(8);
   const s = useMemo(() => ({ ...defaultScreenSettings, feePercent: Number.isFinite(fee) ? Math.max(0, fee) : 0 }), [fee]);
   const lendingOpps = lending?.opportunities ?? null;
   const board: LoopBoard | null = useMemo(() => {
     if (strategy !== 'loop' || !(capital > 0) || !lendingOpps) return null;
-    return leaderLoop(markets, s, lendingOpps, { leverage: Number.isFinite(leverage) ? leverage : 1 }, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
-  }, [strategy, markets, s, lendingOpps, capital, leverage, hurdle]);
+    return leaderLoop(markets, s, lendingOpps, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
+  }, [strategy, markets, s, lendingOpps, capital, hurdle]);
   const rows = useMemo(() => {
     if (!(capital > 0)) return [];
     if (strategy === 'loop') return board?.rows ?? [];
@@ -253,16 +285,18 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
           )}
         </div>
         {strategy === 'loop' && (
-          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-            <NumberField label="اهرم" value={leverage} onChange={setLeverage} suffix="×" />
+          <div className="grid grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] gap-3 items-end">
             <NumberField label="حداقل بازده سالانه" value={hurdle} onChange={setHurdle} suffix="%" />
+            <p className="text-xs text-secondary leading-6">
+              اهرم هر لوپ از داده‌ی زنده‌ی همان بازار: <Num>{formatNumber(PT_LOOP_POLICY.maxLeverage, 0)}</Num>×، یا <Num>{formatNumber(PT_LOOP_POLICY.cautiousLeverage, 1)}</Num>× اگر برابری با دلار تأیید نشده، فاصله‌ی نرخ PT و وام کمتر از <Num>{formatNumber(PT_LOOP_POLICY.minSpreadPp, 0)}</Num> واحد درصد یا سررسید بیش از <Num>{formatNumber(PT_LOOP_POLICY.longDays, 0)}</Num> روز باشد؛ و در هر حال سلامت دست‌کم <Num>{formatNumber(PT_LOOP_POLICY.minHealth, 2)}</Num>.
+            </p>
           </div>
         )}
         {board && (board.liquidated > 0 || board.shortLiquidity > 0) && (
           <p className="text-xs text-warning leading-6">
             {board.liquidated > 0 && (
               <>
-                <Num>{formatNumber(board.liquidated, 0)}</Num> لوپ با این اهرم در LLTV بازار وام خودش از همان ورود لیکویید می‌شود و نیامده است.{' '}
+                <Num>{formatNumber(board.liquidated, 0)}</Num> بازار وام LLTV پایینی دارد و با سلامت <Num>{formatNumber(PT_LOOP_POLICY.minHealth, 2)}</Num> اهرمی نمی‌دهد؛ نیامده است.{' '}
               </>
             )}
             {board.shortLiquidity > 0 && (

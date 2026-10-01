@@ -32,9 +32,11 @@
       1,
       8453
     ],
-    "maxBooks": 50,
+    "pageSize": 20,
+    "maxPages": 25,
+    "concurrency": 6,
     "depth": 100,
-    "maxTokens": 60
+    "maxTokens": 500
   },
   "kamino": {
     "name": "Kamino",

@@ -31,6 +31,10 @@ export interface MerklToken {
   priceSource: string | null;
   verified: boolean;
   type: MerklTokenType;
+  /** Token decimals (for a sell quote); null when Merkl sends none. */
+  decimals?: number | null;
+  /** A Merkl wrapper («… (wrapped)»): Merkl's id of the token it turns into when claimed. */
+  underlyingId?: string | null;
 }
 
 export interface MerklHook {
@@ -161,6 +165,21 @@ export interface TokenMarket {
   url: string | null;
 }
 
+/**
+ * Whether a reward token can actually be sold: a KyberSwap quote selling about
+ * $1,000 of it (or of the token a Merkl wrapper turns into when claimed) into the
+ * chain's dollar stablecoin.
+ */
+export interface SellQuote {
+  /** USD the sale returns ÷ the same amount at Merkl's price, % (impact and price gap together). */
+  keptPct: number;
+  /** Merkl's price implied by the quote: USD out per token. */
+  usdPerToken: number;
+  /** Symbol of the underlying when the reward is a Merkl wrapper; null otherwise. */
+  via: string | null;
+  source: 'KyberSwap';
+}
+
 /** Network cost measured on the server. */
 export interface GasQuote {
   chainId: number;
@@ -178,6 +197,8 @@ export interface MerklFeed {
   markets: Record<string, TokenMarket | null>;
   /** Chains DexScreener covers — a missing market on these means «no DEX pair found». */
   marketChains: number[];
+  /** Sell quotes by `tokenKey`; null = no route (cannot be sold); absent = not checked (chain unsupported). */
+  sells?: Record<string, SellQuote | null>;
   gas: GasQuote[];
   /** When the server received the data from Merkl (ms). */
   fetchedAt: number;

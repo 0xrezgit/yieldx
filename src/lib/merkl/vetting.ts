@@ -1,5 +1,6 @@
 import { restrictions } from './rules';
-import { tokenKey, type MerklOpportunity, type MerklToken, type TokenMarket } from './types';
+import { tokenKey, type MerklOpportunity, type MerklToken, type SellQuote, type TokenMarket } from './types';
+import { formatNumber } from '../utils/formatting';
 
 /**
  * Which Merkl opportunities and tokens YieldX is willing to show, and why not.
@@ -27,6 +28,8 @@ export const RULES = {
   absurdApr: 10_000,
   /** Reward token needs at least this much DEX liquidity to be valued in dollars. */
   minRewardLiquidity: 10_000,
+  /** A sale of about $1,000 must keep at least this share of its value (KyberSwap quote). */
+  minSellKeptPct: 95,
   /** Merkl's price may differ from the DEX price by at most this fraction. */
   maxPriceGap: 0.25,
   /** Robinhood-Chain memecoins: stricter liquidity and price agreement. */
@@ -97,6 +100,8 @@ export interface VetContext {
   markets: Record<string, TokenMarket | null>;
   /** Chains DexScreener covers. */
   marketChains: Set<number>;
+  /** KyberSwap sale quotes by token; null = no route; absent = not checked. */
+  sells: Record<string, SellQuote | null>;
   /** Reference USD prices from verified tokens in the same feed. */
   ref: { eth: number | null; btc: number | null };
   /** Verified tokens by chain+symbol, to catch look-alikes. */
@@ -110,7 +115,7 @@ const median = (xs: number[]) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-export function buildContext(list: MerklOpportunity[], markets: Record<string, TokenMarket | null> = {}, marketChains: number[] = [], now = Date.now() / 1000): VetContext {
+export function buildContext(list: MerklOpportunity[], markets: Record<string, TokenMarket | null> = {}, marketChains: number[] = [], now = Date.now() / 1000, sells: Record<string, SellQuote | null> = {}): VetContext {
   const all = list.flatMap((o) => [...o.tokens, ...o.campaigns.map((c) => c.rewardToken)]);
   const priced = (re: RegExp) => median(all.filter((t) => t.verified && t.price !== null && re.test(t.symbol) && /^(w?eth|w?btc|cbbtc)$/i.test(t.symbol)).map((t) => t.price as number));
   const verifiedBySymbol = new Map<string, MerklToken[]>();
@@ -121,7 +126,7 @@ export function buildContext(list: MerklOpportunity[], markets: Record<string, T
     if (!list.some((x) => x.address.toLowerCase() === t.address.toLowerCase())) list.push(t);
     verifiedBySymbol.set(k, list);
   }
-  return { now, markets, marketChains: new Set(marketChains), ref: { eth: priced(/eth/i), btc: priced(/btc/i) }, verifiedBySymbol };
+  return { now, markets, marketChains: new Set(marketChains), sells, ref: { eth: priced(/eth/i), btc: priced(/btc/i) }, verifiedBySymbol };
 }
 
 export const marketOf = (t: MerklToken, ctx: VetContext): TokenMarket | null | undefined => ctx.markets[tokenKey(t.chainId, t.address)];
@@ -205,14 +210,21 @@ export function checkRewardPrice(t: MerklToken, ctx: VetContext): PriceCheck {
   }
   const cls = tokenClass(t);
   if (cls !== 'other' && t.verified) return out(true, null, 'deep');
+  // Only a reward that can really be sold counts in dollars: a KyberSwap sale quote first
+  // (it also follows a Merkl wrapper to the token it turns into), else a deep DEX market.
+  const sell = ctx.sells[tokenKey(t.chainId, t.address)];
+  if (sell) {
+    if (sell.keptPct < RULES.minSellKeptPct) return out(false, r('sell-impact', `فروش «${t.symbol}» بیش از ${formatNumber(100 - RULES.minSellKeptPct, 0)}٪ ارزشش را از دست می‌دهد`));
+    if (Math.abs(sell.usdPerToken / t.price - 1) > RULES.maxPriceGap) return out(false, r('price-gap', `قیمت Merkl برای «${t.symbol}» با قیمت فروش واقعی هم‌خوان نیست`));
+    return out(true, null, 'known', sell.via ? [`پس از دریافت به ${sell.via} تبدیل می‌شود؛ فروش آن بررسی شد`] : t.verified ? [] : ['توکن پاداش در Merkl تأییدنشده؛ فقط مسیر فروش آن را تأیید می‌کند']);
+  }
   if (market) {
     if (market.dexPrice !== null && Math.abs(t.price / market.dexPrice - 1) > RULES.maxPriceGap) return out(false, r('price-gap', `قیمت Merkl برای «${t.symbol}» با بازار DEX هم‌خوان نیست`));
     if (market.liquidityUsd < RULES.minRewardLiquidity) return out(false, r('thin', `نقدشوندگی «${t.symbol}» کمتر از حد لازم است`));
     return out(true, null, 'known', t.verified ? [] : ['توکن پاداش در Merkl تأییدنشده؛ فقط بازار DEX آن را تأیید می‌کند']);
   }
-  if (!t.verified) return out(false, r('unverified', `توکن پاداش «${t.symbol}» تأییدنشده و بدون بازار قابل‌بررسی`));
-  const covered = ctx.marketChains.has(t.chainId);
-  return out(true, null, 'unknown', [covered ? `بازار DEX برای «${t.symbol}» پیدا نشد` : `نقدشوندگی «${t.symbol}» در این شبکه قابل‌بررسی نیست`]);
+  // No sale route and no DEX market: it cannot be turned into dollars, so it is listed without a value.
+  return out(false, r('unsellable', `«${t.symbol}» در DEX قابل فروش نیست`));
 }
 
 // ─── Opportunity gates ───────────────────────────────────────────────────────

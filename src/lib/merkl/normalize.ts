@@ -18,6 +18,8 @@ export interface RawToken {
   verified?: boolean;
   isTest?: boolean;
   type?: string;
+  /** Merkl's id of the token a wrapper turns into when claimed («… (wrapped)»). */
+  underlyingTokenId?: string | null;
 }
 
 interface RawDistribution {
@@ -104,6 +106,8 @@ export function normalizeToken(t: RawToken | undefined, fallbackChainId = 0): Me
     priceSource: text(t?.priceSource),
     verified: t?.verified === true,
     type,
+    decimals: finite(t?.decimals),
+    underlyingId: text(t?.underlyingTokenId),
   };
 }
 

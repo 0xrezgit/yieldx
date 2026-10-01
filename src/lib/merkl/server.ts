@@ -1,8 +1,9 @@
 import 'server-only';
-import { normalizeOpportunity, normalizeProgram, type RawOpportunity, type RawProgram } from './normalize';
+import { normalizeOpportunity, normalizeProgram, normalizeToken, type RawOpportunity, type RawProgram, type RawToken } from './normalize';
+import { mapLimit } from '../protocols/base';
 import { DEX_CHAINS, marketFromPairs, type RawPair } from './markets';
 import { dedupe, isMeme, isRobinhoodChain, tokenClass } from './vetting';
-import { tokenKey, type GasQuote, type MerklFeed, type MerklOpportunity, type MerklProgram, type MerklToken, type TokenMarket } from './types';
+import { tokenKey, type GasQuote, type MerklFeed, type MerklOpportunity, type MerklProgram, type MerklToken, type SellQuote, type TokenMarket } from './types';
 
 /**
  * Server-side Merkl client. The API key (MERKL_API_KEY, set in the Vercel project
@@ -125,6 +126,129 @@ async function fetchMarkets(list: MerklOpportunity[]): Promise<Record<string, To
   return out;
 }
 
+// ─── Sellability (KyberSwap) ─────────────────────────────────────────────────
+
+/**
+ * Chains KyberSwap's aggregator routes on (slugs checked live 2026-10-01). On other
+ * chains a reward's sellability rests on its DexScreener market alone.
+ */
+export const KYBER_CHAINS: Record<number, string> = {
+  1: 'ethereum', 10: 'optimism', 56: 'bsc', 130: 'unichain', 137: 'polygon', 143: 'monad', 146: 'sonic', 999: 'hyperevm',
+  2020: 'ronin', 8453: 'base', 9745: 'plasma', 42161: 'arbitrum', 43114: 'avalanche', 59144: 'linea', 80094: 'berachain',
+};
+const KYBER = 'https://aggregator-api.kyberswap.com';
+/** Size of the test sale, USD: large enough to meet real depth, small enough for any reward. */
+const SELL_TEST_USD = 1_000;
+const SELL_TTL_MS = 10 * 60_000;
+const SELL_KEEP_MS = 60 * 60_000;
+const sellCache = new Map<string, { q: SellQuote | null; at: number }>();
+const underlyingCache = new Map<string, MerklToken | null>();
+const refreshing = new Set<string>();
+
+/** The token a Merkl wrapper turns into when claimed (Merkl's own token record). */
+async function underlyingOf(t: MerklToken): Promise<MerklToken | null> {
+  if (!t.underlyingId) return null;
+  if (underlyingCache.has(t.underlyingId)) return underlyingCache.get(t.underlyingId) ?? null;
+  try {
+    const { body } = await get<RawToken[]>(`/tokens?id=${encodeURIComponent(t.underlyingId)}`);
+    const u = Array.isArray(body) && body[0] ? normalizeToken(body[0]) : null;
+    underlyingCache.set(t.underlyingId, u);
+    return u;
+  } catch {
+    return null;
+  }
+}
+
+/** Each chain's dollar stablecoin to sell into: a verified USDC (else USDT) at its peg, from the feed itself. */
+function sellTargets(list: MerklOpportunity[]): Map<number, string> {
+  const rank = (sym: string) => ['USDC', 'USDT0', 'USDT', 'USDC.E'].indexOf(sym.toUpperCase());
+  const best = new Map<number, MerklToken>();
+  for (const t of list.flatMap((o) => [...o.tokens, ...o.campaigns.map((c) => c.rewardToken)])) {
+    if (!t.verified || t.price === null || Math.abs(t.price - 1) > 0.02 || rank(t.symbol) < 0 || !/^0x[0-9a-fA-F]{40}$/.test(t.address)) continue;
+    const b = best.get(t.chainId);
+    if (!b || rank(t.symbol) < rank(b.symbol)) best.set(t.chainId, t);
+  }
+  return new Map([...best].map(([c, t]) => [c, t.address]));
+}
+
+/** Raw integer amount for `usd` worth of a token, without floating-point overflow. */
+function rawAmount(usd: number, price: number, decimals: number): string | null {
+  const units = usd / price;
+  if (!(units > 0) || !Number.isFinite(units)) return null;
+  const head = Math.min(decimals, 6);
+  return (BigInt(Math.max(1, Math.round(units * 10 ** head))) * BigInt(10) ** BigInt(decimals - head)).toString();
+}
+
+/** One sale quote; null when KyberSwap knows no route (token or route not found); undefined when it could not be asked. */
+async function quoteSale(chainId: number, t: MerklToken, target: string, via: string | null): Promise<SellQuote | null | undefined> {
+  if (t.price === null || t.decimals == null) return undefined;
+  const amount = rawAmount(SELL_TEST_USD, t.price, t.decimals);
+  if (!amount) return undefined;
+  const url = `${KYBER}/${KYBER_CHAINS[chainId]}/api/v1/routes?tokenIn=${t.address}&tokenOut=${target}&amountIn=${amount}`;
+  // KyberSwap rate-limits bursts (429): back off and ask again a few times.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { accept: 'application/json', 'x-client-id': 'yieldx' }, cache: 'no-store', signal: AbortSignal.timeout(10_000) });
+      if (res.status === 429 || res.status >= 500) {
+        await new Promise((r) => setTimeout(r, 1_500 * (attempt + 1)));
+        continue;
+      }
+      const body = (await res.json()) as { code?: number; data?: { routeSummary?: { amountOutUsd?: string } } };
+      // 4008 route not found, 4011 token not found: nothing to sell into.
+      if (body.code === 4008 || body.code === 4011) return null;
+      const outUsd = Number(body.data?.routeSummary?.amountOutUsd);
+      if (body.code !== 0 || !(outUsd >= 0)) return undefined;
+      // What the sale realises of Merkl's own valuation: price impact and any price gap together.
+      return { keptPct: (outUsd / SELL_TEST_USD) * 100, usdPerToken: outUsd / (SELL_TEST_USD / t.price), via, source: 'KyberSwap' };
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Sell quotes for every priced reward token that is not a verified stable or major. */
+export async function fetchSells(list: MerklOpportunity[]): Promise<Record<string, SellQuote | null>> {
+  const targets = sellTargets(list);
+  const tokens = new Map<string, MerklToken>();
+  for (const o of list)
+    for (const c of o.campaigns) {
+      const t = c.rewardToken;
+      if (t.type === 'TOKEN' && t.price !== null && !(t.verified && tokenClass(t) !== 'other') && KYBER_CHAINS[t.chainId] && /^0x[0-9a-fA-F]{40}$/.test(t.address)) tokens.set(tokenKey(t.chainId, t.address), t);
+    }
+  const now = Date.now();
+  const out: Record<string, SellQuote | null> = {};
+  const ask = async (key: string, t: MerklToken) => {
+    const u = await underlyingOf(t);
+    const sold = u && u.chainId === t.chainId ? u : t;
+    const target = targets.get(t.chainId);
+    if (!target) return undefined;
+    // It turns into the very stablecoin we would sell into: nothing to swap.
+    if (sold.address.toLowerCase() === target.toLowerCase() && t.price !== null) return { keptPct: 100, usdPerToken: t.price, via: sold.symbol, source: 'KyberSwap' as const };
+    const q = await quoteSale(t.chainId, sold, target, sold === t ? null : sold.symbol);
+    if (q !== undefined) sellCache.set(key, { q, at: Date.now() });
+    return q;
+  };
+  const cold: [string, MerklToken][] = [];
+  for (const [key, t] of tokens) {
+    const hit = sellCache.get(key);
+    if (hit && now - hit.at < SELL_KEEP_MS) {
+      // Serve the last answer; past its TTL, ask again behind it so the feed never waits.
+      out[key] = hit.q;
+      if (now - hit.at >= SELL_TTL_MS && !refreshing.has(key)) {
+        refreshing.add(key);
+        void ask(key, t).finally(() => refreshing.delete(key));
+      }
+    } else cold.push([key, t]);
+  }
+  await mapLimit(cold, 3, async ([key, t]) => {
+    const q = await ask(key, t);
+    // A call that failed is not «unsellable»: the token stays unchecked.
+    if (q !== undefined) out[key] = q;
+  });
+  return out;
+}
+
 // ─── Gas ─────────────────────────────────────────────────────────────────────
 
 async function fetchGas(list: MerklOpportunity[]): Promise<GasQuote[]> {
@@ -156,8 +280,8 @@ export async function getMerklFeed(): Promise<MerklFeed> {
   try {
     const [fresh, programs] = await Promise.all([fetchLive(), fetchPrograms()]);
     if (!fresh.opportunities.length && lastGood) return { ...lastGood, stale: true };
-    const [markets, gas] = await Promise.all([fetchMarkets(fresh.opportunities), fetchGas(fresh.opportunities)]);
-    lastGood = { ...fresh, programs, markets, marketChains: Object.keys(DEX_CHAINS).map(Number), gas };
+    const [markets, gas, sells] = await Promise.all([fetchMarkets(fresh.opportunities), fetchGas(fresh.opportunities), fetchSells(fresh.opportunities)]);
+    lastGood = { ...fresh, programs, markets, marketChains: Object.keys(DEX_CHAINS).map(Number), sells, gas };
     return { ...lastGood, stale: false };
   } catch (error) {
     if (lastGood) return { ...lastGood, stale: true };

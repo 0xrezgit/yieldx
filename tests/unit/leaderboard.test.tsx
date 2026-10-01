@@ -131,45 +131,48 @@ const lender = (borrow: Partial<NonNullable<Opportunity['borrow']>> = {}, over: 
     sources: [],
     ...over,
   }) as unknown as Opportunity;
-const lev = { leverage: 3 };
 
 describe('leaderLoop', () => {
   it('builds the loop on the lending market that takes this PT: its rate and LLTV, not a guess', () => {
-    const [r] = leaderLoop([ptListing({ impliedAPY: 12 })], s, [lender()], lev, { capital: 10_000, hurdle: 8 }).rows;
+    const [r] = leaderLoop([ptListing({ impliedAPY: 12 })], s, [lender()], { capital: 10_000, hurdle: 8 }).rows;
     const sim = simulateLoop({ capital: 10_000, daysToMaturity: 90, entryAPY: 12, leverage: 3, borrowAPY: 5, lltv: 91.5, feePercent: s.feePercent });
     expect(r.pnl).toBeCloseTo(sim.profit, 9);
     expect(r.health).toBeCloseTo(sim.healthFactor, 9);
     expect(r.verdict).toBe('worth');
     expect(r.lender).toMatchObject({ protocol: 'Morpho', debtSymbol: 'USDC', borrowPct: 5, lltvPct: 91.5, url: 'https://app.morpho.org/ethereum/market/0xm', rateModelled: false });
-    const [loss] = leaderLoop([ptListing({ impliedAPY: 3 })], s, [lender({ ratePct: 12 })], lev, { capital: 10_000 }).rows;
+    const [loss] = leaderLoop([ptListing({ impliedAPY: 3 })], s, [lender({ ratePct: 12 })], { capital: 10_000 }).rows;
     expect(loss.verdict).toBe('loss');
   });
 
   it('gives no dollar figure without a lending market for the PT', () => {
-    const b = leaderLoop([ptListing()], s, [], lev, { capital: 10_000 });
+    const b = leaderLoop([ptListing()], s, [], { capital: 10_000 });
     expect(b.rows).toHaveLength(0);
     expect(b.noLender.map((x) => x.pendleLoop)).toEqual([true]);
     // Another network, another address or another asset class is not this PT's market.
-    expect(leaderLoop([ptListing()], s, [lender({}, { chain: 'eip155:8453' })], lev, { capital: 10_000 }).rows).toHaveLength(0);
-    expect(leaderLoop([ptListing()], s, [lender({ collateral: [{ token: { symbol: 'PT-X', address: `0x${'cd'.repeat(20)}` }, maxLtv: 0.9 }] })], lev, { capital: 10_000 }).rows).toHaveLength(0);
-    expect(leaderLoop([ptListing()], s, [lender({}, { assets: { deposit: [{ symbol: 'WETH', address: `0x${'33'.repeat(20)}` }] } })], lev, { capital: 10_000 }).rows).toHaveLength(0);
+    expect(leaderLoop([ptListing()], s, [lender({}, { chain: 'eip155:8453' })], { capital: 10_000 }).rows).toHaveLength(0);
+    expect(leaderLoop([ptListing()], s, [lender({ collateral: [{ token: { symbol: 'PT-X', address: `0x${'cd'.repeat(20)}` }, maxLtv: 0.9 }] })], { capital: 10_000 }).rows).toHaveLength(0);
+    expect(leaderLoop([ptListing()], s, [lender({}, { assets: { deposit: [{ symbol: 'WETH', address: `0x${'33'.repeat(20)}` }] } })], { capital: 10_000 }).rows).toHaveLength(0);
     // Not a loop candidate at all: neither a row nor in the no-lender list.
-    expect(leaderLoop([ptListing({ categories: [], name: 'ETHx', liquidity: 200_000 })], s, [], lev, { capital: 1000 }).noLender).toHaveLength(0);
+    expect(leaderLoop([ptListing({ categories: [], name: 'ETHx', liquidity: 200_000 })], s, [], { capital: 1000 }).noLender).toHaveLength(0);
   });
 
   it('one row per lending market, even for a PT outside the old candidate rule', () => {
     const second = lender({ ratePct: 3 }, { key: 'morpho:eip155:1:0xn:supply', url: 'https://app.morpho.org/ethereum/market/0xn' });
-    const rows = leaderLoop([ptListing({ categories: [], name: 'ETHx', liquidity: 200_000 })], s, [lender(), second], lev, { capital: 1000 }).rows;
+    const rows = leaderLoop([ptListing({ categories: [], name: 'ETHx', liquidity: 200_000 })], s, [lender(), second], { capital: 1000 }).rows;
     expect(rows.map((r) => r.lender!.borrowPct).sort()).toEqual([3, 5]);
     expect(new Set(rows.map((r) => r.id)).size).toBe(2);
   });
 
-  it('leaves out and counts loops liquidated at entry or larger than the market can lend', () => {
-    // LLTV 60%: 3× puts LTV near 67% — liquidated on entry.
-    const liq = leaderLoop([ptListing()], s, [lender({ collateral: [{ token: { symbol: 'PT-USDx', address: PT }, maxLtv: 0.6 }] })], lev, { capital: 10_000 });
-    expect(liq).toMatchObject({ rows: [], liquidated: 1 });
+  it('levers at most 3×, less where the LLTV needs it to keep health at 1.25; counts markets that cannot lend enough', () => {
+    const [capped] = leaderLoop([ptListing()], s, [lender()], { capital: 10_000 }).rows;
+    expect(capped.leverage).toBe(3);
+    expect(capped.health!).toBeGreaterThanOrEqual(1.25);
+    // LLTV 60%: 3× would put LTV near 67%; the policy lowers leverage instead.
+    const [low] = leaderLoop([ptListing()], s, [lender({ collateral: [{ token: { symbol: 'PT-USDx', address: PT }, maxLtv: 0.6 }] })], { capital: 10_000 }).rows;
+    expect(low.leverage!).toBeLessThan(2);
+    expect(low.health!).toBeCloseTo(1.25, 9);
     // 3× on $10,000 borrows $20,000; the market has $15,000.
-    const short = leaderLoop([ptListing()], s, [lender({ availableUsd: 15_000 })], lev, { capital: 10_000 });
+    const short = leaderLoop([ptListing()], s, [lender({ availableUsd: 15_000 })], { capital: 10_000 });
     expect(short).toMatchObject({ rows: [], shortLiquidity: 1 });
   });
 
@@ -188,13 +191,32 @@ describe('leaderLoop', () => {
     expect(tokenClass({ symbol: 'apyUSD' })).toBe('other');
     expect(tokenClass({ symbol: 'aPYUSD' })).toBe('other');
     expect(tokenClass({ symbol: 'PYUSD' })).toBe('usd');
-    const unverified = leaderLoop([ptListing({ name: 'sUSDat', asset: tok('sUSDat'), accountingSymbol: 'USDat', categories: ['rwa'] })], s, [lender()], lev, { capital: 1000 }).rows[0];
+    const unverified = leaderLoop([ptListing({ name: 'sUSDat', asset: tok('sUSDat'), accountingSymbol: 'USDat', categories: ['rwa'] })], s, [lender()], { capital: 1000 }).rows[0];
     expect(unverified.pegVerified).toBe(false);
+  });
+
+  it('picks 3× or 2.5× per market from its own live data, and says why', async () => {
+    const { ptLoopLeverage } = await import('../../src/lib/opportunity/leverage');
+    const base = { impliedPct: 12, borrowPct: 5, days: 60, lltvPct: 91.5, pegVerified: true, feePercent: 0.5 };
+    expect(ptLoopLeverage(base)).toEqual({ leverage: 3, reason: 'full' });
+    expect(ptLoopLeverage({ ...base, pegVerified: false })).toEqual({ leverage: 2.5, reason: 'peg' });
+    expect(ptLoopLeverage({ ...base, borrowPct: 10 })).toEqual({ leverage: 2.5, reason: 'spread' });
+    expect(ptLoopLeverage({ ...base, days: 200 })).toEqual({ leverage: 2.5, reason: 'long' });
+    // LLTV 70%: health 1.25 allows only about 2.2×.
+    const low = ptLoopLeverage({ ...base, lltvPct: 70 });
+    expect(low.reason).toBe('health');
+    expect(low.leverage).toBeLessThan(2.5);
+    // A four-year PT at 3%: its price falls far on a rate jump; leverage drops until it survives +10 points.
+    const far = ptLoopLeverage({ ...base, impliedPct: 3, borrowPct: -2, days: 1460, lltvPct: 86 });
+    expect(far.reason).toBe('rate');
+    expect(far.leverage).toBeLessThan(2.5);
+    const r = simulateLoop({ capital: 1, daysToMaturity: 1460, entryAPY: 3, leverage: far.leverage, borrowAPY: -2, lltv: 86, feePercent: 0.5 });
+    expect(r.liquidationAPY - 3).toBeGreaterThanOrEqual(10 - 1e-6);
   });
 
   it('uses the borrow rate after the user\'s own borrow when the market publishes its curve', () => {
     const curve = { suppliedUsd: 100_000, borrowedUsd: 50_000, points: [{ u: 0, rate: 0.02 }, { u: 0.5, rate: 0.05 }, { u: 1, rate: 0.5 }], source: 'test' };
-    const [r] = leaderLoop([ptListing()], s, [lender({ curve })], lev, { capital: 10_000 }).rows;
+    const [r] = leaderLoop([ptListing()], s, [lender({ curve })], { capital: 10_000 }).rows;
     expect(r.lender!.rateModelled).toBe(true);
     expect(r.lender!.borrowNowPct).toBe(5);
     expect(r.lender!.borrowPct).toBeGreaterThan(5);
