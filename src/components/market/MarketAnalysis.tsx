@@ -136,7 +136,7 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
       </div>
 
       {open && (
-        <div className="mt-3 rounded-xl border border-default bg-elevated/30 p-3">
+        <div className="mt-3 rounded-xl border border-default bg-canvas p-3 sm:p-4">
           <OpportunityDetails row={row} days={days} modelVersion={modelVersion} />
         </div>
       )}
@@ -176,10 +176,13 @@ export default function MarketAnalysis() {
   const shown = top.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-4">
-      <header className="flex items-center justify-between gap-3">
-        <h1 className="page-title">تحلیل بازار</h1>
-        <button type="button" onClick={m.refresh} disabled={m.refreshing} className="tap inline-flex items-center gap-1.5 rounded-lg px-3 min-h-10 text-sm text-secondary hover:text-primary hover:bg-elevated disabled:opacity-60" aria-label="به‌روزرسانی داده‌ها">
+    <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-5 lg:py-8 flex flex-col gap-4">
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex flex-col">
+          <h1 className="page-title">تحلیل بازار</h1>
+          <p className="page-sub">فرصت‌ها به ترتیب سود خالص دلاری</p>
+        </div>
+        <button type="button" onClick={m.refresh} disabled={m.refreshing} className="tap shrink-0 inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-raised disabled:opacity-60" aria-label="به‌روزرسانی داده‌ها">
           <RefreshCw size={14} className={m.refreshing ? 'animate-spin' : ''} aria-hidden />
           {m.updatedAt ? formatAgo(m.updatedAt) : 'به‌روزرسانی'}
         </button>
@@ -188,11 +191,11 @@ export default function MarketAnalysis() {
       <Segmented<View>
         value={st.view}
         onChange={(view) => setSt({ ...st, view })}
-        label="بخش"
+        label="رتبه‌بندی"
         options={[
-          { id: 'all', label: 'رتبه‌بندی یکپارچه' },
-          { id: 'yt', label: 'رتبه‌بندی دلاری YT' },
-          { id: 'loop', label: 'رتبه‌بندی دلاری Loop PT' },
+          { id: 'all', label: 'همه‌ی فرصت‌ها' },
+          { id: 'yt', label: <>دلاری <bdi dir="ltr">YT</bdi></> },
+          { id: 'loop', label: <>لوپ <bdi dir="ltr">PT</bdi></> },
         ]}
       />
 
@@ -218,9 +221,9 @@ export default function MarketAnalysis() {
         <label className="relative flex-1">
           <span className="sr-only">جست‌وجو</span>
           <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی نماد، پروتکل یا شبکه" className="w-full rounded-lg border border-control bg-surface pr-9 pl-3 min-h-10 text-sm" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی نماد، پروتکل یا شبکه" className="w-full pr-9 pl-3 text-sm" />
         </label>
-        <div className="sm:w-auto">
+        <div className="min-w-0 sm:w-auto">
           <Segmented<FamilyFilter> value={filter} onChange={setFilter} label="نوع" size="sm" options={FAMILY_FILTERS} />
         </div>
       </div>
@@ -258,7 +261,7 @@ export default function MarketAnalysis() {
           {pages > 1 && (
             <nav className="flex items-center justify-center gap-1 pt-3" aria-label="صفحه‌ها">
               {Array.from({ length: pages }, (_, p) => (
-                <button key={p} type="button" onClick={() => setPage(p)} aria-current={p === page ? 'page' : undefined} className={`tap min-w-10 min-h-10 rounded-lg text-sm ${p === page ? 'bg-elevated text-primary font-semibold ring-1 ring-accent' : 'text-secondary hover:bg-elevated'}`}>
+                <button key={p} type="button" onClick={() => setPage(p)} aria-current={p === page ? 'page' : undefined} className={`tap min-w-10 min-h-10 rounded-md text-sm font-medium ${p === page ? 'bg-hover text-primary' : 'text-muted hover:text-primary hover:bg-raised'}`}>
                   <Num>{formatNumber(p + 1, 0)}</Num>
                 </button>
               ))}

@@ -48,7 +48,7 @@ export function EntryLink({ m, strategy, primary = false }: { m: OpportunityList
   const label = link.exact ? 'ورود به بازار' : <>اپ <bdi dir="ltr">{protocols[m.protocol].name}</bdi></>;
   const address = !link.exact && (
     <span className="text-xs text-muted min-w-0 break-all">
-      نشانی بازار: <bdi dir="ltr" className="select-all">{marketAddress(m)}</bdi>
+      نشانی بازار: <bdi dir="ltr" className="latin select-all">{marketAddress(m)}</bdi>
     </span>
   );
   if (primary)
@@ -62,7 +62,7 @@ export function EntryLink({ m, strategy, primary = false }: { m: OpportunityList
     );
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5 text-xs">
-      <a href={link.url} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1 rounded-lg border border-accent/60 px-2.5 min-h-8 text-primary hover:bg-elevated">
+      <a href={link.url} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1 rounded-md border border-strong bg-white/[0.03] px-2.5 min-h-8 font-medium text-primary hover:bg-hover">
         <ExternalLink size={12} aria-hidden /> {label}
       </a>
       {address}
@@ -178,7 +178,7 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
         </div>
       </div>
       {open && (
-        <div className="mt-3 rounded-xl border border-default bg-elevated/40 p-3">
+        <div className="mt-3 rounded-xl border border-default bg-canvas p-3 sm:p-4">
           <StepList steps={steps} />
         </div>
       )}
@@ -218,7 +218,7 @@ function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStr
   const daily = [...good].sort((a, b) => b.perDay - a.perDay)[0];
   const line = (label: string, r: LeaderRow | undefined) =>
     r && (
-      <li className="flex flex-col gap-3 rounded-xl border border-default bg-elevated/40 p-3">
+      <li className="flex flex-col gap-3 rounded-xl border border-default bg-canvas p-3">
         <span className="text-xs text-secondary">{label}</span>
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
@@ -332,9 +332,9 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
           <NumberField label="کارمزد هر معامله" value={fee} onChange={setFee} suffix="%" />
           <Segmented<RankBy> value={by} onChange={setBy} label="مرتب‌سازی" size="sm" options={[{ id: 'total', label: 'سود کل دلاری' }, { id: 'perDay', label: 'سود در هر روز' }]} />
           {strategy === 'yt' && (
-            <label className="flex items-center gap-2 text-sm text-secondary min-h-10">
-              <input type="checkbox" checked={pointsOnly} onChange={(e) => setPointsOnly(e.target.checked)} className="accent-accent size-4" />
-              فقط پوینت‌دار
+            <label className="tap flex items-center gap-2.5 text-sm text-secondary min-h-11 cursor-pointer">
+              <input type="checkbox" checked={pointsOnly} onChange={(e) => setPointsOnly(e.target.checked)} />
+              فقط بازارهای پوینت‌دار
             </label>
           )}
         </div>
@@ -361,18 +361,27 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
           </p>
         )}
       </section>
-      <p className="text-xs text-secondary leading-6">
-        {strategy === 'yt' ? 'خرید YT، فروش در بهترین روز؛ بدون ارزش پوینت.' : 'لوپ PT تا سررسید روی بازار وام واقعی.'}{' '}
-        <Num>{formatNumber(rows.length, 0)}</Num> بازار: <bdi dir="ltr">Pendle</bdi> <Num>{formatNumber(count('pendle'), 0)}</Num> · <bdi dir="ltr">Spectra</bdi> <Num>{formatNumber(count('spectra'), 0)}</Num> · <bdi dir="ltr">Exponent</bdi>{' '}
-        <Num>{formatNumber(count('exponent'), 0)}</Num> ·{' '}
-        <span className="text-success">
-          <Num>{formatNumber(gains, 0)}</Num> سودده
-        </span>{' '}
-        ·{' '}
-        <span className="text-danger">
-          <Num>{formatNumber(rows.length - gains, 0)}</Num> زیان‌ده
-        </span>
-      </p>
+      <div className="flex flex-col gap-1.5 text-xs">
+        <p className="text-secondary leading-6">
+          {strategy === 'yt' ? <>خرید <bdi dir="ltr">YT</bdi>، فروش در بهترین روز؛ بدون ارزش پوینت.</> : <>لوپ <bdi dir="ltr">PT</bdi> تا سررسید روی بازار وام واقعی.</>}
+        </p>
+        <ul className="meta text-muted" aria-label="خلاصه">
+          <li>
+            <Num>{formatNumber(rows.length, 0)}</Num> بازار
+          </li>
+          {(['pendle', 'spectra', 'exponent'] as const).map((p) => (
+            <li key={p}>
+              <bdi dir="ltr">{protocols[p].name}</bdi> <Num>{formatNumber(count(p), 0)}</Num>
+            </li>
+          ))}
+          <li className="text-success">
+            <Num>{formatNumber(gains, 0)}</Num> سودده
+          </li>
+          <li className="text-danger">
+            <Num>{formatNumber(rows.length - gains, 0)}</Num> زیان‌ده
+          </li>
+        </ul>
+      </div>
       <Suggestion rows={rows} strategy={strategy} />
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Bucket title="بیشترین سود" icon={<TrendingUp size={18} aria-hidden />} cls="text-success" rows={b.topProfit} strategy={strategy} />

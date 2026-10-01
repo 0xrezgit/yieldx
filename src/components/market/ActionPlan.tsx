@@ -22,7 +22,7 @@ const ICON: Record<StepKind, LucideIcon> = {
 /** The path in one line: an icon and a word per step, read right to left; scrolls sideways instead of wrapping. */
 export function StepStrip({ steps }: { steps: Step[] }) {
   return (
-    <ol className="strip flex flex-nowrap items-center gap-1 overflow-x-auto text-xs text-secondary rounded-lg bg-elevated/60 px-2 py-1.5" aria-label="مسیر">
+    <ol className="strip flex flex-nowrap items-center gap-1 overflow-x-auto text-xs text-secondary rounded-md bg-canvas border border-default px-2 py-1.5" aria-label="مسیر">
       {steps.map((s, i) => {
         const Icon = ICON[s.kind];
         return (

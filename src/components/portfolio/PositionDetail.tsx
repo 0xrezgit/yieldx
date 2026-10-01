@@ -363,24 +363,24 @@ export function AnalysisPanel({ x }: { x: PositionView }) {
         ))}
       </ul>
       {a.scenarios.length > 0 && (
-        <div className="overflow-x-auto -mx-5 md:-mx-7">
+        <div className="overflow-x-auto -mx-4 md:-mx-6">
           <table className="w-full text-sm min-w-[32rem]">
             <thead>
               <tr className="text-sx-muted text-xs text-right border-y border-sx-border bg-sx-raised/40">
-                <th className="py-2.5 px-5 md:px-7 font-normal">سناریو</th>
+                <th className="py-2.5 px-4 md:px-6 font-normal">سناریو</th>
                 <th className="py-2.5 px-3 font-normal">نتیجه</th>
-                <th className="py-2.5 px-5 md:px-7 font-normal">در مقایسه با خروج اکنون</th>
+                <th className="py-2.5 px-4 md:px-6 font-normal">در مقایسه با خروج اکنون</th>
               </tr>
             </thead>
             <tbody>
               {a.scenarios.map((s) => (
                 <tr key={s.label} className="border-b border-sx-border align-top">
-                  <td className="py-3 px-5 md:px-7">
+                  <td className="py-3 px-4 md:px-6">
                     <div className="text-sx-text">{s.label}</div>
                     <div className="text-xs text-sx-faint mt-0.5">{s.assumption}</div>
                   </td>
                   <td className="py-3 px-3">{usd(s.valueUsd)}</td>
-                  <td className="py-3 px-5 md:px-7">
+                  <td className="py-3 px-4 md:px-6">
                     <Pnl usd={s.vsExitUsd} size="sm" word={false} />
                   </td>
                 </tr>

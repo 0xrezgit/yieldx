@@ -38,9 +38,9 @@ export function Pill({ tone = 'muted', children }: { tone?: Tone; children: Reac
     danger: 'bg-danger/12 text-danger',
     info: 'bg-info/12 text-info',
     accent: 'bg-accent/15 text-accent',
-    muted: 'bg-elevated text-secondary',
+    muted: 'bg-hover text-secondary',
   };
-  return <span className={`inline-flex items-center gap-1 rounded px-1.5 min-h-6 text-xs font-medium whitespace-nowrap ${cls[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2 min-h-6 text-xs font-medium whitespace-nowrap ${cls[tone]}`}>{children}</span>;
 }
 
 /** Identity for tables and cards: token + network badge, symbol, protocol · network · maturity. */
@@ -165,7 +165,7 @@ export function Segmented<T extends string>({
   size?: 'sm' | 'md';
 }) {
   return (
-    <div className="flex gap-1 p-1 rounded-lg bg-surface border border-default overflow-x-auto" role="radiogroup" aria-label={label}>
+    <div className={`seg ${options.length > 4 ? 'seg-scroll strip' : 'seg-fit'}`} role="radiogroup" aria-label={label}>
       {options.map((o) => (
         <button
           key={o.id}
@@ -173,9 +173,7 @@ export function Segmented<T extends string>({
           role="radio"
           aria-checked={value === o.id}
           onClick={() => onChange(o.id)}
-          className={`tap flex-1 shrink-0 whitespace-nowrap flex items-center justify-center gap-1.5 rounded-md transition-colors [&>svg]:hidden sm:[&>svg]:inline ${
-            size === 'sm' ? 'px-2.5 min-h-9 text-sm' : 'px-2 sm:px-3 min-h-10 text-[15px]'
-          } ${value === o.id ? 'bg-elevated text-primary font-semibold ring-1 ring-accent' : 'text-secondary hover:text-primary'}`}
+          className={`tap [&>svg]:hidden sm:[&>svg]:inline ${size === 'sm' ? 'min-h-9 text-sm' : 'min-h-10 text-[15px]'}`}
         >
           {o.label}
         </button>
@@ -208,5 +206,5 @@ export function Legend({ items }: { items: { cls: string; label: string }[] }) {
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-lg border border-dashed border-strong p-8 text-center text-secondary text-sm">{children}</div>;
+  return <div className="rounded-2xl border border-dashed border-strong px-6 py-10 text-center text-secondary text-sm">{children}</div>;
 }

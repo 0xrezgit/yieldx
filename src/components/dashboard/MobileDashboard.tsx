@@ -29,7 +29,8 @@ export function MobileDashboard({ d }: { d: ReadyDashboard }) {
     <main className="sx px-4 py-4 flex flex-col gap-4 max-w-2xl mx-auto">
       <PageHeader d={d} />
       {started && (
-        <div role="tablist" aria-label="بخش‌های تحلیل" className="sticky top-14 z-20 -mx-4 px-4 py-2 bg-canvas/95 backdrop-blur grid grid-cols-3 gap-1">
+        <div role="tablist" aria-label="بخش‌های تحلیل" className="sticky below-header z-20 -mx-4 px-4 py-2 bg-canvas/90 backdrop-blur-md">
+          <div className="seg seg-fit">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -37,12 +38,13 @@ export function MobileDashboard({ d }: { d: ReadyDashboard }) {
               role="tab"
               aria-selected={current === t.id}
               onClick={() => setTab(t.id)}
-              className={`tap min-h-11 rounded-lg text-[15px] inline-flex items-center justify-center gap-1.5 ${current === t.id ? 'bg-elevated text-primary font-semibold ring-1 ring-accent' : 'text-secondary'}`}
+              className="tap min-h-10 text-[15px]"
             >
               {t.label}
               {!!t.count && <span className="min-w-5 h-5 px-1 rounded-full bg-danger text-xs leading-5 text-[var(--c-bg)] font-semibold"><Num>{formatNumber(t.count, 0)}</Num></span>}
             </button>
           ))}
+          </div>
         </div>
       )}
 

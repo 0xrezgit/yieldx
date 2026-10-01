@@ -64,14 +64,14 @@ export function FinancialNumber({ value, kind = 'num', digits = 2, signed = fals
  */
 export function MetricCard({ label, children, sub, help, emphasis = false }: { label: ReactNode; children: ReactNode; sub?: ReactNode; help?: ReactNode; emphasis?: boolean }) {
   return (
-    <div className={`@container min-w-0 flex flex-col gap-1 rounded-lg border border-default bg-surface p-3 sm:p-4 ${emphasis ? 'col-span-full' : ''}`}>
+    <div className={`@container min-w-0 flex flex-col gap-1 rounded-xl border border-default bg-surface p-3 sm:p-4 ${emphasis ? 'col-span-full' : ''}`}>
       <div className={`text-sm text-secondary flex items-start gap-1 leading-5 ${emphasis ? '' : 'min-h-10 sm:min-h-0'}`}>
         {label}
         {help}
       </div>
       <div
         className={`min-w-0 text-primary leading-tight ${
-          emphasis ? 'font-medium tabular-nums text-[clamp(1.5rem,9cqi,2.25rem)]' : 'font-semibold text-[clamp(0.95rem,12cqi,1.25rem)]'
+          emphasis ? 'font-semibold tabular-nums text-[clamp(1.5rem,9cqi,2.25rem)]' : 'font-semibold text-[clamp(0.95rem,12cqi,1.25rem)]'
         }`}
       >
         {children}
@@ -85,7 +85,7 @@ export function MetricCard({ label, children, sub, help, emphasis = false }: { l
 export function EmptyState({ icon, title, children, action }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
     <section className="sx-card px-6 py-10 flex flex-col items-center gap-3 text-center">
-      {icon && <span className="grid place-items-center size-12 rounded-full bg-accent/12 text-accent">{icon}</span>}
+      {icon && <span className="grid place-items-center size-12 rounded-xl bg-accent/12 text-accent">{icon}</span>}
       <h2 className="text-lg font-semibold text-primary">{title}</h2>
       {children && <div className="text-sm text-secondary max-w-md leading-7">{children}</div>}
       {action && <div className="flex flex-wrap justify-center gap-2 mt-1">{action}</div>}
@@ -95,7 +95,7 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
 
 /** Shared button looks. */
 export const button = {
-  primary: 'tap inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-lg bg-brand text-white text-[15px] font-semibold hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed',
-  secondary: 'tap inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-accent/70 text-primary text-[15px] hover:bg-accent/10 transition-colors disabled:opacity-40',
-  ghost: 'tap inline-flex items-center justify-center gap-1.5 min-h-10 px-3 rounded-lg text-secondary text-sm hover:text-primary hover:bg-elevated transition-colors disabled:opacity-40',
+  primary: 'tap inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-md bg-brand text-white text-[15px] font-medium hover:brightness-110 active:brightness-95 transition disabled:opacity-40 disabled:cursor-not-allowed',
+  secondary: 'tap inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-md border border-strong bg-white/[0.03] text-primary text-[15px] font-medium hover:bg-hover transition-colors disabled:opacity-40',
+  ghost: 'tap inline-flex items-center justify-center gap-1.5 min-h-10 px-3 rounded-md text-secondary text-sm hover:text-primary hover:bg-hover transition-colors disabled:opacity-40',
 };

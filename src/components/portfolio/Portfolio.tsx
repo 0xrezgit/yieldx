@@ -488,7 +488,7 @@ export default function Portfolio() {
         </section>
       ) : (
         <>
-          <section className="sx-hero p-5 md:p-7 flex flex-col gap-5">
+          <section className="sx-hero p-4 md:p-6 flex flex-col gap-4">
             <div className="flex flex-wrap items-end justify-between gap-5">
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs text-sx-muted">ارزش خالص</span>

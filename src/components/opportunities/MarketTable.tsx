@@ -74,13 +74,13 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
         <caption className="sr-only">{caption}</caption>
         <thead>
           <tr>
-            <th scope="col" className="sticky top-14 z-10 bg-elevated text-right font-normal text-secondary px-2 xl:px-3 py-2.5 border-y border-default first:rounded-tr-lg first:border-r">
+            <th scope="col" className="sticky below-header z-10 bg-elevated text-right font-normal text-secondary px-2 xl:px-3 py-2.5 border-y border-default first:rounded-tr-lg first:border-r">
               {identityHeader}
             </th>
             {columns.map((c) => {
               const active = sort?.id === c.id;
               return (
-                <th key={c.id} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : undefined} className={`sticky top-14 z-10 bg-elevated text-right font-normal text-secondary px-2 xl:px-3 py-2.5 border-y border-default leading-5 align-bottom ${c.className ?? ''}`}>
+                <th key={c.id} scope="col" aria-sort={active ? (sort!.dir === 1 ? 'ascending' : 'descending') : undefined} className={`sticky below-header z-10 bg-elevated text-right font-normal text-secondary px-2 xl:px-3 py-2.5 border-y border-default leading-5 align-bottom ${c.className ?? ''}`}>
                   {c.sort ? (
                     <button type="button" onClick={() => setSort({ id: c.id, dir: active ? (sort!.dir === 1 ? -1 : 1) : -1 })} className={`inline-flex items-center gap-1 min-h-8 hover:text-primary ${active ? 'text-primary font-semibold' : ''}`}>
                       {c.header}
@@ -93,7 +93,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
                 </th>
               );
             })}
-            <th scope="col" className="sticky top-14 z-10 bg-elevated px-3 py-2.5 border-y border-l border-default rounded-tl-lg">
+            <th scope="col" className="sticky below-header z-10 bg-elevated px-3 py-2.5 border-y border-l border-default rounded-tl-lg">
               <span className="sr-only">اقدام</span>
             </th>
           </tr>
@@ -147,7 +147,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex flex-col gap-1">
                   {identity(r)}
-                  {mb.meta && <div className="text-xs text-secondary flex flex-wrap items-center gap-x-1.5">{mb.meta}</div>}
+                  {mb.meta && <div className="meta text-xs text-secondary">{mb.meta}</div>}
                 </div>
                 <div className="text-left shrink-0 flex flex-col items-end">
                   {mb.result}
@@ -156,10 +156,10 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
               </div>
               {mb.warning && <div className="text-xs text-warning">{mb.warning}</div>}
               <div className="flex gap-2">
-                <button type="button" onClick={() => onAction(r)} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand text-white px-3 min-h-11 text-[15px] font-semibold">
+                <button type="button" onClick={() => onAction(r)} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand text-white px-3 min-h-11 text-[15px] font-medium hover:brightness-110">
                   {actionIcon ?? <Calculator size={15} aria-hidden />} {actionLabel}
                 </button>
-                <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} className="tap inline-flex items-center justify-center gap-1 rounded-lg border border-control px-3 min-h-11 text-[15px] text-primary">
+                <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} className="tap inline-flex items-center justify-center gap-1 rounded-md border border-strong bg-white/[0.03] px-3 min-h-11 text-[15px] font-medium text-secondary hover:text-primary hover:bg-hover">
                   جزئیات <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
                 </button>
               </div>
@@ -170,7 +170,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
       </ul>
 
       {sorted.length > shown && (
-        <button type="button" onClick={() => setShown((n) => n + pageSize)} className="tap self-center rounded-lg border border-control px-4 min-h-11 text-sm text-primary">
+        <button type="button" onClick={() => setShown((n) => n + pageSize)} className="tap self-center rounded-md border border-strong bg-white/[0.03] px-4 min-h-11 text-sm font-medium text-primary hover:bg-hover">
           نمایش بیشتر (<Num>{formatNumber(shown, 0)}</Num> از <Num>{formatNumber(sorted.length, 0)}</Num>)
         </button>
       )}
