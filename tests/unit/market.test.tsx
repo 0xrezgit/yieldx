@@ -63,6 +63,18 @@ describe('non-dollar fiat deposits', () => {
   });
 });
 
+describe('volatile deposits', () => {
+  it('give no dollar figure, except dollars, ETH/BTC, majors, PENDLE and established DeFi tokens', async () => {
+    const { volatileDeposit } = await import('../../src/lib/opportunity/policy');
+    for (const sym of ['USDC', 'sUSDe', 'wstETH', 'cbBTC', 'SOL', 'jitoSOL', 'fragSOL', 'kHYPE', 'PENDLE', 'AAVE', 'stkAAVE', 'CRV', 'MORPHO', 'ENA', 'PAXG']) expect(volatileDeposit(sym)).toBe(false);
+    for (const sym of ['CARROT', 'mtwCARROT', 'PEPE', 'veMEZO', 'KAITO']) expect(volatileDeposit(sym)).toBe(true);
+    const carrot = run([lend('c', { family: 'stake', assets: { deposit: [{ symbol: 'mtwCARROT', address: '0xc' }] } })]).rows[0].byHorizon[30];
+    expect(carrot.placement).toBe('needs-model');
+    expect(carrot.reason).toContain('پرنوسان');
+    expect(run([lend('p', { assets: { deposit: [{ symbol: 'PENDLE', address: '0xp' }] } })]).rows[0].byHorizon[30].placement).toBe('ranked');
+  });
+});
+
 describe('lending rate spikes', () => {
   it('ranks on the lower of today and the 7-day average; a clear spike is marked and shown as a range', () => {
     // 30% today at full utilization, 7.7% over the week (live USDC/USD3 on Morpho).

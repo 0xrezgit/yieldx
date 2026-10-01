@@ -4,8 +4,8 @@ import { calcCampaign, estimate as merklEstimate, needsLoop, type EstimateSettin
 import { gate, isYieldToken, type VetContext } from '../merkl/vetting';
 import { restrictions } from '../merkl/rules';
 import { networkByChainId } from '../registry/networks';
-import { fiatReason, placeOf, reasonOf } from './estimate';
-import { nonUsdFiat } from './policy';
+import { fiatReason, placeOf, reasonOf, volatileReason } from './estimate';
+import { nonUsdFiat, volatileDeposit } from './policy';
 
 /**
  * The reward layer across sources.
@@ -190,6 +190,8 @@ export function merklEstimateShared(m: MerklOpportunity, o: Opportunity, s: Esti
   if (g) return { ...base, placement: 'rejected', reason: g.label, assumptions: [...base.assumptions, g.label] };
   const fiat = nonUsdFiat(o.assets.deposit[0]?.symbol);
   if (fiat) return { ...base, placement: 'needs-model', reason: fiatReason(fiat), assumptions: [...base.assumptions, fiatReason(fiat)] };
+  const sym = o.assets.deposit[0]?.symbol;
+  if (volatileDeposit(sym)) return { ...base, placement: 'needs-model', reason: volatileReason(sym as string), assumptions: [...base.assumptions, volatileReason(sym as string)] };
   const r = merklEstimate(m, s, ctx, gas);
   if (r.ok === false) {
     const p = r.reason.code === 'units-only' || r.reason.code === 'model' ? 'needs-model' : 'insufficient';

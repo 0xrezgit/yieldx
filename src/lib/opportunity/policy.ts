@@ -46,6 +46,32 @@ export function nonUsdFiat(symbol: string | null | undefined): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Deposits whose dollar value is steady enough to rank in dollars at a constant price:
+ * dollars (any symbol carrying USD, and the named dollar stables), ETH and BTC in all their
+ * wrapped and staked forms, the majors, gold, and established DeFi tokens (PENDLE among
+ * them). Anything else — a small governance token, a memecoin, a locked ve-token — is a
+ * price bet: its dollar result is not estimated. Matching drops wrapper/staking prefixes.
+ */
+const STEADY = /(USD|ETH|BTC)/i;
+const DOLLARS = new Set(['DAI', 'GHO', 'BOLD', 'LUSD', 'DOLA', 'FRAX', 'MIM', 'RLUSD', 'PYUSD', 'FDUSD', 'TUSD', 'USDS', 'AUSD']);
+const MAJORS = new Set(['SOL', 'BNB', 'AVAX', 'HYPE', 'MON', 'POL', 'MATIC', 'SUI', 'XRP', 'FXRP', 'TRX', 'TON', 'ADA', 'DOT', 'NEAR', 'APT', 'SEI', 'S', 'XPL', 'BERA', 'MNT', 'ARB', 'OP', 'XAUT', 'PAXG', 'XAU']);
+const DEFI = new Set([
+  'PENDLE', 'AAVE', 'UNI', 'CRV', 'CVX', 'LDO', 'MKR', 'SKY', 'COMP', 'MORPHO', 'ENA', 'ETHFI', 'EIGEN', 'GMX', 'AERO', 'VELO', 'JUP', 'RAY', 'ORCA', 'KMNO',
+  'FLUID', 'INST', 'BAL', 'SNX', 'LQTY', 'FXS', 'FXN', 'SYRUP', 'RSR', 'ONDO', 'YFI', 'SUSHI', '1INCH', 'DYDX', 'RPL', 'SSV', 'SPK', 'ZRO', 'LINK', 'EUL', 'SILO', 'KNC', 'CAKE', 'JTO', 'DRIFT', 'PYTH', 'W',
+]);
+export function volatileDeposit(symbol: string | null | undefined): boolean {
+  if (!symbol) return false;
+  if (/^ve[A-Z]/.test(symbol)) return true;
+  if (STEADY.test(symbol)) return false;
+  const upper = symbol.toUpperCase();
+  // Liquid-staking forms of a major end in its ticker: fragSOL, stHYPE, sAVAX, slisBNB, shMON.
+  if (/(SOL|HYPE|AVAX|BNB|MON|SUI|XRP|POL)$/.test(upper) && upper.length > 3) return false;
+  const core = upper.replace(/^(STK|W|ST|S|X|K|M|B|JITO|JUP|LST|V|A)(?=[A-Z0-9]{2,})/, '');
+  const names = [upper, core, core.replace(/(\.E|X)$/, '')];
+  return !names.some((n) => DOLLARS.has(n) || MAJORS.has(n) || DEFI.has(n));
+}
+
 /** Amounts asked of a router are rounded to two significant figures, so nearby capitals share one quote. */
 export const quoteAmount = (usd: number) => {
   if (!(usd > 0)) return 0;

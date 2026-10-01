@@ -5,7 +5,7 @@ import { formatNumber, formatPercent } from '../utils/formatting';
 import { askDepth, fillAsks, impliedApy, sellIntoBids, settlementFeeAt } from './book';
 import { rateAfterDeposit } from './curve';
 import { leverageEstimate, type LeverageInput } from './leverage';
-import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, nonUsdFiat, PT_LOOP_POLICY, temporaryBase } from './policy';
+import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, nonUsdFiat, PT_LOOP_POLICY, temporaryBase, volatileDeposit } from './policy';
 import { periodGrowth, simpleIncome } from './rates';
 
 /**
@@ -150,6 +150,9 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   // A deposit in a non-dollar fiat currency: its dollar result is an exchange-rate bet.
   const fiat = nonUsdFiat(o.assets.deposit[0]?.symbol);
   if (fiat && o.family !== 'leverage') return stop('needs-model', fiatReason(fiat));
+  // A deposit in a volatile token (not a dollar, ETH/BTC, a major or an established DeFi token): a price bet.
+  const symbol = o.assets.deposit[0]?.symbol;
+  if (o.family !== 'leverage' && !o.ptClass && volatileDeposit(symbol)) return stop('needs-model', volatileReason(symbol as string));
 
   // The published base yield checked against the protocol's own data (lib/opportunity/health).
   const health = o.family === 'yt' ? o.yt?.health : null;
@@ -372,6 +375,9 @@ export const NEEDS_QUOTE_IMPLIED = 'نرخ بازار مشکوک است؛ فقط
 
 /** Why a non-dollar fiat deposit gets no dollar figure. */
 export const fiatReason = (code: string) => `سپرده به ارز ${code} است و سودش به همان ارز؛ نتیجه‌ی دلاری به نرخ ارز بستگی دارد و برآورد نمی‌شود.`;
+
+/** Why a deposit in a volatile token gets no dollar figure. */
+export const volatileReason = (symbol: string) => `سپرده ${symbol} پرنوسان است؛ سود دلاری به قیمتش بستگی دارد.`;
 
 /** Today's rate counts as a spike above this multiple of its 7-day average and this many points over it. */
 export const SPIKE = { ratio: 2, minPp: 5 } as const;
