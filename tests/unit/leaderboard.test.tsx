@@ -73,6 +73,31 @@ describe('leaderYt', () => {
     expect(sp.pnl).toBeGreaterThan(ex.pnl);
   });
 
+  it('keeps broken data and points-only YTs out of the dollar ranking, ranks a suspect one on its conservative base', async () => {
+    const { ytExcluded } = await import('../../src/lib/risk/leaderboard');
+    const broken = listing({ id: 'b', baseAPY: 27, impliedAPY: 4.6, baseHealth: { status: 'broken', reasons: ['x'], conservativePct: null, pointsOnly: false } });
+    const points = listing({ id: 'p', baseAPY: 0, baseHealth: { status: 'ok', reasons: [], conservativePct: 0, pointsOnly: true } });
+    const suspect = listing({ id: 's', baseAPY: 12, impliedAPY: 8, baseHealth: { status: 'suspect', reasons: ['jump'], conservativePct: 6, pointsOnly: false } });
+    const rows = leaderYt([broken, points, suspect], s, { capital: 1000 }, false);
+    expect(rows.map((r) => r.m.id)).toEqual(['s']);
+    const atSix = leaderYt([listing({ id: 's', baseAPY: 6, impliedAPY: 8 })], s, { capital: 1000 }, false)[0];
+    expect(rows[0].pnl).toBeCloseTo(atSix.pnl, 9);
+    expect(rows[0].confidence).toBe('suspect');
+    expect(rows[0].range!.high).toBeGreaterThan(rows[0].range!.low);
+    const ex = ytExcluded([broken, points, suspect], s);
+    expect(ex.broken.map((x) => x.m.id)).toEqual(['b']);
+    expect(ex.pointsOnly.map((m) => m.id)).toEqual(['p']);
+  });
+
+  it('a quote for this capital replaces the mid entry price (fees and impact are in it)', () => {
+    const m = listing({ id: '1-0xpool', impliedAPY: 8, baseAPY: 12, daysToMaturity: 60 });
+    const q = { side: 'yt' as const, usd: 1000, units: 20_000, unitUsd: 1, priceImpactPct: 3, at: '', source: 'Pendle' as const };
+    const [r] = leaderYt([m], s, { capital: 1000, quotes: { '1-0xpool': q } }, false);
+    expect(r.confidence).toBe('executable');
+    // 20,000 units of yield exposure bought: the notional the points ride on.
+    expect(r.pointsExposure).toBeCloseTo(20_000, 6);
+  });
+
   it('skips markets without points when asked', () => {
     expect(leaderYt([listing({ hasPoints: false })], s, input, true)).toHaveLength(0);
     expect(leaderYt([listing({ hasPoints: false })], s, input, false)).toHaveLength(1);

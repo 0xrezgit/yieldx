@@ -147,6 +147,24 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, o.maturity !== null ? PT_LOOP_POLICY : input.leverage, base, now);
   if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
   if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
+  // The published base yield checked against the protocol's own data (lib/opportunity/health).
+  const health = o.family === 'yt' ? o.yt?.health : null;
+  if (health?.pointsOnly) return stop('needs-model', POINTS_ONLY);
+  if (health?.status === 'broken') return stop('needs-model', `داده‌ی بازده پایه‌ی این بازار خراب است؛ سود دلاری ساخته نمی‌شود. ${health.reasons.join(' ')}`);
+  if (health?.status === 'suspect' && o.yt && o.rate.value !== null) {
+    const clean = { ...o, yt: { ...o.yt, health: null } };
+    const conservative = health.conservativePct ?? o.rate.value;
+    const low = estimate({ ...clean, rate: { ...o.rate, value: Math.min(conservative, o.rate.value) } }, input);
+    const high = estimate(clean, input);
+    const why = `بازده پایه مشکوک است: ${health.reasons.join(' ')} سود با بازده محافظه‌کارانه‌ی ${formatPercent(Math.min(conservative, o.rate.value), 1)} رتبه گرفت.`;
+    return {
+      ...low,
+      quality: worseQuality(low.quality, 'partial'),
+      confidence: 'suspect',
+      range: low.net !== null && high.net !== null ? { low: Math.min(low.net, high.net), high: Math.max(low.net, high.net) } : null,
+      assumptions: [why, ...low.assumptions],
+    };
+  }
   // A base yield far above the market's own forecast is a temporary boost: no dollar figure on it.
   if (o.family === 'yt' && o.yt && temporaryBase(o.rate.value, o.yt.impliedPct))
     return stop('needs-model', `بازده پایه‌ی امروز (${formatPercent(o.rate.value as number, 1)}) بسیار بالاتر از نرخ بازار (${formatPercent(o.yt.impliedPct, 1)}) است؛ احتمالاً موقت، پس سود دلاری روی آن ساخته نمی‌شود.`);
@@ -165,6 +183,12 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
 
   // An executable quote for this amount: the PT or YT actually bought, price impact included.
   if ((o.family === 'pt' || o.family === 'yt') && quoteFits(o.quote, capital)) return fromQuote(o, input, { base, assumptions, unknown, quality, now, earningDays });
+
+  // Without a quote the mid rate decides, so it must be believable (lib/opportunity/health).
+  if ((o.family === 'pt' || o.family === 'yt') && o.impliedHealth && o.impliedHealth.status !== 'ok') {
+    if (o.impliedHealth.status === 'broken') return stop('needs-model', `نرخ بازار این PT/YT قابل اتکا نیست؛ سود دلاری ساخته نمی‌شود. ${o.impliedHealth.reasons.join(' ')}`);
+    return stop('needs-model', `${NEEDS_QUOTE_IMPLIED} ${o.impliedHealth.reasons.join(' ')}`);
+  }
 
   // An AMM entry without an executable quote: only for amounts small against the pool.
   if (o.family === 'pt' || o.family === 'yt') {
@@ -322,6 +346,12 @@ export const placeOf = (quality: DataQuality, net: number, allocatable: number, 
 export const reasonOf = (p: Placement): string | null =>
   p === 'ranked' ? null : p === 'unprofitable' ? 'هزینه‌ها از درآمد این دوره بیشترند.' : p === 'stale' ? 'داده‌ی منبع قدیمی است.' : p === 'no-capacity' ? 'ظرفیت ندارد.' : p === 'insufficient' ? 'داده‌ی کافی نیست.' : null;
 
+/** The reason a PT/YT with a doubtful implied APY waits for an executable quote (it then decides). */
+export const NEEDS_QUOTE_IMPLIED = 'نرخ بازار مشکوک است؛ فقط با قیمت اجرایی برآورد می‌شود.';
+
+/** A YT on a points market whose token earns nothing itself: it pays in points only. */
+export const POINTS_ONLY = 'این توکن خودش بازده ندارد و YT آن فقط پوینت می‌دهد؛ سود دلاری ساخته نمی‌شود.';
+
 /** The reason a PT/YT waits for an executable quote (the market analysis then asks for one). */
 export const NEEDS_QUOTE = 'مبلغ نسبت به نقدینگی استخر بزرگ است؛ quote لازم است.';
 
@@ -381,6 +411,7 @@ function fromQuote(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; 
     quality,
     placement,
     reason: reasonOf(placement),
+    confidence: 'executable',
   };
 }
 

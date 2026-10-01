@@ -78,6 +78,10 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
   return out;
 }
 
+/** The borrow rate a loop is costed at: today's or the 7-day average, whichever is higher. */
+export const loopBorrowPct = (side: { ratePct: number | null; ratePct7d?: number | null }) =>
+  side.ratePct === null ? null : Math.max(side.ratePct, side.ratePct7d ?? -Infinity);
+
 /** Why a PT loop gets its leverage; shown with the row. */
 export type PtLeverageReason = 'full' | 'peg' | 'spread' | 'long' | 'health' | 'rate';
 
@@ -178,6 +182,7 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
         borrow: null,
         loop: { collateral: { token, yield: { pct: p.rate.value as number, kind: 'apy', source: `Implied APY امروز ${p.protocol.name} تا سررسید` } }, debt: { token: debt, side }, maxLtv: c.maxLtv, pairClass: debtClass as 'usd' | 'eth' | 'btc', pegVerified: !unverified, entryUrl: p.url ?? null },
         poolLiquidityUsd: p.poolLiquidityUsd ?? null,
+        impliedHealth: p.impliedHealth ?? null,
         quality: worst,
         sources: [...o.sources, ...p.sources],
         notes: [
@@ -210,6 +215,8 @@ export function leverageEstimate(
   // Unwinding costs are not measured, so a loop is never a complete estimate.
   let quality: DataQuality = o.quality === 'current' ? 'partial' : o.quality;
   if (l.debt.side.ratePct === null) return stop('insufficient', 'نرخ وام گزارش نشده است.');
+  // A PT loop earns the PT's implied APY: it must be believable.
+  if (o.impliedHealth && o.impliedHealth.status !== 'ok') return stop('needs-model', `نرخ بازار PT مشکوک است؛ لوپ برآورد نمی‌شود. ${o.impliedHealth.reasons.join(' ')}`);
   if (!(l.maxLtv > 0 && l.maxLtv < 1)) return stop('insufficient', 'حد لیکوییدشدن معتبر نیست.');
 
   // A collateral with a maturity (PT): the loop closes at maturity — PT redeems, the debt is repaid.
@@ -228,7 +235,7 @@ export function leverageEstimate(
   const maxSafe = maxLoopLeverage(l.maxLtv * 100, Math.max(1, lev.minHealth));
   let L = Math.min(maxSafe, lev.maxLeverage);
   // A PT loop (it has a maturity): the PT loop policy picks 3× or 2.5× for this market.
-  const pt = m.state === 'active' && m.days !== null ? ptLoopLeverage({ impliedPct: l.collateral.yield.pct, borrowPct: l.debt.side.ratePct, days: m.days, lltvPct: l.maxLtv * 100, pegVerified: l.pegVerified !== false, feePercent: 0 }) : null;
+  const pt = m.state === 'active' && m.days !== null ? ptLoopLeverage({ impliedPct: l.collateral.yield.pct, borrowPct: loopBorrowPct(l.debt.side) as number, days: m.days, lltvPct: l.maxLtv * 100, pegVerified: l.pegVerified !== false, feePercent: 0 }) : null;
   if (pt) L = pt.leverage;
   if (!Number.isFinite(L) || L < 1) L = 1;
   if (!(L > 1)) return stop('needs-model', 'حد سلامت اجازه‌ی اهرم نمی‌دهد.');
@@ -251,7 +258,8 @@ export function leverageEstimate(
     if (G > liq * MAX_POOL_SHARE_WITHOUT_QUOTE) return stop('needs-model', 'حجم لوپ نسبت به نقدینگی استخر PT بزرگ است؛ quote لازم است.');
   }
 
-  const r0 = l.debt.side.ratePct;
+  const r0 = loopBorrowPct(l.debt.side) as number;
+  if (l.debt.side.ratePct7d != null && l.debt.side.ratePct7d > (l.debt.side.ratePct ?? 0)) assumptions.push(`بهره‌ی وام با میانگین ۷ روز (${formatPercent(l.debt.side.ratePct7d, 2)}) حساب شد، که از نرخ امروز بالاتر است.`);
   let r = r0;
   if (l.debt.side.curve) {
     const after = rateAfterBorrow(l.debt.side.curve, B, r0);

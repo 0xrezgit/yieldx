@@ -1,10 +1,13 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, TrendingUp } from 'lucide-react';
-import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
-import type { Opportunity } from '../../types/opportunity';
+import { buckets, leaderLoop, leaderYt, ytExcluded, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
+import type { ExecQuote, Opportunity } from '../../types/opportunity';
+import { fetchQuote } from '../../lib/market/quotes';
+import { MAX_QUOTES_PER_SIDE, quoteAmount } from '../../lib/opportunity/policy';
+import { Confidence } from './Confidence';
 import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
 import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/opportunity/policy';
 import thresholds from '../../config/thresholds.json';
@@ -154,6 +157,7 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
         <div className={`font-semibold text-lg leading-tight ${row.pnl >= 0 ? 'text-success' : 'text-danger'}`}>
           <Num>{money(row.pnl)}</Num>
         </div>
+        <Confidence confidence={row.confidence} range={row.range} why={row.doubts} />
         <div className="text-xs text-secondary">
           <Num>{signedPct(row.pnlPercent, 2)}</Num> · سالانه {row.annualized > 9999 ? <>بیش از <Num>{formatPercent(9999, 0)}</Num></> : <Num>{signedPct(row.annualized, 1)}</Num>}
         </div>
@@ -200,7 +204,8 @@ function Bucket({ title, icon, cls, rows, strategy }: { title: string; icon: Rea
 
 function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStrategy }) {
   // A temporary base-yield boost would make the suggestion rest on a number that will not last.
-  const good = rows.filter((r) => (strategy === 'yt' ? r.verdict === 'free' && !temporaryBase(r.m) : r.verdict === 'worth' && (r.health == null || r.health >= MIN_HEALTH)) && !r.tooBig);
+  // Never on a doubtful input (lib/opportunity/health) or a temporary base-yield boost.
+  const good = rows.filter((r) => (strategy === 'yt' ? r.verdict === 'free' && !temporaryBase(r.m) : r.verdict === 'worth' && (r.health == null || r.health >= MIN_HEALTH)) && !r.tooBig && r.confidence !== 'suspect');
   const total = [...good].sort((a, b) => b.pnl - a.pnl)[0];
   const daily = [...good].sort((a, b) => b.perDay - a.perDay)[0];
   const line = (label: string, r: LeaderRow | undefined) =>
@@ -257,11 +262,34 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
     if (strategy !== 'loop' || !(capital > 0) || !lendingOpps) return null;
     return leaderLoop(markets, s, lendingOpps, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
   }, [strategy, markets, s, lendingOpps, capital, hurdle]);
+  // Executable quotes for the best YT rows at this capital (Pendle's router; rounded amount, cached on the server).
+  const [quotes, setQuotes] = useState<Record<string, ExecQuote | null>>({});
+  const usdQ = quoteAmount(capital);
+  const ytQuotes = useMemo(() => Object.fromEntries(Object.entries(quotes).filter(([k]) => k.endsWith(`|${usdQ}`)).map(([k, q]) => [k.slice(0, k.lastIndexOf('|')), q])), [quotes, usdQ]);
   const rows = useMemo(() => {
     if (!(capital > 0)) return [];
     if (strategy === 'loop') return board?.rows ?? [];
-    return leaderYt(markets, s, { capital }, pointsOnly);
-  }, [markets, s, capital, pointsOnly, strategy, board]);
+    return leaderYt(markets, s, { capital, quotes: ytQuotes }, pointsOnly);
+  }, [markets, s, capital, pointsOnly, strategy, board, ytQuotes]);
+  const excluded = useMemo(() => (strategy === 'yt' ? ytExcluded(markets, s) : null), [strategy, markets, s]);
+  useEffect(() => {
+    if (strategy !== 'yt' || !(usdQ >= 100)) return;
+    const want = [...rows]
+      .filter((r) => r.m.protocol === 'pendle' && /^\d+-0x[0-9a-fA-F]{40}$/.test(r.m.id) && !(`${r.m.id}|${usdQ}` in quotes))
+      .sort((a, b) => b.pnl - a.pnl)
+      .slice(0, MAX_QUOTES_PER_SIDE);
+    if (!want.length) return;
+    const t = setTimeout(async () => {
+      const got = await Promise.all(
+        want.map(async (r) => {
+          const [chain, market] = r.m.id.split('-');
+          return [`${r.m.id}|${usdQ}`, await fetchQuote({ id: r.m.id, chain: Number(chain), market, side: 'yt', usd: usdQ })] as const;
+        }),
+      );
+      setQuotes((prev) => ({ ...prev, ...Object.fromEntries(got) }));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [strategy, rows, usdQ, quotes]);
   const b = useMemo(() => buckets(rows, by), [rows, by]);
   const gains = rows.filter((x) => x.pnl >= 0).length;
   const count = (p: string) => rows.filter((r) => r.m.protocol === p).length;
@@ -327,6 +355,9 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
         <Bucket title="بیشترین ضرر" icon={<TrendingDown size={18} aria-hidden />} cls="text-danger" rows={b.topLoss} strategy={strategy} />
       </div>
       {board && board.noLender.length > 0 && <NoLender list={board.noLender} />}
+      {board && board.broken.length > 0 && <Excluded title="نرخ بازار PT قابل اتکا نیست" note="قیمت PT و نرخ اعلامی هم‌خوان نیستند یا استخر خالی است؛ سود دلاری ساخته نمی‌شود." list={board.broken} strategy={strategy} />}
+      {excluded && excluded.broken.length > 0 && <Excluded title="داده‌ی بازار خراب" note="بازده پایه یا نرخ بازار با داده‌ی خود پروتکل نمی‌خواند؛ سود دلاری ساخته نمی‌شود." list={excluded.broken} strategy={strategy} />}
+      {excluded && excluded.pointsOnly.length > 0 && <Excluded title="فقط پوینت" note="توکن خودش بازده ندارد؛ YT فقط پوینت و ایردراپ می‌دهد و سود دلاری ندارد." list={excluded.pointsOnly.map((m) => ({ m, reasons: [] }))} strategy={strategy} />}
     </div>
   );
 }
@@ -355,6 +386,43 @@ function NoLender({ list }: { list: LoopBoard['noLender'] }) {
             </span>
             {pendleLoop && <Pill tone="info">لوپ داخلی پندل دارد</Pill>}
             <EntryLink m={m} strategy="loop" />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Markets kept out of a dollar ranking: listed with the reason, never with a dollar figure. */
+function Excluded({ title, note, list, strategy }: { title: string; note: string; list: { m: OpportunityListing; reasons: string[] }[]; strategy: LeaderStrategy }) {
+  return (
+    <section className="sx-card p-4 flex flex-col gap-2" aria-label={title}>
+      <h2 className="font-semibold text-secondary">
+        {title}{' '}
+        <span className="text-xs text-muted font-normal">
+          (<Num>{formatNumber(list.length, 0)}</Num>)
+        </span>
+      </h2>
+      <p className="text-xs text-secondary leading-6">{note}</p>
+      <ul className="flex flex-col divide-y divide-default">
+        {list.map(({ m, reasons }) => (
+          <li key={`${m.protocol}-${m.id}`} className="flex flex-col gap-1 py-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <AssetIdentity symbol={m.name} icon={m.icon} chain={m.chain} protocol={m.protocol} maturity={m.maturity} size={24} compact />
+              </div>
+              <span className="text-xs text-muted">
+                Implied <Num>{formatPercent(m.impliedAPY, 1)}</Num>
+                {m.baseAPY !== null && (
+                  <>
+                    {' '}
+                    · پایه <Num>{formatPercent(m.baseAPY, 1)}</Num>
+                  </>
+                )}
+              </span>
+              <EntryLink m={m} strategy={strategy} />
+            </div>
+            {reasons.length > 0 && <p className="text-xs text-warning leading-6">{reasons.join(' ')}</p>}
           </li>
         ))}
       </ul>

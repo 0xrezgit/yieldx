@@ -22,6 +22,8 @@ import { morphoLink } from '../market/links';
  * - Vault V2 `avgNetApy`: realized from share price, «after fees, with rewards»;
  *   `liquidityUsd`: liquidity adapter + idle assets.
  * - Reward `supplyApr`: APR, reported without a campaign end date.
+ * - Market `state.weeklyBorrowApy`: the borrow APY averaged over 7 days (loops use the
+ *   higher of it and today's, so one cheap moment does not make a loop look good).
  * - A market is identified by `marketId` (the on-chain id) and filtered with `listed`.
  *
  * Schema renames seen live on 2026-10-01 (the old names now fail validation):
@@ -65,6 +67,7 @@ export interface RawMorphoMarket {
   state: {
     supplyApy: number;
     borrowApy?: number;
+    weeklyBorrowApy?: number | null;
     supplyAssetsUsd: number | null;
     borrowAssetsUsd: number | null;
     liquidityAssetsUsd: number | null;
@@ -119,7 +122,7 @@ export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float
       collateralAsset { ${ASSET} }
       warnings { type level }
       currentIrmCurve { utilization supplyApy borrowApy }
-      state { supplyApy borrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp ${REWARD} }
+      state { supplyApy borrowApy weeklyBorrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp ${REWARD} }
     }
   }
   vaults(first: $first, skip: $skip, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, totalAssetsUsd_gte: $minUsd }) {
@@ -231,6 +234,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
       m.collateralAsset?.address && Number.isFinite(lltv) && lltv > 0
         ? {
             ratePct: pct(s.borrowApy),
+            ratePct7d: pct(s.weeklyBorrowApy),
             curve:
               supplied !== null && borrowed !== null && curve.length > 1 && curve.every((p) => Number.isFinite(p.borrowApy))
                 ? { suppliedUsd: supplied, borrowedUsd: borrowed, points: curve.map((p) => ({ u: p.utilization, rate: p.borrowApy as number })), source: 'منحنی IRM گزارش‌شده‌ی Morpho' }

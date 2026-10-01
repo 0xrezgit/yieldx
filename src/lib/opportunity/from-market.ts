@@ -57,6 +57,7 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     url: listingLink(protocol, m, 'pt').url,
     ptToken: m.ptToken ?? null,
     ptClass: ptClassOf(m),
+    impliedHealth: m.impliedHealth ?? null,
     poolLiquidityUsd: m.liquidity !== null && Number.isFinite(m.liquidity) && m.liquidity > 0 ? m.liquidity : null,
     icon: m.icon ?? null,
   };
@@ -96,7 +97,7 @@ export function ytOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     exit: { type: 'maturity', note: 'در سررسید YT صفر می‌شود و بازده جمع‌شده دریافت می‌شود؛ فروش زودتر در استخر ممکن است.' },
     ptToken: null,
     url: listingLink(protocol, m, 'yt').url,
-    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints, yieldFeePct: YT_YIELD_FEE_PCT[protocol] ?? null },
+    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints, yieldFeePct: YT_YIELD_FEE_PCT[protocol] ?? null, health: m.baseHealth ?? null },
   };
 }
 
