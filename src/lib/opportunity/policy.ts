@@ -20,6 +20,25 @@ export const TOP_LIMIT = 60;
 export const PAGE_SIZE = 20;
 
 /**
+ * A YT's base yield far above the market's implied rate (the market's own forecast of the
+ * average until maturity) is almost always a temporary boost: more than this many points
+ * above it and more than this multiple of it. Holding it constant would invent profit.
+ */
+export const TEMPORARY_BASE = { minGapPp: 5, minRatio: 2 } as const;
+export const temporaryBase = (basePct: number | null, impliedPct: number) =>
+  basePct !== null && basePct - impliedPct > TEMPORARY_BASE.minGapPp && basePct > TEMPORARY_BASE.minRatio * impliedPct;
+
+/** Amounts asked of a router are rounded to two significant figures, so nearby capitals share one quote. */
+export const quoteAmount = (usd: number) => {
+  if (!(usd > 0)) return 0;
+  const p = Math.pow(10, Math.floor(Math.log10(usd)) - 1);
+  return Math.round(usd / p) * p;
+};
+
+/** At most this many PT and this many YT markets are quoted per capital (the router's quota is small). */
+export const MAX_QUOTES_PER_SIDE = 10;
+
+/**
  * Leverage policy: the leverage that keeps health at `minHealth` (LLTV ÷ LTV, or HF),
  * capped at `maxLeverage`. Never the protocol maximum.
  */

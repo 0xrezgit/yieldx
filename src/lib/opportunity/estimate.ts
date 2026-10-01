@@ -5,7 +5,7 @@ import { formatNumber, formatPercent } from '../utils/formatting';
 import { askDepth, fillAsks, impliedApy, sellIntoBids, settlementFeeAt } from './book';
 import { rateAfterDeposit } from './curve';
 import { leverageEstimate, type LeverageInput } from './leverage';
-import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, PT_LOOP_POLICY } from './policy';
+import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, PT_LOOP_POLICY, temporaryBase } from './policy';
 import { periodGrowth, simpleIncome } from './rates';
 
 /**
@@ -147,6 +147,9 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, o.maturity !== null ? PT_LOOP_POLICY : input.leverage, base, now);
   if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
   if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
+  // A base yield far above the market's own forecast is a temporary boost: no dollar figure on it.
+  if (o.family === 'yt' && o.yt && temporaryBase(o.rate.value, o.yt.impliedPct))
+    return stop('needs-model', `بازده پایه‌ی امروز (${formatPercent(o.rate.value as number, 1)}) بسیار بالاتر از نرخ بازار (${formatPercent(o.yt.impliedPct, 1)}) است؛ احتمالاً موقت، پس سود دلاری روی آن ساخته نمی‌شود.`);
 
   // Horizon: a maturity inside it ends the earning there (cash earns nothing after, no
   // reinvestment); one after it would need an exit price at the horizon, which is not modelled.
@@ -160,13 +163,16 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     if (m.days < days) assumptions.push(`سررسید روز ${formatNumber(Math.ceil(m.days), 0)}؛ پس از آن نقد و بی‌درآمد.`);
   }
 
+  // An executable quote for this amount: the PT or YT actually bought, price impact included.
+  if ((o.family === 'pt' || o.family === 'yt') && quoteFits(o.quote, capital)) return fromQuote(o, input, { base, assumptions, unknown, quality, now, earningDays });
+
   // An AMM entry without an executable quote: only for amounts small against the pool.
   if (o.family === 'pt' || o.family === 'yt') {
     const liq = o.poolLiquidityUsd ?? null;
     if (liq === null || !(liq > 0)) return stop('needs-model', 'نقدینگی استخر گزارش نشده؛ بدون quote برآورد نمی‌شود.');
     // A YT buy moves the pool by its notional (the PT sold against it), not by the capital.
     const traded = o.family === 'yt' && o.yt ? capital / ytUnitPrice(o.yt.impliedPct, exactDays(o.maturity, now)) : capital;
-    if (!(traded <= liq * MAX_POOL_SHARE_WITHOUT_QUOTE)) return stop('needs-model', 'مبلغ نسبت به نقدینگی استخر بزرگ است؛ quote لازم است.');
+    if (!(traded <= liq * MAX_POOL_SHARE_WITHOUT_QUOTE)) return stop('needs-model', NEEDS_QUOTE);
     quality = worseQuality(quality, 'partial');
   }
   if (o.family === 'yt') return ytToMaturity(o, input, { base, assumptions, unknown, quality, now });
@@ -315,6 +321,68 @@ export const placeOf = (quality: DataQuality, net: number, allocatable: number, 
 /** A short default reason for a placement that has no specific one. */
 export const reasonOf = (p: Placement): string | null =>
   p === 'ranked' ? null : p === 'unprofitable' ? 'هزینه‌ها از درآمد این دوره بیشترند.' : p === 'stale' ? 'داده‌ی منبع قدیمی است.' : p === 'no-capacity' ? 'ظرفیت ندارد.' : p === 'insufficient' ? 'داده‌ی کافی نیست.' : null;
+
+/** The reason a PT/YT waits for an executable quote (the market analysis then asks for one). */
+export const NEEDS_QUOTE = 'مبلغ نسبت به نقدینگی استخر بزرگ است؛ quote لازم است.';
+
+/** A quote speaks for this capital when it was asked for (about) the same amount. */
+export const quoteFits = (q: Opportunity['quote'], capital: number): q is NonNullable<Opportunity['quote']> => !!q && q.units > 0 && q.unitUsd > 0 && Math.abs(q.usd - capital) <= capital * 0.05;
+
+/**
+ * PT or YT bought through the router's quote, held to maturity. The quote's amount is
+ * scaled to the capital after entry costs (they differ by at most a few percent).
+ *
+ *   PT:  payout = units × unit USD;                     net = payout − spent − other costs
+ *   YT:  income = units × unit USD × growth(base) × (1 − fee);  the YT is worth 0 at maturity
+ */
+function fromQuote(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; assumptions: string[]; unknown: string[]; quality: DataQuality; now: number; earningDays: number }): Estimate {
+  const q = o.quote!;
+  const { assumptions, unknown } = ctx;
+  const entry = input.entryCosts ?? [];
+  const S = Math.max(0, input.capital - sum(entry));
+  const units = q.units * (S / q.usd);
+  const D = exactDays(o.maturity, ctx.now);
+  const impact = q.priceImpactPct !== null ? ` (اثر قیمت ${formatPercent(q.priceImpactPct, 2)})` : '';
+  assumptions.push(`قیمت ورود از quote اجرایی ${q.source} برای مبلغ شما${impact}؛ ${formatNumber(units, 2)} ${q.side === 'pt' ? 'PT' : 'YT'} خریده می‌شود.`);
+  let income: number;
+  const costs: CostItem[] = [...entry];
+  if (q.side === 'pt') {
+    // One PT redeems for one unit of the accounting asset; spending S buys it.
+    income = units * q.unitUsd - S;
+    assumptions.push('PT در سررسید یک واحد دارایی حسابداری می‌شود؛ قیمت دلاری آن ثابت فرض شد.');
+  } else {
+    const g = periodGrowth(o.rate, D);
+    if (g === null || o.rate.value === null || !o.yt) return { ...ctx.base, quality: 'insufficient', placement: 'insufficient', reason: 'بازده پایه معلوم نیست.', assumptions: [...assumptions, 'بازده پایه معلوم نیست.'] };
+    const fee = o.yt.yieldFeePct;
+    income = units * q.unitUsd * g * (1 - (fee ?? 0) / 100);
+    costs.push({ key: 'yt-principal', label: 'بهای YT (در سررسید صفر می‌شود)', usd: S, basis: 'model' });
+    assumptions.push(`بازده پایه‌ی امروز (${formatPercent(o.rate.value, 2)}) تا سررسید ثابت فرض شد؛ متغیر است.`, 'YT در سررسید صفر می‌شود؛ فقط بازده جمع‌شده برمی‌گردد.');
+    if (fee !== null) assumptions.push(`کارمزد پروتکل از بازده YT (${formatPercent(fee, 0)}) کم شد.`);
+    else unknown.push('کارمزد پروتکل از بازده YT تأیید نشده؛ کم نشد.');
+    if (o.yt.hasPoints) assumptions.push('پوینت و ایردراپ این بازار در سود دلاری نیامده است.');
+  }
+  costs.push(...(input.exitCosts ?? []));
+  const net = income - sum(costs.filter((c) => c.key !== 'yt-principal')) - (q.side === 'yt' ? S : 0);
+  const quality = worseQuality(ctx.quality, 'current');
+  const placement = placeOf(quality, net, S, input.capital);
+  return {
+    ...ctx.base,
+    earningDays: ctx.earningDays,
+    allocatable: S,
+    unallocated: 0,
+    rateNow: o.rate.value,
+    rateAfterEntry: null,
+    baseIncome: income,
+    costs,
+    unknown,
+    net,
+    netPct: (net / input.capital) * 100,
+    assumptions,
+    quality,
+    placement,
+    reason: reasonOf(placement),
+  };
+}
 
 const exactDays = (maturity: string | null, now: number) => (maturity ? (new Date(maturity).getTime() - now) / DAY_MS : NaN);
 /** YT price in underlying units: 1 − PT, PT = (1 + implied)^(−days/365). */

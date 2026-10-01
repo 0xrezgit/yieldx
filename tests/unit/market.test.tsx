@@ -394,6 +394,40 @@ describe('YT held to maturity', () => {
     expect(ytOpportunity('pendle', listing({ baseAPY: null }), AT, NOW)).toBeNull();
   });
 
+  it('gives a YT on a probably temporary base yield (far above the market rate) no dollar figure', () => {
+    // 44% today against a 13.5% market rate: more than 5 points above and more than twice it.
+    const e = run([yt({ impliedAPY: 13.5, baseAPY: 44 })]).rows[0].byHorizon[60];
+    expect(e.placement).toBe('needs-model');
+    expect(e.net).toBeNull();
+    expect(e.reason).toContain('احتمالاً موقت');
+  });
+
+  it('uses an executable quote for this amount: the YT actually bought, price impact included', () => {
+    const q = { side: 'yt' as const, usd: 1000, units: 30_000, unitUsd: 1, priceImpactPct: 2.5, at: AT, source: 'Pendle' as const };
+    // Too big for the pool on the mid rate, but quoted.
+    const o = { ...yt({ liquidity: 1e6 }), quote: q };
+    const e = run([o]).rows[0].byHorizon[60];
+    const S = 1000 - e.costs.find((c) => c.key === 'gas-entry')!.usd;
+    const income = 30_000 * (S / 1000) * (Math.pow(1.14, 45 / 365) - 1) * 0.95;
+    expect(e.baseIncome).toBeCloseTo(income, 6);
+    expect(e.net).toBeCloseTo(income - 1000 - e.costs.find((c) => c.key === 'gas-exit')!.usd, 6);
+    expect(e.assumptions.join()).toContain('quote');
+    // A quote for another amount does not speak for this one.
+    expect(run([{ ...o, quote: { ...q, usd: 5000 } }]).rows[0].byHorizon[60].placement).toBe('needs-model');
+  });
+
+  it('picks the Pendle markets that wait for a quote, the most promising first, capped per side', async () => {
+    const { quoteCandidates, quoteId } = await import('../../src/lib/market/quotes');
+    const { MAX_QUOTES_PER_SIDE } = await import('../../src/lib/opportunity/policy');
+    const many = Array.from({ length: MAX_QUOTES_PER_SIDE + 3 }, (_, i) => ({ ...yt({ id: `1-0x${String(i).padStart(40, '0')}`, liquidity: 1e5, baseAPY: 11 + i / 10 }) }));
+    const a = run(many);
+    const want = quoteCandidates(a, 1000, {});
+    expect(want.filter((w) => w.side === 'yt')).toHaveLength(MAX_QUOTES_PER_SIDE);
+    // Highest base-over-implied spread first; anything already asked is not asked again.
+    expect(want[0].market).toBe(many[many.length - 1].market.address);
+    expect(quoteCandidates(a, 1000, { [quoteId(many[many.length - 1].key, 1000)]: null }).some((w) => w.market === many[many.length - 1].market.address)).toBe(false);
+  });
+
   it('checks the pool against the notional bought, not the capital', () => {
     const p = 1 - Math.pow(1.1, -45 / 365);
     const needed = 1000 / p / MAX_POOL_SHARE_WITHOUT_QUOTE;

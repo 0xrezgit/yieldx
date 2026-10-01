@@ -6,7 +6,7 @@ import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, T
 import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import type { Opportunity } from '../../types/opportunity';
 import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
-import { PT_LOOP_POLICY } from '../../lib/opportunity/policy';
+import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/opportunity/policy';
 import thresholds from '../../config/thresholds.json';
 import { isStable } from '../../lib/risk/opportunities';
 import { listingLink, marketAddress } from '../../lib/market/links';
@@ -33,8 +33,8 @@ const MIN_HEALTH = thresholds.opportunities.loopMinHealth;
 
 const money = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
-/** Base yield far above the implied rate usually means a temporary boost. */
-const temporaryBase = (m: OpportunityListing) => m.baseAPY !== null && m.baseAPY - m.impliedAPY > 5 && m.baseAPY > 2 * m.impliedAPY;
+/** Base yield far above the implied rate usually means a temporary boost (shared rule). */
+const temporaryBase = (m: OpportunityListing) => isTemporaryBase(m.baseAPY, m.impliedAPY);
 
 /** «ورود به بازار»: the market's own page when its format is known, else the protocol's app and the address to search. */
 export function EntryLink({ m, strategy }: { m: OpportunityListing; strategy: LeaderStrategy }) {

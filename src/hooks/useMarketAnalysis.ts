@@ -1,6 +1,6 @@
 'use client';
 
-import { useDeferredValue, useMemo } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useLending } from './useLending';
 import { useAllMarkets } from './useAllMarkets';
 import { useMerkl } from './useMerkl';
@@ -10,7 +10,9 @@ import { ptOpportunity, ytOpportunity } from '../lib/opportunity/from-market';
 import { protocolIdentity } from '../lib/registry/identity';
 import { evaluate, type Analysis, type AnalysisInput } from '../lib/market/analysis';
 import type { SourceStatus } from '../lib/lending/types';
-import type { Opportunity } from '../types/opportunity';
+import type { ExecQuote, Opportunity } from '../types/opportunity';
+import { fetchQuote, quoteCandidates, quoteId } from '../lib/market/quotes';
+import { quoteAmount } from '../lib/opportunity/policy';
 
 export interface MarketAnalysisState {
   /** Estimates for the capital at every horizon; null until some data arrived. */
@@ -47,7 +49,7 @@ export function useMarketAnalysis(capital: number): MarketAnalysisState {
   const merkl = useMerkl();
   const minute = Math.floor(merkl.now / 60) * 60;
 
-  const input: AnalysisInput | null = useMemo(() => {
+  const baseInput: AnalysisInput | null = useMemo(() => {
     if (!lending.feed && !pt.markets.length && !merkl.feed) return null;
     const live = pt.markets.filter((m) => !m.expired);
     const at = (m: (typeof live)[number]) => new Date(pt.feeds[m.protocol]?.at ?? Date.now()).toISOString();
@@ -62,7 +64,29 @@ export function useMarketAnalysis(capital: number): MarketAnalysisState {
   }, [lending.feed, pt.markets, pt.feeds, merkl.feed, merkl.stale, minute]);
 
   const deferredCapital = useDeferredValue(capital);
+  // Executable PT/YT quotes for this amount (rounded), asked only for markets that wait for one.
+  const [quotes, setQuotes] = useState<Record<string, ExecQuote | null>>({});
+  const usd = quoteAmount(deferredCapital);
+  const input = useMemo(() => {
+    if (!baseInput || !Object.keys(quotes).length) return baseInput;
+    const withQuote = (o: Opportunity) => {
+      const q = (o.family === 'pt' || o.family === 'yt') && quotes[quoteId(o.key, usd)];
+      return q ? { ...o, quote: q } : o;
+    };
+    return { ...baseInput, opportunities: baseInput.opportunities.map(withQuote) };
+  }, [baseInput, quotes, usd]);
   const analysis = useMemo(() => (input && deferredCapital > 0 ? evaluate(input, deferredCapital, minute * 1000) : null), [input, deferredCapital, minute]);
+  useEffect(() => {
+    if (!analysis || !(usd >= 100)) return;
+    const want = quoteCandidates(analysis, usd, quotes);
+    if (!want.length) return;
+    // Wait for the typing to settle; a quote that fails is remembered as null, never retried in a loop.
+    const t = setTimeout(async () => {
+      const got = await Promise.all(want.map(async (q) => [q.id, await fetchQuote(q)] as const));
+      setQuotes((prev) => ({ ...prev, ...Object.fromEntries(got) }));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [analysis, usd, quotes]);
 
   const sources: SourceStatus[] = useMemo(
     () => [
