@@ -37,6 +37,8 @@ export interface RateQuote {
   fees?: { performancePct?: number | null; managementPct?: number | null };
   /** When the source measured this rate (ISO); null when not reported. */
   at: string | null;
+  /** The same rate averaged over the last 7 days, when the source publishes it (same kind). */
+  avg7d?: number | null;
 }
 
 /** An incentive paid on top of the base rate. The key identifies the campaign across sources. */

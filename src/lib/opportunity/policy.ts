@@ -28,6 +28,24 @@ export const TEMPORARY_BASE = { minGapPp: 5, minRatio: 2 } as const;
 export const temporaryBase = (basePct: number | null, impliedPct: number) =>
   basePct !== null && basePct - impliedPct > TEMPORARY_BASE.minGapPp && basePct > TEMPORARY_BASE.minRatio * impliedPct;
 
+/**
+ * Fiat stablecoins other than the dollar (pesos, euros, lira…): their interest is earned in
+ * that currency, and its exchange rate against the dollar moves — high-yield currencies lose
+ * value roughly in line with their rate. Holding the rate constant would turn a peso return
+ * into a fake dollar profit, so such deposits get no dollar figure.
+ */
+const FIAT_ISO = /^(ARS|BRL|BRZ|MXN|TRY|EUR|GBP|JPY|CHF|ZAR|AUD|CAD|COP|CLP|PEN|BOB|NGN|KRW|IDR|PHP|SGD|HKD|CNH|CNY|INR|UYU)[A-Za-z0-9]{0,2}$/;
+/** Tokenised Latin-American currencies published as «COLt», «PERt» …: matched whole, so BOLD or PENDLE never are. */
+const FIAT_LATAM_T = /^(ARG|BRA|BOL|CHL|COL|MEX|PER)t$/;
+export function nonUsdFiat(symbol: string | null | undefined): string | null {
+  if (!symbol) return null;
+  const latam = FIAT_LATAM_T.exec(symbol);
+  if (latam) return latam[1];
+  // A wrapper or staking prefix (wARS, stEUR, tGBP) is dropped before the code is read.
+  const m = FIAT_ISO.exec(symbol.replace(/^(w|s|st|t|x|c)(?=[A-Z]{3})/, ''));
+  return m ? m[1] : null;
+}
+
 /** Amounts asked of a router are rounded to two significant figures, so nearby capitals share one quote. */
 export const quoteAmount = (usd: number) => {
   if (!(usd > 0)) return 0;

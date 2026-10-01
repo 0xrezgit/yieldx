@@ -17,6 +17,10 @@ const INFO_TTL_MS = 5 * 60_000;
 const STABLE_TTL_MS = 24 * 3_600_000;
 /** Stop asking when fewer computing units than this remain in Pendle's minute window. */
 const MIN_REMAINING_CU = 40;
+/** A route losing more than this share also tries the market's own input token. */
+const POOR_ROUTE = 0.2;
+/** A route losing more than this share is broken: no quote. */
+const BROKEN_ROUTE = 0.5;
 
 interface Token {
   address: string;
@@ -100,10 +104,14 @@ export async function pendleQuote(chainId: number, market: string, side: 'pt' | 
     const units = amount ? Number(amount) / 10 ** out.decimals : NaN;
     return units > 0 ? { units, impact: route?.data?.priceImpact } : null;
   };
-  // USDC first; some markets only route their own input token (sized by its USD price).
+  // USDC first; some markets only route (or route well) from their own input token, sized by its USD price.
   let got = stable ? await convert(stable.address, raw(usd, stable.decimals)) : null;
-  if (!got && info.input) got = await convert(info.input.address, raw(usd / info.input.usd, info.input.decimals));
-  if (!got) return hit?.q ?? null;
+  if ((!got || (got.impact ?? 0) < -POOR_ROUTE) && info.input) {
+    const alt = await convert(info.input.address, raw(usd / info.input.usd, info.input.decimals));
+    if (alt && (!got || alt.units > got.units)) got = alt;
+  }
+  // Losing more than half on entry is a routing failure, not a price: no quote rather than a false loss.
+  if (!got || (got.impact ?? 0) < -BROKEN_ROUTE) return hit?.q ?? null;
   const quote: ExecQuote = {
     side,
     usd,

@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, TrendingUp } from 'lucide-react';
-import { buckets, leaderLoop, leaderYt, ytExcluded, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytExcluded, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import type { ExecQuote, Opportunity } from '../../types/opportunity';
 import { fetchQuote } from '../../lib/market/quotes';
-import { MAX_QUOTES_PER_SIDE, quoteAmount } from '../../lib/opportunity/policy';
+import { MAX_QUOTES_PER_SIDE } from '../../lib/opportunity/policy';
 import { Confidence } from './Confidence';
 import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
 import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/opportunity/policy';
@@ -258,38 +258,46 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   const [hurdle, setHurdle] = useState(8);
   const s = useMemo(() => ({ ...defaultScreenSettings, feePercent: Number.isFinite(fee) ? Math.max(0, fee) : 0 }), [fee]);
   const lendingOpps = lending?.opportunities ?? null;
+  // Executable quotes (Pendle's router; rounded amounts, cached on the server) for rows too
+  // large for the pool's mid price: the YT bought, or the PT a loop buys at its full size.
+  const [quotes, setQuotes] = useState<Record<string, ExecQuote | null>>({});
+  // Quotes speak for one capital: a new capital starts a new set (the server still caches them).
+  useEffect(() => setQuotes({}), [capital]);
   const board: LoopBoard | null = useMemo(() => {
     if (strategy !== 'loop' || !(capital > 0) || !lendingOpps) return null;
-    return leaderLoop(markets, s, lendingOpps, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
-  }, [strategy, markets, s, lendingOpps, capital, hurdle]);
-  // Executable quotes for the best YT rows at this capital (Pendle's router; rounded amount, cached on the server).
-  const [quotes, setQuotes] = useState<Record<string, ExecQuote | null>>({});
-  const usdQ = quoteAmount(capital);
-  const ytQuotes = useMemo(() => Object.fromEntries(Object.entries(quotes).filter(([k]) => k.endsWith(`|${usdQ}`)).map(([k, q]) => [k.slice(0, k.lastIndexOf('|')), q])), [quotes, usdQ]);
-  const rows = useMemo(() => {
+    return leaderLoop(markets, s, lendingOpps, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8, quotes });
+  }, [strategy, markets, s, lendingOpps, capital, hurdle, quotes]);
+  const all = useMemo(() => {
     if (!(capital > 0)) return [];
     if (strategy === 'loop') return board?.rows ?? [];
-    return leaderYt(markets, s, { capital, quotes: ytQuotes }, pointsOnly);
-  }, [markets, s, capital, pointsOnly, strategy, board, ytQuotes]);
+    return leaderYt(markets, s, { capital, quotes }, pointsOnly);
+  }, [markets, s, capital, pointsOnly, strategy, board, quotes]);
+  // Only rows with a dollar figure that can be trusted are ranked; the rest wait for (or lack) a quote.
+  const rows = useMemo(() => all.filter((r) => !r.needsQuote), [all]);
+  const waiting = useMemo(() => all.filter((r) => r.needsQuote), [all]);
   const excluded = useMemo(() => (strategy === 'yt' ? ytExcluded(markets, s) : null), [strategy, markets, s]);
   useEffect(() => {
-    if (strategy !== 'yt' || !(usdQ >= 100)) return;
-    const want = [...rows]
-      .filter((r) => r.m.protocol === 'pendle' && /^\d+-0x[0-9a-fA-F]{40}$/.test(r.m.id) && !(`${r.m.id}|${usdQ}` in quotes))
+    // At most MAX_QUOTES_PER_SIDE quotes per amount: the router's quota is small.
+    const asked = new Set(Object.keys(quotes)).size;
+    const room = Math.max(0, MAX_QUOTES_PER_SIDE * 2 - asked);
+    if (!room) return;
+    const want = waiting
+      .filter((r) => r.m.protocol === 'pendle' && /^\d+-0x[0-9a-fA-F]{40}$/.test(r.m.id) && r.needsQuote!.usd >= 100 && !(leaderQuoteKey(r.m.id, r.needsQuote!.side, r.needsQuote!.usd) in quotes))
       .sort((a, b) => b.pnl - a.pnl)
-      .slice(0, MAX_QUOTES_PER_SIDE);
+      .slice(0, Math.min(MAX_QUOTES_PER_SIDE, room));
     if (!want.length) return;
     const t = setTimeout(async () => {
       const got = await Promise.all(
         want.map(async (r) => {
           const [chain, market] = r.m.id.split('-');
-          return [`${r.m.id}|${usdQ}`, await fetchQuote({ id: r.m.id, chain: Number(chain), market, side: 'yt', usd: usdQ })] as const;
+          const { side, usd } = r.needsQuote!;
+          return [leaderQuoteKey(r.m.id, side, usd), await fetchQuote({ id: r.m.id, chain: Number(chain), market, side, usd })] as const;
         }),
       );
       setQuotes((prev) => ({ ...prev, ...Object.fromEntries(got) }));
     }, 600);
     return () => clearTimeout(t);
-  }, [strategy, rows, usdQ, quotes]);
+  }, [waiting, quotes]);
   const b = useMemo(() => buckets(rows, by), [rows, by]);
   const gains = rows.filter((x) => x.pnl >= 0).length;
   const count = (p: string) => rows.filter((r) => r.m.protocol === p).length;
@@ -354,6 +362,14 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
         <Bucket title="کمترین ضرر" icon={<ArrowDownRight size={18} aria-hidden />} cls="text-warning" rows={b.leastLoss} strategy={strategy} />
         <Bucket title="بیشترین ضرر" icon={<TrendingDown size={18} aria-hidden />} cls="text-danger" rows={b.topLoss} strategy={strategy} />
       </div>
+      {waiting.length > 0 && (
+        <Excluded
+          title="نیازمند قیمت اجرایی"
+          note="این حجم برای نرخ میانی استخر بزرگ است؛ سود دلاری فقط با قیمت اجرایی برای همین مبلغ ساخته می‌شود. بازارهای پندل قیمت می‌گیرند و به رتبه‌بندی برمی‌گردند؛ بقیه بدون عدد می‌مانند."
+          list={waiting.map((r) => ({ m: r.m, reasons: [] }))}
+          strategy={strategy}
+        />
+      )}
       {board && board.noLender.length > 0 && <NoLender list={board.noLender} />}
       {board && board.broken.length > 0 && <Excluded title="نرخ بازار PT قابل اتکا نیست" note="قیمت PT و نرخ اعلامی هم‌خوان نیستند یا استخر خالی است؛ سود دلاری ساخته نمی‌شود." list={board.broken} strategy={strategy} />}
       {excluded && excluded.broken.length > 0 && <Excluded title="داده‌ی بازار خراب" note="بازده پایه یا نرخ بازار با داده‌ی خود پروتکل نمی‌خواند؛ سود دلاری ساخته نمی‌شود." list={excluded.broken} strategy={strategy} />}

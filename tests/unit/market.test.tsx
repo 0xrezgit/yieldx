@@ -51,6 +51,36 @@ const pt = (key: string, maturityDays: number, over: Partial<Opportunity> = {}):
     ...over,
   });
 
+describe('non-dollar fiat deposits', () => {
+  it('give no dollar figure: a peso or euro return is an exchange-rate bet, not dollars', async () => {
+    const { nonUsdFiat } = await import('../../src/lib/opportunity/policy');
+    for (const [sym, code] of [['ARSs', 'ARS'], ['wARS', 'ARS'], ['EURC', 'EUR'], ['tGBP', 'GBP'], ['MXNB', 'MXN'], ['COLt', 'COL']] as const) expect(nonUsdFiat(sym)).toBe(code);
+    for (const sym of ['USDC', 'sUSDe', 'PENDLE', 'BOLD', 'PYUSD', 'AUSD', 'WETH', 'frxUSD']) expect(nonUsdFiat(sym)).toBeNull();
+    const ars = run([lend('ars', { assets: { deposit: [{ symbol: 'ARSs', address: '0xars' }] }, rate: { value: 22, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT } })]).rows[0].byHorizon[90];
+    expect(ars.placement).toBe('needs-model');
+    expect(ars.net).toBeNull();
+    expect(ars.reason).toContain('ARS');
+  });
+});
+
+describe('lending rate spikes', () => {
+  it('ranks on the lower of today and the 7-day average; a clear spike is marked and shown as a range', () => {
+    // 30% today at full utilization, 7.7% over the week (live USDC/USD3 on Morpho).
+    const spike = run([lend('s', { rate: { value: 30, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
+    const calm = run([lend('c', { rate: { value: 7.7, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT } })], 10_000).rows[0].byHorizon[90];
+    expect(spike.net).toBeCloseTo(calm.net!, 6);
+    expect(spike.confidence).toBe('suspect');
+    expect(spike.range!.high).toBeGreaterThan(spike.range!.low * 3);
+    // Slightly above the average: still the lower rate, but not marked.
+    const mild = run([lend('m', { rate: { value: 9, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
+    expect(mild.net).toBeCloseTo(calm.net!, 6);
+    expect(mild.confidence).toBeUndefined();
+    // Below its average: today's rate stands.
+    const low = run([lend('l', { rate: { value: 5, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
+    expect(low.net!).toBeLessThan(calm.net!);
+  });
+});
+
 describe('four horizons, each on its own', () => {
   const row = (d: number) => run([pt(`pt${d}`, d)]).rows[0].byHorizon;
 

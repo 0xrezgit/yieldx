@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buckets, leaderLoop, leaderYt, type LeaderRow } from '../../src/lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderQuoteKey, leaderYt, type LeaderRow } from '../../src/lib/risk/leaderboard';
 import { simulateLoop } from '../../src/lib/calculators/trade';
 import { defaultScreenSettings, type OpportunityListing } from '../../src/lib/risk/opportunities';
 import type { Opportunity } from '../../src/types/opportunity';
@@ -92,7 +92,7 @@ describe('leaderYt', () => {
   it('a quote for this capital replaces the mid entry price (fees and impact are in it)', () => {
     const m = listing({ id: '1-0xpool', impliedAPY: 8, baseAPY: 12, daysToMaturity: 60 });
     const q = { side: 'yt' as const, usd: 1000, units: 20_000, unitUsd: 1, priceImpactPct: 3, at: '', source: 'Pendle' as const };
-    const [r] = leaderYt([m], s, { capital: 1000, quotes: { '1-0xpool': q } }, false);
+    const [r] = leaderYt([m], s, { capital: 1000, quotes: { [leaderQuoteKey('1-0xpool', 'yt', 1000)]: q } }, false);
     expect(r.confidence).toBe('executable');
     // 20,000 units of yield exposure bought: the notional the points ride on.
     expect(r.pointsExposure).toBeCloseTo(20_000, 6);
@@ -305,8 +305,17 @@ describe('entry links', () => {
   it('never suggests a market whose base yield looks like a temporary boost', async () => {
     const { renderToString } = await import('react-dom/server');
     const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
-    const html = renderToString(<LeaderRanking markets={[listing({ name: 'superWETH', impliedAPY: 4, baseAPY: 40 })]} capital={10_000} strategy="yt" />);
+    // A pool deep enough for the mid price: the row is ranked, labelled, and still not suggested.
+    const html = renderToString(<LeaderRanking markets={[listing({ name: 'superWETH', impliedAPY: 4, baseAPY: 40, liquidity: 5e9 })]} capital={10_000} strategy="yt" />);
     expect(html).toContain('با این فرض‌ها هیچ YTی بی‌ضرر نیست');
     expect(html).toContain('بازده پایه احتمالاً موقت');
+  });
+
+  it('a YT too large for its pool shows no dollar figure until an executable quote arrives', async () => {
+    const { renderToString } = await import('react-dom/server');
+    const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
+    const html = renderToString(<LeaderRanking markets={[listing({ name: 'thinYT', impliedAPY: 1, baseAPY: 5, liquidity: 200_000 })]} capital={1000} strategy="yt" />);
+    expect(html).toContain('نیازمند قیمت اجرایی');
+    expect(html).toContain('بیشترین سود<span class="text-xs text-muted font-normal">(<bdi dir="ltr" class="num ">۰</bdi>)');
   });
 });

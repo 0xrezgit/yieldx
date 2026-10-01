@@ -5,7 +5,7 @@ import { formatNumber, formatPercent } from '../utils/formatting';
 import { askDepth, fillAsks, impliedApy, sellIntoBids, settlementFeeAt } from './book';
 import { rateAfterDeposit } from './curve';
 import { leverageEstimate, type LeverageInput } from './leverage';
-import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, PT_LOOP_POLICY, temporaryBase } from './policy';
+import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, nonUsdFiat, PT_LOOP_POLICY, temporaryBase } from './policy';
 import { periodGrowth, simpleIncome } from './rates';
 
 /**
@@ -147,6 +147,10 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, o.maturity !== null ? PT_LOOP_POLICY : input.leverage, base, now);
   if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
   if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
+  // A deposit in a non-dollar fiat currency: its dollar result is an exchange-rate bet.
+  const fiat = nonUsdFiat(o.assets.deposit[0]?.symbol);
+  if (fiat && o.family !== 'leverage') return stop('needs-model', fiatReason(fiat));
+
   // The published base yield checked against the protocol's own data (lib/opportunity/health).
   const health = o.family === 'yt' ? o.yt?.health : null;
   if (health?.pointsOnly) return stop('needs-model', POINTS_ONLY);
@@ -226,8 +230,22 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     unknown.push('اثر ورود سرمایه‌ی شما بر نرخ مدل نشده است؛ نرخ فعلی به کار رفت.');
   }
 
+  // Ranked on the lower of today's rate and its own 7-day average: a utilization spike
+  // (lending markets near 100% often pay several times their average for a few days)
+  // is not held for the whole period. A clear spike is marked and shown as a range.
+  let incomeRate = rateAfterEntry;
+  let spikeRate: number | null = null;
+  const avg7d = o.rate.avg7d;
+  if (incomeRate !== null && avg7d != null && Number.isFinite(avg7d) && incomeRate > avg7d && (o.family === 'lend' || o.family === 'vault')) {
+    if (incomeRate > SPIKE.ratio * avg7d && incomeRate - avg7d > SPIKE.minPp) {
+      spikeRate = incomeRate;
+      assumptions.push(`نرخ امروز (${formatPercent(incomeRate, 2)}) جهشی است و بیش از دو برابر میانگین ۷ روز (${formatPercent(avg7d, 2)})؛ سود با میانگین ۷ روز رتبه گرفت.`);
+    } else assumptions.push(`نرخ با میانگین ۷ روز (${formatPercent(avg7d, 2)}) حساب شد که از نرخ امروز کمتر است.`);
+    incomeRate = avg7d;
+  }
+
   // Base income at that rate, read as published.
-  const growth = periodGrowth({ ...o.rate, value: rateAfterEntry }, earningDays);
+  const growth = periodGrowth({ ...o.rate, value: incomeRate }, earningDays);
   if (o.rate.kind === 'unknown') {
     assumptions.push('نوع نرخ (APR یا APY) اعلام نشده؛ به‌صورت ساده و محافظه‌کارانه حساب شد.');
     quality = worseQuality(quality, 'partial');
@@ -299,6 +317,8 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   const debtCost = 0;
   const net = baseIncome + rewards - debtCost - sum(costs);
   const netPct = (net / capital) * 100;
+  const spikeGrowth = spikeRate !== null ? periodGrowth({ ...o.rate, value: spikeRate }, earningDays) : null;
+  const spike = spikeGrowth !== null ? { confidence: 'suspect' as const, range: { low: net, high: net + allocatable * (spikeGrowth - growth) } } : {};
 
   const placement = placeOf(quality, net, allocatable, capital);
 
@@ -324,6 +344,7 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     assumptions,
     quality,
     placement,
+    ...spike,
   };
 }
 
@@ -348,6 +369,12 @@ export const reasonOf = (p: Placement): string | null =>
 
 /** The reason a PT/YT with a doubtful implied APY waits for an executable quote (it then decides). */
 export const NEEDS_QUOTE_IMPLIED = 'نرخ بازار مشکوک است؛ فقط با قیمت اجرایی برآورد می‌شود.';
+
+/** Why a non-dollar fiat deposit gets no dollar figure. */
+export const fiatReason = (code: string) => `سپرده به ارز ${code} است و سودش به همان ارز؛ نتیجه‌ی دلاری به نرخ ارز بستگی دارد و برآورد نمی‌شود.`;
+
+/** Today's rate counts as a spike above this multiple of its 7-day average and this many points over it. */
+export const SPIKE = { ratio: 2, minPp: 5 } as const;
 
 /** A YT on a points market whose token earns nothing itself: it pays in points only. */
 export const POINTS_ONLY = 'این توکن خودش بازده ندارد و YT آن فقط پوینت می‌دهد؛ سود دلاری ساخته نمی‌شود.';
