@@ -109,6 +109,8 @@ export interface BaseHealth {
   conservativePct: number | null;
   /** 0% base on a points market: the YT pays only in points. */
   pointsOnly: boolean;
+  /** The base yield measured on-chain over the last 30 days, %; null when not measurable. */
+  realizedPct?: number | null;
 }
 
 export interface ImpliedHealth {

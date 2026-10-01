@@ -2,6 +2,7 @@ import protocols from '../../config/protocols.json';
 import type { MarketData, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
 import { assessBase, assessImplied, type BaseHistoryPoint } from '../opportunity/health';
+import { cachedRealized } from './realized';
 import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, isObject, plausibleAPY, toPercent, type Shape } from './base';
 
 /** One row of GET /v1/{chain}/markets (paginated). */
@@ -28,6 +29,8 @@ interface PendleListItem {
   liquidity?: { usd: number } | number;
   underlyingAsset?: PendleToken;
   accountingAsset?: PendleToken;
+  /** The SY token: its exchangeRate() growth is the realized base yield. */
+  sy?: PendleToken;
   /** The PT token: an object like the others, or an id string "<chainId>-<address>". */
   pt?: PendleToken | string;
   dataUpdatedAt?: string;
@@ -72,6 +75,7 @@ function healthOf(m: PendleListItem, chainId: number, base: string, categories: 
     range,
     history: cachedHistory(base, chainId, m.address),
     categories,
+    realized: cachedRealized(chainId, m.sy?.address),
   });
 }
 

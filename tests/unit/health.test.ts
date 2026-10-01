@@ -34,6 +34,28 @@ describe('base yield health', () => {
   });
 });
 
+describe('base yield against what the chain delivered (30 days)', () => {
+  it('superWETH: 27% published, 4.5% realized — broken, whatever the other checks say', () => {
+    const h = assessBase({ basePct: 27.16, range: { min: 2, max: 30 }, categories: [], realized: { d7: 19, d30: 4.49 } });
+    expect(h.status).toBe('broken');
+    expect(h.realizedPct).toBe(4.49);
+    expect(h.reasons[0]).toContain('روی زنجیره');
+  });
+
+  it('sBOLD: 8.7% published, 5.0% realized — suspect, ranked on the realized yield', () => {
+    expect(assessBase({ basePct: 8.66, categories: [], realized: { d7: 5, d30: 4.97 } })).toMatchObject({ status: 'suspect', conservativePct: 4.97 });
+  });
+
+  it('sUSDat: 44% published outside its range after a jump, but 49.6% realized — the chain confirms it', () => {
+    const h = assessBase({ basePct: 44.11, range: { min: 8, max: 25 }, history: days([...Array(20).fill(2), 44, 44]), categories: [], realized: { d7: 40, d30: 49.62 } });
+    expect(h).toMatchObject({ status: 'ok', reasons: [], conservativePct: 44.11 });
+  });
+
+  it('no measurement: the heuristics decide as before', () => {
+    expect(assessBase({ basePct: 27.3, range: { min: 2, max: 13 }, categories: [], realized: { d7: null, d30: null } }).status).toBe('broken');
+  });
+});
+
 describe('implied APY health', () => {
   it('jrRoyAPYUSD: published 19.32% while the PT price gives about 16.1% is suspect', () => {
     // 35 days left, PT price that implies ~16.08%.

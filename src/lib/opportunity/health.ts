@@ -39,6 +39,10 @@ export const HEALTH_RULES = {
   /** A reward-only figure unchanged this many days is a configured rate. */
   staleDays: 14,
   medianDays: 30,
+  /** Published more than this many points above the 30-day realized yield (and twice it): broken… */
+  realizedGapPp: 5,
+  /** …more than this many points above it: suspect, ranked on the realized yield. */
+  realizedSuspectPp: 2,
 } as const;
 
 const median = (xs: number[]) => {
@@ -57,6 +61,8 @@ export function assessBase(p: {
   /** Daily base yield, oldest first; null when the protocol gives no history. */
   history?: BaseHistoryPoint[] | null;
   categories: string[];
+  /** Base yield realized on-chain over the last 7 and 30 days, %; overrides the heuristics. */
+  realized?: { d7: number | null; d30: number | null } | null;
 }): BaseHealth {
   const R = HEALTH_RULES;
   const reasons: string[] = [];
@@ -102,6 +108,20 @@ export function assessBase(p: {
       worse('suspect');
       reasons.push(`بازده پایه ${formatNumber(same, 0)} روز بدون تغییر مانده و فقط نرخ پاداش اعلامی است، نه بازده اندازه‌گیری‌شده.`);
     }
+  }
+
+  // Measured on-chain over 30 days: the delivered yield is the evidence, ahead of every heuristic.
+  // Thirty days, not seven: yield can arrive in lumps (a catch-up harvest makes one week look huge).
+  const real = p.realized?.d30;
+  if (real != null && Number.isFinite(real)) {
+    if (base > 2 * Math.max(real, 0.5) && base - real > R.realizedGapPp) {
+      return { status: 'broken', reasons: [`بازده واقعی ۳۰ روز گذشته روی زنجیره ${formatPercent(real, 2)} است، نه ${formatPercent(base, 1)}.`], conservativePct: real, pointsOnly: false, realizedPct: real };
+    }
+    if (base - real > R.realizedSuspectPp) {
+      return { status: 'suspect', reasons: [`بازده واقعی ۳۰ روز گذشته روی زنجیره ${formatPercent(real, 2)} است؛ عدد اعلامی ${formatPercent(base, 1)}.`], conservativePct: real, pointsOnly: false, realizedPct: real };
+    }
+    // The chain confirms the published figure: the heuristics' doubts do not stand.
+    return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct: real };
   }
 
   const med = median(h.slice(-R.medianDays).map((x) => x.basePct));
