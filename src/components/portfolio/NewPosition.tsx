@@ -188,7 +188,7 @@ export default function NewPosition() {
   const draftError = validateDraft(draft);
   const loopError =
     kind === 'loop' && (!(borrowed > 0) || !loop.debtAsset.trim() || !(loop.lltv > 0 && loop.lltv < 100) || !(loop.borrowAPY >= 0))
-      ? 'مقدار وام، دارایی بدهی، نرخ بهره و آستانه‌ی لیکویید شدن را کامل کنید.'
+      ? 'اطلاعات وام را کامل کنید.'
       : null;
 
   const create = () => {
@@ -258,7 +258,7 @@ export default function NewPosition() {
       />
 
       {step === 0 && (
-        <Panel title="پلتفرم را انتخاب کنید" subtitle="بازارهای زنده‌ی هر پلتفرم از API خودش خوانده می‌شود.">
+        <Panel title="پلتفرم را انتخاب کنید" subtitle="">
           <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="پلتفرم">
             {LIVE.map((id) => (
               <Choice key={id} selected={protocol === id} onClick={() => { setProtocol(id); setChain(null); setMarket(null); setStep(1); }}>
@@ -386,11 +386,11 @@ export default function NewPosition() {
                 <span className="text-lg font-light">{assetUsd !== null ? formatDollar(assetUsd, priceDigits(assetUsd)) : 'نامعلوم'}</span>
               </div>
             </div>
-            {kind !== 'yt' && <p className="text-xs text-sx-muted">هر PT در سررسید به ۱ واحد دارایی پایه بازخرید می‌شود؛ ارزش دلاری آن با قیمت همان دارایی تغییر می‌کند.</p>}
+            {kind !== 'yt' && <p className="text-xs text-sx-muted">هر PT در سررسید ۱ واحد دارایی پایه می‌شود.</p>}
           </section>
 
           {mode === 'plan' ? (
-            <Panel title="محاسبه قبل از خرید" subtitle="فقط یک تخمین با قیمت فعلی بازار است و ذخیره نمی‌شود. پس از خرید، تعداد واقعی دریافتی را ثبت کنید.">
+            <Panel title="محاسبه قبل از خرید" subtitle="تخمین؛ ذخیره نمی‌شود.">
               <div className="grid grid-cols-2 gap-4">
                 <NumberField persian label="مقدار پرداختی" value={planAmount} onChange={setPlanAmount} />
                 <TokenSelect label="رمزارز پرداختی" value={planToken} onChange={setPlanToken} tokens={tokens} />
@@ -436,16 +436,16 @@ export default function NewPosition() {
                     </button>
                   </div>
                 );
-              })() : <p className="text-sm text-sx-orange">قیمت بازار، قیمت دلاری دارایی یا قیمت ارز پرداختی در دسترس نیست؛ تخمین ممکن نیست.</p>}
+              })() : <p className="text-sm text-sx-orange">قیمت در دسترس نیست.</p>}
             </Panel>
           ) : (
             <>
-              <Panel title="جزئیات خرید" subtitle="مبنای محاسبات، مبلغ واقعی پرداختی و تعداد واقعی دریافتی از تراکنش شماست؛ قیمت امروز جایگزین قیمت ورود نمی‌شود.">
+              <Panel title="جزئیات خرید" subtitle="اعداد واقعی تراکنش">
                 <EventFields draft={draft} onChange={setDraft} assetSymbol={assetSymbol} liveAssetUsd={assetUsd} types={['buy']} chain={market.chain} marketIcon={market.icon} showErrors={tried} />
               </Panel>
 
               {kind === 'loop' && (
-                <Panel title="وام و بازار وام‌دهی" subtitle="مبلغ خرید بالا باید کل PT خریداری‌شده (سرمایه‌ی خودتان + وام) باشد. سرمایه‌ی شخصی = خرید − وام.">
+                <Panel title="وام و بازار وام‌دهی" subtitle="خرید = سرمایه + وام">
                   <div className="grid grid-cols-2 gap-4">
                     <TextField label="پلتفرم وام‌دهی" value={loop.lendingPlatform} onChange={(lendingPlatform) => setLoop({ ...loop, lendingPlatform })} placeholder="Morpho" ltr />
                     <TextField label="بازار وام‌دهی" value={loop.lendingMarket} onChange={(lendingMarket) => setLoop({ ...loop, lendingMarket })} placeholder="PT-sUSDe / USDC" ltr />

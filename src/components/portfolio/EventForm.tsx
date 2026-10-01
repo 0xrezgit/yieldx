@@ -68,11 +68,11 @@ export type DraftField = 'at' | 'units' | 'amount' | 'token' | 'fees';
 export function validateDraftFields(d: Draft): Partial<Record<DraftField, string>> {
   const e: Partial<Record<DraftField, string>> = {};
   if (!d.at) e.at = 'تاریخ و ساعت تراکنش را وارد کنید.';
-  else if (new Date(d.at).getTime() > Date.now() + 5 * 60_000) e.at = 'تاریخ رویداد نمی‌تواند در آینده باشد؛ زمان واقعی تراکنش را وارد کنید.';
-  if (usesUnits(d.type) && !(d.units > 0)) e.units = 'تعداد توکن باید بیشتر از صفر باشد؛ عدد را از جزئیات تراکنش بخوانید.';
+  else if (new Date(d.at).getTime() > Date.now() + 5 * 60_000) e.at = 'تاریخ نمی‌تواند در آینده باشد.';
+  if (usesUnits(d.type) && !(d.units > 0)) e.units = 'تعداد باید بیشتر از صفر باشد.';
   if (!(d.cash.amount >= 0) || (d.type !== 'claim_reward' && !(d.cash.amount > 0))) e.amount = 'مبلغ باید بیشتر از صفر باشد.';
   if (!d.cash.token.trim()) e.token = 'ارز را انتخاب کنید یا نماد آن را بنویسید.';
-  if (d.fees.some((f) => !(f.amount >= 0) || !f.token.trim())) e.fees = 'برای هر کارمزد مقدار و ارز را کامل کنید، یا آن را حذف کنید.';
+  if (d.fees.some((f) => !(f.amount >= 0) || !f.token.trim())) e.fees = 'کارمزد را کامل یا حذف کنید.';
   return e;
 }
 
@@ -205,7 +205,7 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
 
   return (
     <div className="flex flex-col gap-5">
-      <Group n={1} title="زمان و مقدار واقعی" note="از جزئیات همان تراکنش؛ قیمت امروز جایگزین آن نمی‌شود.">
+      <Group n={1} title="زمان و مقدار واقعی" note="از جزئیات تراکنش">
         {types.length > 1 && <SelectField label="نوع رویداد" value={d.type} onChange={(type) => set({ type })} options={types.map((t) => ({ value: t, label: EVENT_FA[t] }))} />}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="min-w-0" onBlur={() => touch('at')}>
@@ -231,7 +231,7 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
       <Group
         n={2}
         title={d.type === 'buy' ? 'ارز پرداختی و نرخ تبدیل' : 'ارز و نرخ تبدیل'}
-        note={tokenIsAsset ? `با خود ${assetSymbol} پرداخت شده؛ یک نرخ هم برای مبلغ و هم برای دارایی پایه کافی است.` : 'نرخ ارز پرداختی بهای خرید را به دلار می‌سازد؛ نرخ دارایی پایه ارزش PT را در سررسید (PT = ۱ واحد دارایی پایه). این دو فقط وقتی یکی‌اند که با خود دارایی پایه پرداخت کنید.'}
+        note={tokenIsAsset ? `با خود ${assetSymbol} پرداخت شده؛ یک نرخ هم برای مبلغ و هم برای دارایی پایه کافی است.` : 'قیمت دلاری ارز پرداختی و دارایی پایه.'}
       >
         <div className="grid grid-cols-2 gap-3">
           <div onBlur={() => touch('amount')}>
@@ -277,7 +277,7 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
         )}
       </Group>
 
-      <Group n={3} title="کارمزدها" note="کارمزدی که از مبلغ یا تعداد دریافتی کم شده را «داخل مبلغ» علامت بزنید تا دو بار کم نشود.">
+      <Group n={3} title="کارمزدها" note="کارمزد کم‌شده از مبلغ: «داخل مبلغ»">
         {d.fees.map((f, i) => (
           <div key={i} className="rounded-lg border border-sx-border bg-sx-raised/40 p-4 flex flex-col gap-3">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -289,7 +289,7 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
             <div className="flex items-center justify-between gap-2">
               <label className="flex items-start gap-2 text-sm text-sx-muted leading-6 min-h-11">
                 <input type="checkbox" checked={f.included} onChange={(e) => setFee(i, { included: e.target.checked })} className="mt-1" />
-                <span>داخل مبلغ بالا حساب شده (مثلاً کارمزد سواپی که از توکن دریافتی کم شده)؛ دوباره از سود کم نشود</span>
+                <span>داخل مبلغ</span>
               </label>
               <button type="button" aria-label="حذف کارمزد" className="tap grid place-items-center size-10 rounded-md text-sx-faint hover:text-sx-red hover:bg-sx-red/10" onClick={() => onChange((x) => ({ ...x, fees: x.fees.filter((_, j) => j !== i) }))}>
                 <Trash2 size={16} aria-hidden />

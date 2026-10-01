@@ -233,7 +233,7 @@ function Suggestion({ rows, strategy }: { rows: LeaderRow[]; strategy: LeaderStr
       ) : (
         <p className="text-secondary">{strategy === 'yt' ? 'با این فرض‌ها هیچ YTی بی‌ضرر نیست.' : `با این نرخ وام و اهرم هیچ لوپی با سلامت دست‌کم ${formatNumber(MIN_HEALTH, 2)} از حداقل بازده بالاتر نیست.`}</p>
       )}
-      <p className="text-xs text-muted">بازارهای با بازده پایه‌ی احتمالاً موقت پیشنهاد نمی‌شوند. فقط بر پایه‌ی همین فرض‌ها؛ نقدینگی، ریسک لیکوییدشدن و بازار وام واقعی را پیش از ورود بررسی کنید.</p>
+      <p className="text-xs text-muted">بازده موقت یا داده‌ی مشکوک پیشنهاد نمی‌شود.</p>
     </section>
   );
 }
@@ -305,7 +305,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   if (!(capital > 0)) return <Empty>سرمایه‌ی اولیه را وارد کنید.</Empty>;
   if (strategy === 'loop' && !lendingOpps) {
     if (lending?.loading) return <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" aria-label="در حال دریافت بازارهای وام" />;
-    return <Empty>داده‌ی بازارهای وام در دسترس نیست؛ بدون بازار وامی که PT را وثیقه بگیرد، سود دلاری لوپ ساخته نمی‌شود.</Empty>;
+    return <Empty>داده‌ی بازارهای وام در دسترس نیست.</Empty>;
   }
   return (
     <div className="flex flex-col gap-4">
@@ -323,8 +323,8 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
         {strategy === 'loop' && (
           <div className="grid grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] gap-3 items-end">
             <NumberField label="حداقل بازده سالانه" value={hurdle} onChange={setHurdle} suffix="%" />
-            <p className="text-xs text-secondary leading-6">
-              اهرم هر لوپ از داده‌ی زنده‌ی همان بازار: <Num>{formatNumber(PT_LOOP_POLICY.maxLeverage, 0)}</Num>×، یا <Num>{formatNumber(PT_LOOP_POLICY.cautiousLeverage, 1)}</Num>× اگر برابری با دلار تأیید نشده، فاصله‌ی نرخ PT و وام کمتر از <Num>{formatNumber(PT_LOOP_POLICY.minSpreadPp, 0)}</Num> واحد درصد یا سررسید بیش از <Num>{formatNumber(PT_LOOP_POLICY.longDays, 0)}</Num> روز باشد؛ و در هر حال سلامت دست‌کم <Num>{formatNumber(PT_LOOP_POLICY.minHealth, 2)}</Num>.
+            <p className="text-xs text-secondary">
+              اهرم <Num>{formatNumber(PT_LOOP_POLICY.maxLeverage, 0)}</Num>× یا <Num>{formatNumber(PT_LOOP_POLICY.cautiousLeverage, 1)}</Num>×، سلامت دست‌کم <Num>{formatNumber(PT_LOOP_POLICY.minHealth, 2)}</Num>
             </p>
           </div>
         )}
@@ -337,14 +337,14 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
             )}
             {board.shortLiquidity > 0 && (
               <>
-                <Num>{formatNumber(board.shortLiquidity, 0)}</Num> بازار وام نقدینگی کافی برای این وام ندارد و نیامده است.
+                <Num>{formatNumber(board.shortLiquidity, 0)}</Num> بازار وام نقدینگی کافی ندارد.
               </>
             )}
           </p>
         )}
       </section>
       <p className="text-xs text-secondary leading-6">
-        {strategy === 'yt' ? 'خرید YT و فروش در بهترین روز با Implied APY امروز (فرض ثابت ماندن نرخ بازار)، بدون ارزش پوینت.' : 'لوپ PT تا سررسید با اهرم شما، روی بازار وامی که همین PT را وثیقه می‌گیرد: بهره‌ی وام پس از وام شما، LLTV و نقدینگی همان بازار (نرخ‌ها تا سررسید ثابت فرض شده‌اند).'}{' '}
+        {strategy === 'yt' ? 'خرید YT، فروش در بهترین روز؛ بدون ارزش پوینت.' : 'لوپ PT تا سررسید روی بازار وام واقعی.'}{' '}
         <Num>{formatNumber(rows.length, 0)}</Num> بازار: <bdi dir="ltr">Pendle</bdi> <Num>{formatNumber(count('pendle'), 0)}</Num> · <bdi dir="ltr">Spectra</bdi> <Num>{formatNumber(count('spectra'), 0)}</Num> · <bdi dir="ltr">Exponent</bdi>{' '}
         <Num>{formatNumber(count('exponent'), 0)}</Num> ·{' '}
         <span className="text-success">
@@ -365,15 +365,15 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       {waiting.length > 0 && (
         <Excluded
           title="نیازمند قیمت اجرایی"
-          note="این حجم برای نرخ میانی استخر بزرگ است؛ سود دلاری فقط با قیمت اجرایی برای همین مبلغ ساخته می‌شود. بازارهای پندل قیمت می‌گیرند و به رتبه‌بندی برمی‌گردند؛ بقیه بدون عدد می‌مانند."
+          note="برای استخر بزرگ است؛ فقط با قیمت اجرایی عدد می‌گیرد."
           list={waiting.map((r) => ({ m: r.m, reasons: [] }))}
           strategy={strategy}
         />
       )}
       {board && board.noLender.length > 0 && <NoLender list={board.noLender} />}
-      {board && board.broken.length > 0 && <Excluded title="نرخ بازار PT قابل اتکا نیست" note="قیمت PT و نرخ اعلامی هم‌خوان نیستند یا استخر خالی است؛ سود دلاری ساخته نمی‌شود." list={board.broken} strategy={strategy} />}
-      {excluded && excluded.broken.length > 0 && <Excluded title="داده‌ی بازار خراب" note="بازده پایه یا نرخ بازار با داده‌ی خود پروتکل نمی‌خواند؛ سود دلاری ساخته نمی‌شود." list={excluded.broken} strategy={strategy} />}
-      {excluded && excluded.pointsOnly.length > 0 && <Excluded title="فقط پوینت" note="توکن خودش بازده ندارد؛ YT فقط پوینت و ایردراپ می‌دهد و سود دلاری ندارد." list={excluded.pointsOnly.map((m) => ({ m, reasons: [] }))} strategy={strategy} />}
+      {board && board.broken.length > 0 && <Excluded title="نرخ بازار PT قابل اتکا نیست" note="قیمت PT و نرخ اعلامی نمی‌خوانند." list={board.broken} strategy={strategy} />}
+      {excluded && excluded.broken.length > 0 && <Excluded title="داده‌ی بازار خراب" note="بازده یا نرخ اعلامی با داده‌ی خود پروتکل نمی‌خواند." list={excluded.broken} strategy={strategy} />}
+      {excluded && excluded.pointsOnly.length > 0 && <Excluded title="فقط پوینت" note="بازده فقط پوینت است." list={excluded.pointsOnly.map((m) => ({ m, reasons: [] }))} strategy={strategy} />}
     </div>
   );
 }
@@ -388,9 +388,7 @@ function NoLender({ list }: { list: LoopBoard['noLender'] }) {
           (<Num>{formatNumber(list.length, 0)}</Num>)
         </span>
       </h2>
-      <p className="text-xs text-secondary leading-6">
-        هیچ بازار وامی در داده‌ی یلدایکس (<bdi dir="ltr">Morpho</bdi> و <bdi dir="ltr">Aave V4</bdi>) این PTها را وثیقه نمی‌گیرد؛ بدون جای وثیقه لوپی ساخته نمی‌شود، پس سود دلاری نشان داده نمی‌شود. ممکن است بازار وام در پروتکلی باشد که یلدایکس نمی‌خواند.
-      </p>
+      <p className="text-xs text-secondary">بدون جای وثیقه، لوپی ساخته نمی‌شود.</p>
       <ul className="flex flex-col divide-y divide-default">
         {list.map(({ m, pendleLoop }) => (
           <li key={`${m.protocol}-${m.id}`} className="flex flex-wrap items-center gap-2 py-2.5">

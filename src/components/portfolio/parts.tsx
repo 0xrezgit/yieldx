@@ -213,7 +213,7 @@ export function NoWalletNote() {
   return (
     <p className="text-sm text-sx-muted leading-7 flex items-start gap-2">
       <Info size={16} className="mt-1.5 shrink-0 text-sx-blue" aria-hidden />
-      کیف پول متصل نیست: موجودی و رویدادها فقط بر اساس ثبت شما هستند و از روی بلاکچین تأیید نمی‌شوند. اطلاعات فقط در همین مرورگر ذخیره می‌شود؛ از بخش «پشتیبان» فایل بگیرید.
+      داده فقط در همین مرورگر است و از زنجیره تأیید نمی‌شود؛ از آن پشتیبان بگیرید.
     </p>
   );
 }
@@ -224,7 +224,7 @@ export function SnapshotChart({ points, label, gapMs = 3 * 86_400_000 }: { point
   if (pts.length < 2) {
     return (
       <p className="text-sm text-sx-muted leading-7">
-        سابقه‌ی کافی ثبت نشده است. هر بار که صفحه با داده‌ی به‌روز باز شود (حداکثر ساعتی یک بار)، یک نقطه‌ی واقعی ذخیره می‌شود؛ جای خالی با داده‌ی ساختگی پر نمی‌شود.
+        هنوز سابقه‌ای ثبت نشده.
       </p>
     );
   }

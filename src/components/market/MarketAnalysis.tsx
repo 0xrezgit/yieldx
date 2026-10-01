@@ -183,7 +183,7 @@ export default function MarketAnalysis() {
       {st.view === 'all' && (
         <>
 
-      <p className="text-xs text-secondary">برآورد با نرخ‌های فعلی و هزینه‌های محاسبه‌شده؛ سرمایه در شبکه‌ی مقصد فرض شده است. سود ردیف‌ها قابل جمع نیست.</p>
+      <p className="text-xs text-secondary">سود هر ردیف جداست و جمع‌پذیر نیست.</p>
 
       <div className="flex flex-col sm:flex-row gap-2">
         <label className="relative flex-1">
@@ -205,7 +205,7 @@ export default function MarketAnalysis() {
           ))}
         </div>
       ) : m.failed ? (
-        <Empty>هیچ منبعی پاسخ نداد. کمی بعد به‌روزرسانی کنید.</Empty>
+        <Empty>منبعی پاسخ نداد.</Empty>
       ) : !top.length ? (
         <Empty>برای این سرمایه و افق فرصت سودده‌ای پیدا نشد.</Empty>
       ) : (

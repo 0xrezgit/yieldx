@@ -2,14 +2,14 @@
 
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, Download, Loader2, PieChart, Plus, RefreshCw, Upload, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, Download, Loader2, PieChart, Plus, RefreshCw, SlidersHorizontal, Upload, Wallet } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import protocols from '../../config/protocols.json';
 import { usePortfolioView, type PositionView } from '../../hooks/usePortfolioView';
 import { allocation, concentration } from '../../lib/portfolio/portfolio';
 import { chainFa, KIND_LABEL, STATUS_FA } from '../../lib/portfolio/labels';
 import { fmtDays } from '../../lib/portfolio/analysis';
-import { formatDate, formatDateTime, formatNumber, formatPercent, formatToken } from '../../lib/utils/formatting';
+import { formatAgo, formatDate, formatDateTime, formatNumber, formatPercent, formatToken } from '../../lib/utils/formatting';
 import { maturedSummary, type MaturedSummary, type TokenSum } from '../../lib/portfolio/matured';
 import type { PositionKind } from '../../types/position';
 import type { ProtocolId } from '../../types/protocol';
@@ -102,7 +102,9 @@ export function PositionTable({ views }: { views: PositionView[] }) {
     );
   };
   return (
-    <div className="sx-card overflow-hidden">
+    <>
+    <PositionCards rows={rows} />
+    <div className="hidden md:block sx-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[56rem] text-sm">
           <thead>
@@ -164,6 +166,47 @@ export function PositionTable({ views }: { views: PositionView[] }) {
         </table>
       </div>
     </div>
+    </>
+  );
+}
+
+/** Phones: one compact card per position — what it is, its value and result, how long is left. */
+function PositionCards({ rows }: { rows: PositionView[] }) {
+  return (
+    <ul className="md:hidden flex flex-col gap-2">
+      {rows.map(({ p, v, alerts }) => {
+        const warn = alerts.filter((a) => a.level === 'danger' || a.level === 'warning').length;
+        return (
+          <li key={p.id}>
+            <Link href={`/portfolio/${encodeURIComponent(p.id)}`} className="sx-card p-4 flex flex-col gap-3 hover:bg-sx-raised/50 transition-colors">
+              <div className="flex items-start justify-between gap-3">
+                <MarketIdentity p={p} size={32} />
+                <StatusBadge s={v.status} />
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[11px] text-sx-faint">ارزش</span>
+                  <Usd x={v.netValueUsd} />
+                </div>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[11px] text-sx-faint">سود و زیان</span>
+                  <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" word={false} />
+                </div>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[11px] text-sx-faint">مانده</span>
+                  <span>{v.status === 'closed' ? '—' : fmtDays(v.daysLeft)}</span>
+                </div>
+              </div>
+              {warn > 0 && (
+                <span className="inline-flex items-center gap-1 text-xs text-sx-orange">
+                  <AlertTriangle size={11} aria-hidden /> <Num>{formatNumber(warn, 0)}</Num> هشدار
+                </span>
+              )}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -194,7 +237,7 @@ function Out({ m, asset }: { m: MaturedSummary; asset: string }) {
       <span className="whitespace-nowrap">
         ≈ <Num>{formatToken(m.estimateUnits ?? 0, asset || 'واحد دارایی', 4)}</Num>
       </span>
-      <span className="text-xs text-sx-orange">تخمینی — بازخرید یا فروش ثبت نشده{m.estimateUsd !== null && Number.isFinite(m.estimateUsd) ? <> · <Usd x={m.estimateUsd} /></> : null}</span>
+      <span className="text-xs text-sx-orange">تخمینی{m.estimateUsd !== null && Number.isFinite(m.estimateUsd) ? <> · <Usd x={m.estimateUsd} /></> : null}</span>
     </span>
   );
 }
@@ -211,8 +254,8 @@ const MaturedPnl = ({ m, asset, drop }: { m: MaturedSummary; asset: string; drop
       )}
     </span>
   ) : (
-    <span className="text-sx-faint text-sm">
-      — <span className="text-xs">نامعلوم: قیمت دلاری <bdi dir="ltr">{asset || 'دارایی پایه'}</bdi> در دسترس نیست؛ بازخرید را ثبت کنید یا قیمت را دستی وارد کنید</span>
+    <span className="text-sx-faint text-sm" title={`قیمت دلاری ${asset || 'دارایی پایه'} در دسترس نیست`}>
+      — <span className="text-xs">بدون قیمت</span>
     </span>
   );
 
@@ -229,7 +272,7 @@ const exitDate = (m: MaturedSummary) =>
   ) : (
     <span className="flex flex-col">
       <span>{formatDate(m.maturity)}</span>
-      <span className="text-xs text-sx-orange">سررسید — خروج ثبت نشده</span>
+      <span className="text-xs text-sx-orange">خروج ثبت نشده</span>
     </span>
   );
 
@@ -248,10 +291,10 @@ export function MaturedSection({ views }: { views: PositionView[] }) {
     <section className="flex flex-col gap-3 min-w-0" aria-labelledby="matured-h">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="matured-h" className="text-lg font-semibold">
-          پوزیشن‌های سررسیدشده
+          سررسیدشده
         </h2>
         <span className="text-xs text-sx-muted">
-          <Num>{formatNumber(rows.length, 0)}</Num> پوزیشن · خلاصه از روی رویدادهای ثبت‌شده
+          <Num>{formatNumber(rows.length, 0)}</Num>
         </span>
       </div>
 
@@ -339,6 +382,7 @@ export default function Portfolio() {
   const { positions, views, totals, airdropTotals, history, refresh, refreshing, updatedAt, exportFile, importFile, earn, saveEarn, removeEarn } = usePortfolioView();
   const [f, setF] = useState<Filters>(ALL);
   const [message, setMessage] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const options = useMemo(() => {
@@ -405,84 +449,61 @@ export default function Portfolio() {
 
   return (
     <SxPage>
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
           <h1 className="page-title">پرتفوی من</h1>
-          <p className="text-sm text-sx-muted max-w-xl leading-7">وضعیت خریدهای ثبت‌شده: ارزش، سود و زیان، بدهی و مبلغ خروج.</p>
-          <p className="text-xs text-sx-faint flex items-center gap-1.5">
-            {refreshing ? <Loader2 size={12} className="animate-spin" /> : <span className={`size-1.5 rounded-full ${updatedAt ? 'bg-sx-green' : 'bg-sx-faint'}`} aria-hidden />}
-            {updatedAt ? (
-              <>
-                آخرین دریافت داده: <Num>{formatDateTime(new Date(updatedAt).toISOString())}</Num> · تازه‌سازی خودکار هر ۵ دقیقه
-              </>
-            ) : views.length ? (
-              'در حال دریافت قیمت‌ها…'
-            ) : (
-              'هنوز پوزیشنی ثبت نشده'
-            )}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={refresh} disabled={refreshing} className={btn.ghost}>
-            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> تازه‌سازی
-          </button>
-          <Link href="/portfolio/new" className={btn.primary}>
-            <Plus size={16} /> ثبت پوزیشن
-          </Link>
-        </div>
-      </header>
-
-      <section className="sx-card px-5 py-4 flex flex-wrap items-center justify-between gap-3" aria-label="پشتیبان و بازیابی">
-        <p className="text-sm text-sx-muted leading-7 flex items-start gap-2 max-w-2xl">
-          <Download size={16} className="mt-1.5 shrink-0 text-sx-blue" aria-hidden />
-          <span>
-            <b className="text-sx-text font-semibold">داده فقط در همین مرورگر ذخیره می‌شود.</b> با پاک شدن داده‌های مرورگر از بین می‌رود؛ از آن فایل پشتیبان بگیرید. در بازیابی، پوزیشن‌های هم‌شناسه با نسخه‌ی فایل جایگزین می‌شوند.
+          <span className="text-xs text-sx-faint inline-flex items-center gap-1.5">
+            {refreshing ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <span className={`size-1.5 rounded-full ${updatedAt ? 'bg-sx-green' : 'bg-sx-faint'}`} aria-hidden />}
+            {updatedAt ? <>به‌روز {formatAgo(updatedAt)}</> : views.length ? 'در حال دریافت قیمت‌ها' : 'بدون پوزیشن'}
           </span>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={doExport} disabled={!views.length} className={btn.secondary}>
-            <Download size={15} aria-hidden /> دریافت فایل پشتیبان
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={refresh} disabled={refreshing} className={btn.ghost} aria-label="تازه‌سازی">
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} aria-hidden />
           </button>
-          <button type="button" onClick={() => fileRef.current?.click()} className={btn.ghost}>
-            <Upload size={15} aria-hidden /> بازیابی از فایل
+          <button type="button" onClick={doExport} disabled={!views.length} className={btn.ghost} aria-label="دریافت فایل پشتیبان" title="پشتیبان">
+            <Download size={16} aria-hidden />
+          </button>
+          <button type="button" onClick={() => fileRef.current?.click()} className={btn.ghost} aria-label="بازیابی از فایل" title="بازیابی">
+            <Upload size={16} aria-hidden />
           </button>
           {fileInput}
+          <Link href="/portfolio/new" className={btn.primary}>
+            <Plus size={16} aria-hidden /> ثبت پوزیشن
+          </Link>
         </div>
         {message && <p className="w-full text-sm text-sx-blue" role="status">{message}</p>}
-      </section>
+      </header>
 
       {views.length === 0 ? (
         <section className="sx-hero px-6 py-14 flex flex-col items-center gap-4 text-center">
           <span className="grid place-items-center size-14 rounded-full bg-sx-accent/15 text-sx-accent">
-            <Wallet size={26} />
+            <Wallet size={26} aria-hidden />
           </span>
           <h2 className="text-xl font-semibold">هنوز پوزیشنی ثبت نشده</h2>
-          <p className="text-sm text-sx-muted max-w-md leading-7">خریدی را که انجام داده‌اید ثبت کنید تا ارزش، سود و زیان و مبلغ خروج آن را دنبال کنید. قبل از خرید هم می‌توانید مقدار دریافتی را محاسبه کنید.</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Link href="/portfolio/new" className={btn.primary}>
-              <Plus size={16} /> ثبت پوزیشن
-            </Link>
-          </div>
+          <p className="text-sm text-sx-muted max-w-sm leading-7">خریدتان را ثبت کنید تا ارزش و سودش را ببینید.</p>
+          <Link href="/portfolio/new" className={btn.primary}>
+            <Plus size={16} aria-hidden /> ثبت پوزیشن
+          </Link>
         </section>
       ) : (
         <>
-          <section className="sx-hero p-6 md:p-8 flex flex-col gap-6">
+          <section className="sx-hero p-5 md:p-7 flex flex-col gap-5">
             <div className="flex flex-wrap items-end justify-between gap-5">
-              <div className="flex flex-col gap-2">
-                <span className="text-sm text-sx-muted">ارزش خالص کل</span>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-sx-muted">ارزش خالص</span>
                 <span className="hero-num">
                   <Usd x={totals.netValueUsd} />
                 </span>
-                <span className="text-xs text-sx-faint">{totals.unpriced ? `${formatNumber(totals.unpriced, 0)} پوزیشن بدون قیمت، در جمع حساب نشده` : 'پس از کسر بدهی‌ها'}</span>
+                {totals.unpriced > 0 && <span className="text-xs text-sx-orange">{formatNumber(totals.unpriced, 0)} پوزیشن بدون قیمت</span>}
               </div>
               <div className="flex flex-col items-start gap-1">
-                <span className="text-xs text-sx-muted">سود و زیان کل</span>
+                <span className="text-xs text-sx-muted">سود و زیان</span>
                 <Pnl usd={totals.pnlUsd} pct={totals.pnlPct} size="lg" />
-                <span className="text-xs text-sx-faint">واریز جدید سود حساب نمی‌شود</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-x-6 lg:gap-y-0 lg:border-t lg:border-sx-border lg:pt-5">
-              <Figure label="سرمایه‌ی واردشده" hint="پول شخصی، بدون وام">
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-x-5 gap-y-1 border-t border-sx-border pt-4">
+              <Figure label="سرمایه">
                 <Usd x={totals.investedUsd} />
               </Figure>
               <Figure label="تحقق‌یافته">
@@ -491,13 +512,13 @@ export default function Portfolio() {
               <Figure label="تحقق‌نیافته">
                 <Pnl usd={totals.unrealizedUsd} size="sm" word={false} />
               </Figure>
-              <Figure label="درآمد دریافت‌شده">
+              <Figure label="درآمد">
                 <Usd x={totals.incomeUsd} />
               </Figure>
               <Figure label="کارمزد و بهره">
                 <Usd x={totals.feesUsd} />
               </Figure>
-              <Figure label="بدهی‌ها">
+              <Figure label="بدهی">
                 <Usd x={totals.debtUsd} />
               </Figure>
             </div>
@@ -516,65 +537,71 @@ export default function Portfolio() {
           {alerts.length > 0 && (
             <section className="flex flex-col gap-2" aria-labelledby="pf-alerts">
               <h2 id="pf-alerts" className="text-sm font-semibold text-sx-muted">
-                هشدارهای پوزیشن‌ها{updatedAt ? <span className="font-normal text-sx-faint"> · بررسی‌شده با داده‌ی {formatDateTime(new Date(updatedAt).toISOString())} · جزئیات در صفحه‌ی هر پوزیشن</span> : null}
+                هشدارها
               </h2>
               <AlertList alerts={alerts} />
             </section>
           )}
 
-          <section className="flex flex-col gap-4 min-w-0">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-lg font-medium">پوزیشن‌ها</h2>
-              <span className="text-xs text-sx-muted">
-                <Num>{formatNumber(open, 0)}</Num> باز از <Num>{formatNumber(views.length, 0)}</Num> · برای مرتب‌سازی روی سرستون بزنید
-              </span>
+          <section className="flex flex-col gap-3 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-medium">
+                پوزیشن‌ها{' '}
+                <span className="text-xs text-sx-muted font-normal">
+                  <Num>{formatNumber(open, 0)}</Num> باز · <Num>{formatNumber(views.length, 0)}</Num> کل
+                </span>
+              </h2>
+              {views.length > 3 && (
+                <button type="button" onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters} className={btn.ghost}>
+                  <SlidersHorizontal size={15} aria-hidden /> فیلتر
+                </button>
+              )}
             </div>
-            {views.length > 3 && <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {showFilters && (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <Select label="پلتفرم" value={f.protocol} onChange={(protocol) => setF({ ...f, protocol })} options={[{ value: 'all', label: 'همه' }, ...options.protocols.map((p) => ({ value: p, label: protocols[p].name }))]} />
                 <Select label="شبکه" value={f.chain} onChange={(chain) => setF({ ...f, chain })} options={[{ value: 'all', label: 'همه' }, ...options.chains.map((c) => ({ value: c, label: chainFa(c) }))]} />
                 <Select label="دارایی" value={f.asset} onChange={(asset) => setF({ ...f, asset })} options={[{ value: 'all', label: 'همه' }, ...options.assets.map((a) => ({ value: a, label: a }))]} />
                 <Select label="استراتژی" value={f.kind} onChange={(kind) => setF({ ...f, kind })} options={[{ value: 'all', label: 'همه' }, { value: 'pt', label: 'PT' }, { value: 'yt', label: 'YT' }, { value: 'loop', label: 'PT Loop' }]} />
                 <Select label="وضعیت" value={f.status} onChange={(status) => setF({ ...f, status })} options={[{ value: 'all', label: 'همه' }, ...(['open', 'matured', 'closed'] as const).map((s) => ({ value: s, label: STATUS_FA[s] }))]} />
-              </div>}
+              </div>
+            )}
             {shown.length ? <PositionTable views={shown} /> : <p className="sx-card text-sm text-sx-muted text-center py-10">پوزیشنی با این فیلترها نیست.</p>}
           </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              <Panel title="عملکرد" icon={<PieChart size={17} />} subtitle="ارزش خالص ثبت‌شده، فقط از داده‌ی واقعی">
-                <SnapshotChart label="ارزش خالص ثبت‌شده‌ی پرتفوی" points={history.map((h) => ({ t: new Date(h.at).getTime(), y: h.netValueUsd }))} />
-              </Panel>
-              <Panel title="تخصیص و تمرکز ریسک">
-                <div className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-2.5">
-                    <h3 className="text-xs text-sx-muted">شبکه</h3>
-                    <ShareBars slices={byChain} name={chainFa} />
-                  </div>
-                  <div className="flex flex-col gap-2.5">
-                    <h3 className="text-xs text-sx-muted">پروتکل</h3>
-                    <ShareBars slices={byProtocol} name={(k) => <span dir="ltr">{protocols[k as ProtocolId]?.name ?? k}</span>} />
-                  </div>
-                  <div className="flex flex-col gap-2.5">
-                    <h3 className="text-xs text-sx-muted">دارایی پایه</h3>
-                    <ShareBars slices={byAsset} name={(k) => <span dir="ltr">{k}</span>} />
-                  </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+            <Panel title="عملکرد" icon={<PieChart size={17} />}>
+              <SnapshotChart label="ارزش خالص" points={history.map((h) => ({ t: new Date(h.at).getTime(), y: h.netValueUsd }))} />
+            </Panel>
+            <Panel title="تخصیص">
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-2.5">
+                  <h3 className="text-xs text-sx-muted">شبکه</h3>
+                  <ShareBars slices={byChain} name={chainFa} />
                 </div>
-                {byAsset.length > 0 && (
-                  <p className={`text-sm leading-7 ${hhi > 5000 ? 'text-sx-orange' : 'text-sx-muted'}`}>
-                    {byAsset[0].share >= 50
-                      ? `⚠ تمرکز بالا: ${formatPercent(byAsset[0].share, 0)} از ارزش پرتفوی در ${byAsset[0].key} است؛ ریسک این دارایی (دیپگ، قرارداد هوشمند) بر کل پرتفوی اثر زیادی دارد.`
-                      : 'ارزش پرتفوی بین چند دارایی پخش شده است.'}
-                  </p>
-                )}
-              </Panel>
+                <div className="flex flex-col gap-2.5">
+                  <h3 className="text-xs text-sx-muted">پروتکل</h3>
+                  <ShareBars slices={byProtocol} name={(k) => <span dir="ltr">{protocols[k as ProtocolId]?.name ?? k}</span>} />
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  <h3 className="text-xs text-sx-muted">دارایی</h3>
+                  <ShareBars slices={byAsset} name={(k) => <span dir="ltr">{k}</span>} />
+                </div>
+              </div>
+              {byAsset.length > 0 && byAsset[0].share >= 50 && (
+                <p className={`text-sm ${hhi > 5000 ? 'text-sx-orange' : 'text-sx-muted'}`}>
+                  تمرکز بالا: <Num>{formatPercent(byAsset[0].share, 0)}</Num> در <bdi dir="ltr">{byAsset[0].key}</bdi>
+                </p>
+              )}
+            </Panel>
           </div>
         </>
       )}
 
       <MaturedSection views={views} />
 
-      <footer className="flex flex-col gap-2 border-t border-sx-border pt-5">
+      <footer className="border-t border-sx-border pt-4">
         <NoWalletNote />
-        <p className="text-sm text-sx-faint">ارزش‌ها به دلار آمریکا هستند. هیچ معامله یا خروجی خودکار انجام نمی‌شود.</p>
       </footer>
       <EarnSection earn={earn} saveEarn={saveEarn} removeEarn={removeEarn} />
     </SxPage>
