@@ -1,6 +1,8 @@
 import protocols from '../../config/protocols.json';
 import type { MarketData, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
+import { assessBase, assessImplied, type BaseHistoryPoint } from '../opportunity/health';
+import { cachedRealized } from './realized';
 import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, isObject, plausibleAPY, toPercent, type Shape } from './base';
 
 /** One row of GET /v1/{chain}/markets (paginated). */
@@ -17,13 +19,64 @@ interface PendleListItem {
   protocol?: string;
   categoryIds?: string[];
   impliedApy: number;
+  /** 1 − PT price, in the accounting asset. */
+  ptDiscount?: number;
   underlyingApy?: number;
+  underlyingInterestApy?: number;
+  underlyingRewardApy?: number;
+  /** `yieldRange`: the base-yield range Pendle itself expects for this market (fractions). */
+  extendedInfo?: { yieldRange?: { min?: number; max?: number } } | null;
   liquidity?: { usd: number } | number;
   underlyingAsset?: PendleToken;
   accountingAsset?: PendleToken;
+  /** The SY token: its exchangeRate() growth is the realized base yield. */
+  sy?: PendleToken;
   /** The PT token: an object like the others, or an id string "<chainId>-<address>". */
   pt?: PendleToken | string;
   dataUpdatedAt?: string;
+}
+
+// ─── Base-yield history (for the health checks) ────────────────────────────────
+
+const HISTORY_TTL_MS = 60 * 60_000;
+const historyCache = new Map<string, { h: BaseHistoryPoint[]; at: number }>();
+const historyLoading = new Set<string>();
+
+/**
+ * Daily base yield of one market over the last 45 days, cached for an hour. Never makes
+ * the list wait: a missing or old copy is refreshed in the background (1 computing unit each).
+ */
+function cachedHistory(base: string, chainId: number, address: string): BaseHistoryPoint[] | null {
+  const key = `${chainId}:${address.toLowerCase()}`;
+  const hit = historyCache.get(key);
+  if ((!hit || Date.now() - hit.at > HISTORY_TTL_MS) && !historyLoading.has(key)) {
+    historyLoading.add(key);
+    const start = new Date(Date.now() - 45 * 86_400_000).toISOString();
+    void fetchJson<{ results?: { timestamp?: string; underlyingApy?: number; impliedApy?: number }[] }>('Pendle', `${base}/v3/${chainId}/markets/${address}/historical-data?time_frame=day&timestamp_start=${start}&fields=underlyingApy,impliedApy`, isObject)
+      .then((d) => {
+        const h = (d.results ?? [])
+          .filter((r) => typeof r.underlyingApy === 'number' && r.timestamp)
+          .map((r) => ({ t: r.timestamp as string, basePct: (r.underlyingApy as number) * 100, ...(typeof r.impliedApy === 'number' ? { impliedPct: r.impliedApy * 100 } : {}) }));
+        historyCache.set(key, { h, at: Date.now() });
+      })
+      .catch(() => {})
+      .finally(() => historyLoading.delete(key));
+  }
+  return hit?.h ?? null;
+}
+
+function healthOf(m: PendleListItem, chainId: number, base: string, categories: string[]) {
+  const r = m.extendedInfo?.yieldRange;
+  const range = r && typeof r.min === 'number' && typeof r.max === 'number' ? { min: r.min * 100, max: r.max * 100 } : null;
+  return assessBase({
+    basePct: m.underlyingApy === undefined ? null : toPercent(m.underlyingApy),
+    interestPct: m.underlyingInterestApy === undefined ? null : toPercent(m.underlyingInterestApy),
+    rewardPct: m.underlyingRewardApy === undefined ? null : toPercent(m.underlyingRewardApy),
+    range,
+    history: cachedHistory(base, chainId, m.address),
+    categories,
+    realized: cachedRealized(chainId, m.sy?.address),
+  });
 }
 
 interface PendleToken {
@@ -135,6 +188,13 @@ export class PendleAdapter extends BaseAdapter {
       accountingSymbol: m.accountingAsset?.symbol ?? null,
       sourceUpdatedAt: isoOrNull(m.dataUpdatedAt),
       ptToken: ptRef(m.pt),
+      baseHealth: healthOf(m, chainId, this.base, (m.categoryIds ?? []).map((c) => c.toLowerCase())),
+      impliedHealth: assessImplied({
+        impliedPct: toPercent(m.impliedApy),
+        ptPrice: typeof m.ptDiscount === 'number' ? 1 - m.ptDiscount : null,
+        days: (new Date(m.expiry).getTime() - Date.now()) / 86_400_000,
+        history: cachedHistory(this.base, chainId, m.address),
+      }),
     }));
   }
 

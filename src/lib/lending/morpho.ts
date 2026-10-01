@@ -22,6 +22,8 @@ import { morphoLink } from '../market/links';
  * - Vault V2 `avgNetApy`: realized from share price, «after fees, with rewards»;
  *   `liquidityUsd`: liquidity adapter + idle assets.
  * - Reward `supplyApr`: APR, reported without a campaign end date.
+ * - Market `state.weeklyBorrowApy`: the borrow APY averaged over 7 days (loops use the
+ *   higher of it and today's, so one cheap moment does not make a loop look good).
  * - A market is identified by `marketId` (the on-chain id) and filtered with `listed`.
  *
  * Schema renames seen live on 2026-10-01 (the old names now fail validation):
@@ -65,6 +67,9 @@ export interface RawMorphoMarket {
   state: {
     supplyApy: number;
     borrowApy?: number;
+    weeklyBorrowApy?: number | null;
+    weeklySupplyApy?: number | null;
+    dailySupplyApy?: number | null;
     supplyAssetsUsd: number | null;
     borrowAssetsUsd: number | null;
     liquidityAssetsUsd: number | null;
@@ -82,6 +87,9 @@ export interface RawMorphoVault {
   liquidity: { usd: number } | null;
   state: {
     netApyExcludingRewards: number;
+    /** The same, averaged over the last 7 days and the last day. */
+    avgNetApyExcludingRewards?: number | null;
+    dayNetApyExcludingRewards?: number | null;
     fee: number;
     totalAssetsUsd: number | null;
     timestamp: string | number;
@@ -119,7 +127,7 @@ export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float
       collateralAsset { ${ASSET} }
       warnings { type level }
       currentIrmCurve { utilization supplyApy borrowApy }
-      state { supplyApy borrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp ${REWARD} }
+      state { supplyApy dailySupplyApy weeklySupplyApy borrowApy weeklyBorrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp ${REWARD} }
     }
   }
   vaults(first: $first, skip: $skip, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, totalAssetsUsd_gte: $minUsd }) {
@@ -129,7 +137,7 @@ export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float
       chain { id }
       warnings { type level }
       liquidity { usd }
-      state { netApyExcludingRewards fee totalAssetsUsd timestamp allRewards { ${REWARD_FIELDS} } }
+      state { netApyExcludingRewards avgNetApyExcludingRewards(lookback: SEVEN_DAYS) dayNetApyExcludingRewards: avgNetApyExcludingRewards(lookback: ONE_DAY) fee totalAssetsUsd timestamp allRewards { ${REWARD_FIELDS} } }
     }
   }
   vaultV2s(first: $first, skip: $skip, where: { chainId_in: $chains, listed: true }) {
@@ -220,7 +228,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
       deposit: [{ symbol: m.loanAsset.symbol ?? null, address: m.loanAsset.address }],
       collateral: m.collateralAsset ? [{ symbol: m.collateralAsset.symbol ?? null, address: m.collateralAsset.address }] : [],
     },
-    rate: { value: pct(s.supplyApy), kind: 'apy', feesIncluded: true, rewardsIncluded: false, at },
+    rate: { value: pct(s.supplyApy), kind: 'apy', feesIncluded: true, rewardsIncluded: false, at, avg7d: pct(s.weeklySupplyApy), avg1d: pct(s.dailySupplyApy) },
     maturity: null,
     // Blue markets have no supply cap.
     capacity: { depositRemainingUsd: null, uncapped: true, withdrawableNowUsd: finite(s.liquidityAssetsUsd) },
@@ -231,6 +239,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
       m.collateralAsset?.address && Number.isFinite(lltv) && lltv > 0
         ? {
             ratePct: pct(s.borrowApy),
+            ratePct7d: pct(s.weeklyBorrowApy),
             curve:
               supplied !== null && borrowed !== null && curve.length > 1 && curve.every((p) => Number.isFinite(p.borrowApy))
                 ? { suppliedUsd: supplied, borrowedUsd: borrowed, points: curve.map((p) => ({ u: p.utilization, rate: p.borrowApy as number })), source: 'منحنی IRM گزارش‌شده‌ی Morpho' }
@@ -265,7 +274,7 @@ export function morphoVault(v: RawMorphoVault, fetchedAt: string): Opportunity |
     chain: network.key,
     market: { id: v.address, address: v.address, name: v.name },
     assets: { deposit: [{ symbol: v.asset?.symbol ?? null, address: v.asset?.address ?? null }] },
-    rate: { value: pct(s.netApyExcludingRewards), kind: 'apy', feesIncluded: true, rewardsIncluded: false, fees: { performancePct: pct(s.fee) }, at },
+    rate: { value: pct(s.netApyExcludingRewards), kind: 'apy', feesIncluded: true, rewardsIncluded: false, fees: { performancePct: pct(s.fee) }, at, avg7d: pct(s.avgNetApyExcludingRewards), avg1d: pct(s.dayNetApyExcludingRewards) },
     maturity: null,
     // Room left is bounded by each market's cap in the vault; the API gives no single number.
     capacity: { depositRemainingUsd: null, withdrawableNowUsd: finite(v.liquidity?.usd) },

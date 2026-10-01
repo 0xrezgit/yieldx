@@ -89,7 +89,7 @@ export function YtBoard({
       </div>
 
       {rows.length === 0 ? (
-        <Empty>بازاری با این شرایط پیدا نشد. فیلترها، حداقل نقدینگی یا روز تا سررسید را کم کنید.</Empty>
+        <Empty>بازاری پیدا نشد؛ فیلترها را کم کنید.</Empty>
       ) : (
         <MarketTable<YtOpportunity>
           caption="بازارهای YT برای جمع کردن پوینت"
@@ -128,7 +128,7 @@ export function YtBoard({
             {
               id: 'limit',
               header: 'لیمیت پوینت رایگان',
-              help: <InlineHelp term="لیمیت پوینت رایگان">بالاترین نرخ Implied که اگر YT را در آن بخرید و با همان نرخ بفروشید، ضرر نقدی ندارید.</InlineHelp>,
+              help: <InlineHelp term="لیمیت پوینت رایگان">بالاترین نرخ بی‌ضرر.</InlineHelp>,
               sort: (r) => r.freeLimit,
               cell: (r) => <Bound label="Implied" op="≤" x={r.freeLimit} className="whitespace-nowrap" />,
             },
@@ -212,7 +212,7 @@ function YtDetails({ r, s }: { r: YtOpportunity; s: ScreenSettings }) {
       </div>
       {temporaryBase(m) && (
         <p className="flex items-start gap-2 text-xs text-warning">
-          <TriangleAlert size={14} className="shrink-0 mt-0.5" aria-hidden /> بازده پایه خیلی بالاتر از نرخ بازار است؛ معمولاً یعنی بازده فعلی موقت است (مشوق یا جهش کوتاه). محاسبه با فرض ماندن همین بازده است.
+          <TriangleAlert size={14} className="shrink-0 mt-0.5" aria-hidden /> بازده پایه احتمالاً موقت است.
         </p>
       )}
     </div>

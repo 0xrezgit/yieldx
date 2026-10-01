@@ -5,7 +5,7 @@ import { formatNumber, formatPercent } from '../utils/formatting';
 import { askDepth, fillAsks, impliedApy, sellIntoBids, settlementFeeAt } from './book';
 import { rateAfterDeposit } from './curve';
 import { leverageEstimate, type LeverageInput } from './leverage';
-import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, PT_LOOP_POLICY, temporaryBase } from './policy';
+import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, nonUsdFiat, PT_LOOP_POLICY, temporaryBase, volatileDeposit } from './policy';
 import { periodGrowth, simpleIncome } from './rates';
 
 /**
@@ -147,6 +147,31 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, o.maturity !== null ? PT_LOOP_POLICY : input.leverage, base, now);
   if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
   if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
+  // A deposit in a non-dollar fiat currency: its dollar result is an exchange-rate bet.
+  const fiat = nonUsdFiat(o.assets.deposit[0]?.symbol);
+  if (fiat && o.family !== 'leverage') return stop('needs-model', fiatReason(fiat));
+  // A deposit in a volatile token (not a dollar, ETH/BTC, a major or an established DeFi token): a price bet.
+  const symbol = o.assets.deposit[0]?.symbol;
+  if (o.family !== 'leverage' && !o.ptClass && volatileDeposit(symbol)) return stop('needs-model', volatileReason(symbol as string));
+
+  // The published base yield checked against the protocol's own data (lib/opportunity/health).
+  const health = o.family === 'yt' ? o.yt?.health : null;
+  if (health?.pointsOnly) return stop('needs-model', POINTS_ONLY);
+  if (health?.status === 'broken') return stop('needs-model', `داده‌ی بازده پایه‌ی این بازار خراب است؛ سود دلاری ساخته نمی‌شود. ${health.reasons.join(' ')}`);
+  if (health?.status === 'suspect' && o.yt && o.rate.value !== null) {
+    const clean = { ...o, yt: { ...o.yt, health: null } };
+    const conservative = health.conservativePct ?? o.rate.value;
+    const low = estimate({ ...clean, rate: { ...o.rate, value: Math.min(conservative, o.rate.value) } }, input);
+    const high = estimate(clean, input);
+    const why = `بازده پایه مشکوک است: ${health.reasons.join(' ')} سود با بازده محافظه‌کارانه‌ی ${formatPercent(Math.min(conservative, o.rate.value), 1)} رتبه گرفت.`;
+    return {
+      ...low,
+      quality: worseQuality(low.quality, 'partial'),
+      confidence: 'suspect',
+      range: low.net !== null && high.net !== null ? { low: Math.min(low.net, high.net), high: Math.max(low.net, high.net) } : null,
+      assumptions: [why, ...low.assumptions],
+    };
+  }
   // A base yield far above the market's own forecast is a temporary boost: no dollar figure on it.
   if (o.family === 'yt' && o.yt && temporaryBase(o.rate.value, o.yt.impliedPct))
     return stop('needs-model', `بازده پایه‌ی امروز (${formatPercent(o.rate.value as number, 1)}) بسیار بالاتر از نرخ بازار (${formatPercent(o.yt.impliedPct, 1)}) است؛ احتمالاً موقت، پس سود دلاری روی آن ساخته نمی‌شود.`);
@@ -165,6 +190,12 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
 
   // An executable quote for this amount: the PT or YT actually bought, price impact included.
   if ((o.family === 'pt' || o.family === 'yt') && quoteFits(o.quote, capital)) return fromQuote(o, input, { base, assumptions, unknown, quality, now, earningDays });
+
+  // Without a quote the mid rate decides, so it must be believable (lib/opportunity/health).
+  if ((o.family === 'pt' || o.family === 'yt') && o.impliedHealth && o.impliedHealth.status !== 'ok') {
+    if (o.impliedHealth.status === 'broken') return stop('needs-model', `نرخ بازار این PT/YT قابل اتکا نیست؛ سود دلاری ساخته نمی‌شود. ${o.impliedHealth.reasons.join(' ')}`);
+    return stop('needs-model', `${NEEDS_QUOTE_IMPLIED} ${o.impliedHealth.reasons.join(' ')}`);
+  }
 
   // An AMM entry without an executable quote: only for amounts small against the pool.
   if (o.family === 'pt' || o.family === 'yt') {
@@ -202,8 +233,28 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     unknown.push('اثر ورود سرمایه‌ی شما بر نرخ مدل نشده است؛ نرخ فعلی به کار رفت.');
   }
 
+  // Ranked on the lower of today's rate and its own 7-day average: a utilization spike
+  // (lending markets near 100% often pay several times their average for a few days)
+  // is not held for the whole period. A clear spike is marked and shown as a range.
+  let incomeRate = rateAfterEntry;
+  let spikeRate: number | null = null;
+  const avg7d = o.rate.avg7d;
+  const avg1d = o.rate.avg1d;
+  // A high rate that held over the last day and covered most of the week is the market's new level, not a spike.
+  const sustained = avg7d != null && avg1d != null && incomeRate !== null && avg1d >= incomeRate * SUSTAINED.dayShare && avg7d >= incomeRate * SUSTAINED.weekShare;
+  if (sustained && incomeRate !== null && incomeRate > (avg1d as number) && (o.family === 'lend' || o.family === 'vault')) {
+    assumptions.push(`نرخ بالا ماندگار است؛ با میانگین یک روز (${formatPercent(avg1d as number, 2)}) حساب شد.`);
+    incomeRate = avg1d as number;
+  } else if (!sustained && incomeRate !== null && avg7d != null && Number.isFinite(avg7d) && incomeRate > avg7d && (o.family === 'lend' || o.family === 'vault')) {
+    if (incomeRate > SPIKE.ratio * avg7d && incomeRate - avg7d > SPIKE.minPp) {
+      spikeRate = incomeRate;
+      assumptions.push(`نرخ امروز (${formatPercent(incomeRate, 2)}) جهشی است و بیش از دو برابر میانگین ۷ روز (${formatPercent(avg7d, 2)})؛ سود با میانگین ۷ روز رتبه گرفت.`);
+    } else assumptions.push(`نرخ با میانگین ۷ روز (${formatPercent(avg7d, 2)}) حساب شد که از نرخ امروز کمتر است.`);
+    incomeRate = avg7d;
+  }
+
   // Base income at that rate, read as published.
-  const growth = periodGrowth({ ...o.rate, value: rateAfterEntry }, earningDays);
+  const growth = periodGrowth({ ...o.rate, value: incomeRate }, earningDays);
   if (o.rate.kind === 'unknown') {
     assumptions.push('نوع نرخ (APR یا APY) اعلام نشده؛ به‌صورت ساده و محافظه‌کارانه حساب شد.');
     quality = worseQuality(quality, 'partial');
@@ -275,6 +326,8 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   const debtCost = 0;
   const net = baseIncome + rewards - debtCost - sum(costs);
   const netPct = (net / capital) * 100;
+  const spikeGrowth = spikeRate !== null ? periodGrowth({ ...o.rate, value: spikeRate }, earningDays) : null;
+  const spike = spikeGrowth !== null ? { confidence: 'suspect' as const, range: { low: net, high: net + allocatable * (spikeGrowth - growth) } } : {};
 
   const placement = placeOf(quality, net, allocatable, capital);
 
@@ -300,6 +353,7 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     assumptions,
     quality,
     placement,
+    ...spike,
   };
 }
 
@@ -321,6 +375,23 @@ export const placeOf = (quality: DataQuality, net: number, allocatable: number, 
 /** A short default reason for a placement that has no specific one. */
 export const reasonOf = (p: Placement): string | null =>
   p === 'ranked' ? null : p === 'unprofitable' ? 'هزینه‌ها از درآمد این دوره بیشترند.' : p === 'stale' ? 'داده‌ی منبع قدیمی است.' : p === 'no-capacity' ? 'ظرفیت ندارد.' : p === 'insufficient' ? 'داده‌ی کافی نیست.' : null;
+
+/** The reason a PT/YT with a doubtful implied APY waits for an executable quote (it then decides). */
+export const NEEDS_QUOTE_IMPLIED = 'نرخ بازار مشکوک است؛ فقط با قیمت اجرایی برآورد می‌شود.';
+
+/** Why a non-dollar fiat deposit gets no dollar figure. */
+export const fiatReason = (code: string) => `سپرده به ارز ${code} است و سودش به همان ارز؛ نتیجه‌ی دلاری به نرخ ارز بستگی دارد و برآورد نمی‌شود.`;
+
+/** Why a deposit in a volatile token gets no dollar figure. */
+export const volatileReason = (symbol: string) => `سپرده ${symbol} پرنوسان است؛ سود دلاری به قیمتش بستگی دارد.`;
+
+/** Today's rate counts as a spike above this multiple of its 7-day average and this many points over it. */
+export const SPIKE = { ratio: 2, minPp: 5 } as const;
+/** Today's rate counts as sustained when the last day kept 90% of it and the week 70%. */
+export const SUSTAINED = { dayShare: 0.9, weekShare: 0.7 } as const;
+
+/** A YT on a points market whose token earns nothing itself: it pays in points only. */
+export const POINTS_ONLY = 'این توکن خودش بازده ندارد و YT آن فقط پوینت می‌دهد؛ سود دلاری ساخته نمی‌شود.';
 
 /** The reason a PT/YT waits for an executable quote (the market analysis then asks for one). */
 export const NEEDS_QUOTE = 'مبلغ نسبت به نقدینگی استخر بزرگ است؛ quote لازم است.';
@@ -381,6 +452,7 @@ function fromQuote(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; 
     quality,
     placement,
     reason: reasonOf(placement),
+    confidence: 'executable',
   };
 }
 

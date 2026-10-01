@@ -1,6 +1,6 @@
 import type { ExecQuote } from '../../types/opportunity';
 import type { Analysis } from './analysis';
-import { NEEDS_QUOTE } from '../opportunity/estimate';
+import { NEEDS_QUOTE, NEEDS_QUOTE_IMPLIED } from '../opportunity/estimate';
 import { evmChainId } from '../opportunity/costs';
 import { MAX_QUOTES_PER_SIDE } from '../opportunity/policy';
 
@@ -26,7 +26,7 @@ export function quoteCandidates(a: Analysis, usd: number, known: Record<string, 
   for (const r of a.rows) {
     const o = r.o;
     if ((o.family !== 'pt' && o.family !== 'yt') || o.protocol.id !== 'pendle' || !o.market.address) continue;
-    if (!Object.values(r.byHorizon).some((e) => e.reason === NEEDS_QUOTE)) continue;
+    if (!Object.values(r.byHorizon).some((e) => e.reason === NEEDS_QUOTE || e.reason?.startsWith(NEEDS_QUOTE_IMPLIED))) continue;
     const chain = evmChainId(o.chain);
     const id = quoteId(o.key, usd);
     if (chain === null || id in known) continue;

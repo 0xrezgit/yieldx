@@ -1,3 +1,4 @@
+import type { BaseHealth, ImpliedHealth } from './market';
 /**
  * The protocol-independent model of an opportunity: anything that turns the
  * user's capital into income over a period — a PT held to maturity, a lending
@@ -36,6 +37,10 @@ export interface RateQuote {
   fees?: { performancePct?: number | null; managementPct?: number | null };
   /** When the source measured this rate (ISO); null when not reported. */
   at: string | null;
+  /** The same rate averaged over the last 7 days, when the source publishes it (same kind). */
+  avg7d?: number | null;
+  /** …and over the last day. */
+  avg1d?: number | null;
 }
 
 /** An incentive paid on top of the base rate. The key identifies the campaign across sources. */
@@ -148,6 +153,8 @@ export interface OrderBook {
 export interface BorrowSide {
   /** Variable borrow rate, % per year (APY), without incentives. */
   ratePct: number | null;
+  /** The same rate averaged over the last 7 days, when the protocol publishes it. */
+  ratePct7d?: number | null;
   /** Borrow rate by utilization, for the rate after the user's own borrow. */
   curve: SupplyCurve | null;
   /** What can be borrowed now, USD. */
@@ -255,13 +262,22 @@ export interface Opportunity {
   poolLiquidityUsd?: number | null;
   /** PT/YT: an executable entry quote for one amount (Pendle's router), when one was asked for. */
   quote?: ExecQuote | null;
+  /** PT/YT/PT loop: is the market's implied APY believable (lib/opportunity/health)? */
+  impliedHealth?: ImpliedHealth | null;
   /** The source's field meanings come from a third-party client, not the protocol's own documentation. */
   unofficialSource?: boolean;
   /**
    * YT family: the market's implied APY (sets the YT price) and the underlying's own
    * yield that the YT receives until maturity (`rate` repeats the latter).
    */
-  yt?: { impliedPct: number; hasPoints: boolean; /** Share of the yield the protocol keeps, %; null → not known. */ yieldFeePct: number | null } | null;
+  yt?: {
+    impliedPct: number;
+    hasPoints: boolean;
+    /** Share of the yield the protocol keeps, %; null → not known. */
+    yieldFeePct: number | null;
+    /** Is the published base yield believable (lib/opportunity/health)? */
+    health?: BaseHealth | null;
+  } | null;
 }
 
 /** One cost line. measured: from live data; assumed: the user's setting; model: computed from live data with a stated model. */
@@ -327,6 +343,13 @@ export interface Estimate {
   assumptions: string[];
   quality: DataQuality;
   placement: Placement;
+  /**
+   * How far the dollar figure can be trusted: «executable» (an executable quote for this
+   * amount), «suspect» (a doubtful input, ranked on a conservative value). Absent: an estimate.
+   */
+  confidence?: 'executable' | 'suspect';
+  /** Suspect inputs: the result on the conservative value and on the published one. */
+  range?: { low: number; high: number } | null;
   /** Why it is not ranked, in a few words; null when ranked. */
   reason?: string | null;
 }

@@ -63,6 +63,11 @@ export interface YtTradeInput {
   yieldFeePercent?: number;
   /** How `baseAPY` compounds: 'apy' (default) or 'apr' — simple, as Spectra publishes it. */
   baseRateKind?: 'apy' | 'apr';
+  /**
+   * The YT price actually paid, from an executable quote (asset units per unit of yield,
+   * fees and price impact included). Replaces the mid price and the entry fee.
+   */
+  entryPrice?: number;
 }
 
 export interface YtTrade {
@@ -95,8 +100,9 @@ export function simulateYt(i: YtTradeInput): YtTrade {
   const fee = i.feePercent / 100;
   const toMaturity = h >= D;
 
-  const entryPrice = ytPriceFromAPY(i.entryAPY, D);
-  const units = (i.capital * (1 - fee)) / (entryPrice * i.underlyingPrice);
+  const quoted = i.entryPrice !== undefined && i.entryPrice > 0;
+  const entryPrice = quoted ? (i.entryPrice as number) : ytPriceFromAPY(i.entryAPY, D);
+  const units = (i.capital * (quoted ? 1 : 1 - fee)) / (entryPrice * i.underlyingPrice);
   const notional = units * i.underlyingPrice;
   const yieldEarned = notional * baseGrowth(i.baseAPY, h, i.baseRateKind) * (1 - (i.yieldFeePercent ?? 0) / 100);
   const exitPrice = toMaturity ? 0 : ytPriceFromAPY(i.exitAPY, D - h);

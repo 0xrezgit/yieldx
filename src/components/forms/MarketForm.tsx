@@ -110,7 +110,7 @@ export function MarketForm({ d }: { d: ReadyDashboard }) {
         />
       </div>
 
-      <NumberField label="سرمایه" value={p.capital} onChange={(v) => set('capital', v)} suffix="دلار" error={msg.error('capital')} help="مبلغی که وارد می‌کنید، به دلار آمریکا. بین بازارها ثابت می‌ماند." />
+      <NumberField label="سرمایه" value={p.capital} onChange={(v) => set('capital', v)} suffix="دلار" error={msg.error('capital')} help="به دلار" />
 
       <SelectField<StrategyId | 'auto'>
         label="استراتژی"
@@ -132,7 +132,7 @@ export function MarketForm({ d }: { d: ReadyDashboard }) {
                 <NumberField label="قیمت PT" value={p.ptPrice} onChange={(v) => set('ptPrice', v)} error={msg.error('ptPrice')} note={originNote(p, 'ptPrice')} help={`قیمت یک PT بر حسب ${unit}؛ بین ۰ و ۱.`} />
                 <NumberField label="قیمت YT" value={p.ytPrice} onChange={(v) => set('ytPrice', v)} error={msg.error('ytPrice')} warning={msg.warning('ytPrice')} note={originNote(p, 'ytPrice')} help={`قیمت یک YT بر حسب ${unit}. PT + YT ≈ ۱.`} />
                 <NumberField label="بازده پایه (APY)" value={p.baseAPY} onChange={(v) => set('baseAPY', v)} suffix="%" error={msg.error('baseAPY')} warning={msg.warning('baseAPY')} forceErrors note={originNote(p, 'baseAPY')} help="بازده شناور فعلی دارایی. YT همین را دریافت می‌کند." />
-                <NumberField label={`قیمت دلاری ${unit}`} value={p.underlyingPrice} onChange={(v) => set('underlyingPrice', v)} suffix="دلار" error={msg.error('underlyingPrice')} forceErrors note={originNote(p, 'underlyingPrice')} help="قیمت یک واحد دارایی پایه به دلار آمریکا. USDC و USDT هم ممکن است دقیقاً ۱ دلار نباشند." />
+                <NumberField label={`قیمت دلاری ${unit}`} value={p.underlyingPrice} onChange={(v) => set('underlyingPrice', v)} suffix="دلار" error={msg.error('underlyingPrice')} forceErrors note={originNote(p, 'underlyingPrice')} help="قیمت دلاری یک واحد" />
                 <div className="col-span-2">
                   <TextField label="سررسید" type="date" value={p.maturity} onChange={(v) => set('maturity', v)} error={msg.error('maturity')} />
                 </div>
@@ -141,18 +141,18 @@ export function MarketForm({ d }: { d: ReadyDashboard }) {
             </Group>
 
             {(focus === 'auto' || focus === 'loop') && (
-              <Group title="لوپ PT (Loop)" note="نرخ وام و LLTV در API بازار نیست؛ از پلتفرم وام‌دهی بخوانید.">
+              <Group title="لوپ PT (Loop)" note="از پلتفرم وام‌دهی">
                 <div className="grid grid-cols-2 gap-3">
                   <NumberField label="LTV هر حلقه" value={p.ltv} onChange={(v) => set('ltv', v)} suffix="%" error={msg.error('ltv')} help="درصدی از ارزش وثیقه که در هر حلقه وام می‌گیرید." />
                   <NumberField label="تعداد حلقه" value={p.loops} onChange={(v) => set('loops', v)} error={msg.error('loops')} />
                   <NumberField label="نرخ بهره‌ی وام" value={p.borrowAPY} onChange={(v) => set('borrowAPY', v)} suffix="%" note="فرض دستی" />
-                  <NumberField label="آستانه‌ی لیکوئید (LLTV)" value={p.liquidationThreshold} onChange={(v) => set('liquidationThreshold', v)} suffix="%" note="فرض دستی" help="اگر نسبت بدهی به وثیقه به این عدد برسد، موقعیت لیکوئید می‌شود." />
+                  <NumberField label="آستانه‌ی لیکوئید (LLTV)" value={p.liquidationThreshold} onChange={(v) => set('liquidationThreshold', v)} suffix="%" note="فرض دستی" help="آستانه‌ی لیکوئید" />
                 </div>
               </Group>
             )}
 
             {protocols[p.protocol].hasClmm && (focus === 'auto' || focus === 'clmm') && (
-              <Group title="نقدینگی CLMM" note="بازه بر حسب Implied APY است؛ پیش‌فرض آن حول نرخ همین بازار است.">
+              <Group title="نقدینگی CLMM" note="بازه بر حسب Implied APY">
                 <div className="grid grid-cols-2 gap-3">
                   <NumberField label="کف بازه" value={p.rangeLowerAPY} onChange={(v) => set('rangeLowerAPY', v)} suffix="%" error={msg.error('rangeLowerAPY')} />
                   <NumberField label="سقف بازه" value={p.rangeUpperAPY} onChange={(v) => set('rangeUpperAPY', v)} suffix="%" />
@@ -216,7 +216,7 @@ function HistoryInput({ p, set, warning }: { p: ScenarioParams; set: ReadyDashbo
         onChange={(e) => setText(e.target.value)}
         onBlur={() => set('apyHistory', parseNumberList(text))}
       />
-      <p className="text-xs text-muted mt-1">درصدهای روزانه، از قدیم به جدید، با «،» یا فاصله جدا شوند.</p>
+      <p className="text-xs text-muted mt-1">درصدهای روزانه، جدا با «،»</p>
       {warning && <p className="text-xs text-warning mt-1">{warning}</p>}
     </details>
   );

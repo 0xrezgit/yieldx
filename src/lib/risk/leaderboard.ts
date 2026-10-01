@@ -1,8 +1,9 @@
 import thresholds from '../../config/thresholds.json';
-import type { Opportunity } from '../../types/opportunity';
+import type { ExecQuote, Opportunity } from '../../types/opportunity';
 import { BASE_RATE_KIND, simulateLoop, simulateYt, YT_YIELD_FEE_PCT } from '../calculators/trade';
+import { MAX_POOL_SHARE_WITHOUT_QUOTE, quoteAmount } from '../opportunity/policy';
 import { ptOpportunity } from '../opportunity/from-market';
-import { PT_LEVERAGE_REASON, ptLenders, ptLoopLeverage } from '../opportunity/leverage';
+import { loopBorrowPct, PT_LEVERAGE_REASON, ptLenders, ptLoopLeverage } from '../opportunity/leverage';
 import { rateAfterBorrow } from '../opportunity/curve';
 import type { OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
@@ -59,6 +60,17 @@ export interface LeaderRow {
   leverageReason?: string;
   /** Loop only: false when the PT's dollar peg rests only on its name (see `ptClassOf`). */
   pegVerified?: boolean;
+  /** «executable»: entry from a quote for this capital; «suspect»: a doubtful input (see `doubts`). */
+  confidence?: 'executable' | 'suspect';
+  /** Suspect base yield: the result on the conservative and on the published value. */
+  range?: { low: number; high: number };
+  /** Why an input is doubtful, in Persian. */
+  doubts?: string[];
+  /**
+   * Too large for the pool's mid price (more than MAX_POOL_SHARE_WITHOUT_QUOTE of it) and no
+   * executable quote yet: the dollar figure is not shown. `quote` says what to ask for.
+   */
+  needsQuote?: { side: 'pt' | 'yt'; usd: number };
 }
 
 export interface LoopLender {
@@ -83,8 +95,19 @@ export interface LoopBoard {
   noLender: { m: OpportunityListing; pendleLoop: boolean }[];
   /** Loops left out: the policy allows no leverage at the market's LLTV, or it cannot lend enough. */
   liquidated: number;
+  /** The PT's implied APY is broken: no dollar figure (lib/opportunity/health). */
+  broken: { m: OpportunityListing; reasons: string[] }[];
   shortLiquidity: number;
 }
+
+/** The key a quote is stored under for one market, side and amount. */
+export const leaderQuoteKey = (marketId: string, side: 'pt' | 'yt', usd: number) => `${marketId}|${side}|${usd}`;
+
+/** A quote that speaks for this amount (within 5%). */
+const fits = (q: ExecQuote | null | undefined, side: 'pt' | 'yt', usd: number): q is ExecQuote => !!q && q.side === side && q.units > 0 && q.unitUsd > 0 && Math.abs(q.usd - usd) <= usd * 0.05;
+
+/** More than the pool can take at its mid price without an executable quote. */
+const overPool = (m: OpportunityListing, size: number) => m.liquidity === null || !(m.liquidity > 0) || size > m.liquidity * MAX_POOL_SHARE_WITHOUT_QUOTE;
 
 export interface LeaderInput {
   capital: number;
@@ -110,12 +133,17 @@ const fixedVerdict = (annualized: number, hurdle: number): Verdict => (annualize
  * the market analysis (markets with a borrow side). Markets Pendle lists for looping,
  * or deep stablecoin markets, that have no lending market are returned in `noLender`.
  */
-export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, lending: Opportunity[], i: LeaderInput, fetchedAt = new Date().toISOString()): LoopBoard {
-  const board: LoopBoard = { rows: [], noLender: [], liquidated: 0, shortLiquidity: 0 };
+export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, lending: Opportunity[], i: LeaderInput & { quotes?: Record<string, ExecQuote | null> }, fetchedAt = new Date().toISOString()): LoopBoard {
+  const board: LoopBoard = { rows: [], noLender: [], liquidated: 0, shortLiquidity: 0, broken: [] };
   for (const m of markets) {
     if (!(eligible(m, s) && m.daysToMaturity >= thresholds.opportunities.loopMinDays)) continue;
+    if (m.impliedHealth?.status === 'broken') {
+      board.broken.push({ m, reasons: m.impliedHealth.reasons });
+      continue;
+    }
     const pt = ptOpportunity(m.protocol, m, fetchedAt);
     const lenders = ptLenders(pt, lending);
+    const doubts = m.impliedHealth?.status === 'suspect' ? m.impliedHealth.reasons : [];
     if (!lenders.length) {
       if (isLoopable(m) || (isStable(m) && (m.liquidity ?? 0) >= thresholds.opportunities.loopCandidateLiquidityUsd)) board.noLender.push({ m, pendleLoop: isLoopable(m) });
       continue;
@@ -124,7 +152,8 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
     for (const { lender, collateral, debt: token } of lenders) {
       const side = lender.borrow!;
       const lltv = collateral.maxLtv * 100;
-      const now = side.ratePct as number;
+      // Today's rate or the 7-day average, whichever is higher.
+      const now = loopBorrowPct(side) as number;
       // PT loop policy (shared with the market analysis): 3× or 2.5×, lower only for health or a rate jump.
       const { leverage: L, reason } = ptLoopLeverage({ impliedPct: m.impliedAPY, borrowPct: now, days: D, lltvPct: lltv, pegVerified: pt.ptClass?.pegVerified !== false, feePercent: s.feePercent });
       if (!(L > 1)) {
@@ -138,7 +167,13 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
       }
       const after = side.curve ? rateAfterBorrow(side.curve, debt, now) : null;
       const rate = after ?? now;
-      const r = simulateLoop({ capital: i.capital, daysToMaturity: D, entryAPY: m.impliedAPY, leverage: L, borrowAPY: rate, lltv, feePercent: s.feePercent });
+      // The loop buys leverage × capital of PT. Too much for the mid price: an executable PT quote
+      // for that size gives the rate actually locked (its fee and impact are inside it).
+      const size = quoteAmount(i.capital * L);
+      const q = i.quotes?.[leaderQuoteKey(m.id, 'pt', size)];
+      const quoted = fits(q, 'pt', size) ? q : null;
+      const entryAPY = quoted ? (Math.pow((quoted.units * quoted.unitUsd) / size, 365 / D) - 1) * 100 : m.impliedAPY;
+      const r = simulateLoop({ capital: i.capital, daysToMaturity: D, entryAPY, leverage: L, borrowAPY: rate, lltv, feePercent: quoted ? 0 : s.feePercent });
       if (r.healthFactor < 1) {
         board.liquidated++;
         continue;
@@ -161,6 +196,8 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
         pointsExposure: null,
         health: Number.isFinite(r.healthFactor) ? r.healthFactor : null,
         pegVerified: pt.ptClass?.pegVerified !== false,
+        ...(doubts.length ? { confidence: 'suspect' as const, doubts } : quoted ? { confidence: 'executable' as const } : {}),
+        ...(!quoted && overPool(m, i.capital * L) ? { needsQuote: { side: 'pt' as const, usd: size } } : {}),
         lender: {
           name: lender.market.name,
           protocol: lender.protocol.name,
@@ -178,20 +215,52 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
   return board;
 }
 
-export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: LeaderInput, pointsOnly: boolean): LeaderRow[] {
+/** Markets kept out of the YT dollar ranking, and why: no dollar figure is shown for them. */
+export interface YtExcluded {
+  /** 0% base on a points market: the YT pays only in points. */
+  pointsOnly: OpportunityListing[];
+  /** The base yield or the implied APY is broken (lib/opportunity/health). */
+  broken: { m: OpportunityListing; reasons: string[] }[];
+}
+
+export function ytExcluded(markets: OpportunityListing[], s: ScreenSettings): YtExcluded {
+  const out: YtExcluded = { pointsOnly: [], broken: [] };
+  for (const m of markets) {
+    if (!eligible(m, s)) continue;
+    if (m.baseHealth?.pointsOnly) out.pointsOnly.push(m);
+    else if (m.baseHealth?.status === 'broken' || m.impliedHealth?.status === 'broken') out.broken.push({ m, reasons: [...(m.baseHealth?.status === 'broken' ? m.baseHealth.reasons : []), ...(m.impliedHealth?.status === 'broken' ? m.impliedHealth.reasons : [])] });
+  }
+  return out;
+}
+
+/**
+ * YT on its best exit day. A suspect base yield is ranked on its conservative value (the
+ * published one gives the top of the range); broken data and points-only markets are left
+ * to `ytExcluded`. `quotes` (by market id) replace the mid entry price with the price an
+ * executable quote for this capital actually pays.
+ */
+export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: LeaderInput & { quotes?: Record<string, ExecQuote | null> }, pointsOnly: boolean): LeaderRow[] {
+  const usdQ = quoteAmount(i.capital);
   const out: LeaderRow[] = [];
   for (const m of markets) {
     if (!eligible(m, s) || m.baseAPY === null || !Number.isFinite(m.baseAPY)) continue;
     if (pointsOnly && !m.hasPoints) continue;
+    if (m.baseHealth?.pointsOnly || m.baseHealth?.status === 'broken' || m.impliedHealth?.status === 'broken') continue;
     const D = m.daysToMaturity;
     const multiplier = m.points?.ytMultiplier ?? m.ytMultiplier ?? 1;
-    const at = (h: number, shift = 0) =>
+    const q = i.quotes?.[leaderQuoteKey(m.id, 'yt', usdQ)];
+    // The YT price paid per unit of yield, dollars per dollar of underlying: capital ÷ (YT bought × unit USD).
+    const entryPrice = fits(q, 'yt', i.capital) ? i.capital / (q.units * q.unitUsd) : undefined;
+    const suspect = m.baseHealth?.status === 'suspect';
+    const published = m.baseAPY as number;
+    const conservative = suspect ? Math.min(published, m.baseHealth?.conservativePct ?? published) : published;
+    const run = (baseAPY: number) => (h: number, shift = 0) =>
       simulateYt({
         capital: i.capital,
         underlyingPrice: 1,
         daysToMaturity: D,
         entryAPY: m.impliedAPY,
-        baseAPY: (m.baseAPY as number) + shift,
+        baseAPY: baseAPY + shift,
         holdDays: h,
         exitAPY: m.impliedAPY,
         feePercent: s.feePercent,
@@ -201,21 +270,28 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
         valuePerPoint: 0,
         yieldFeePercent: YT_YIELD_FEE_PCT[m.protocol] ?? 0,
         baseRateKind: BASE_RATE_KIND[m.protocol],
+        entryPrice,
       });
-
-    // Best exit day at today's implied APY; ties go to the longer hold (more points).
-    let best = at(1);
-    let bestDay = 1;
-    let freeUntil: number | null = null;
-    for (let h = 1; h <= D; h++) {
-      const r = h === 1 ? best : at(h);
-      if (r.cash >= best.cash) {
-        best = r;
-        bestDay = h;
+    const bestOf = (at: ReturnType<typeof run>) => {
+      // Best exit day at today's implied APY; ties go to the longer hold (more points).
+      let best = at(1);
+      let day = 1;
+      let freeUntil: number | null = null;
+      for (let h = 1; h <= D; h++) {
+        const r = h === 1 ? best : at(h);
+        if (r.cash >= best.cash) {
+          best = r;
+          day = h;
+        }
+        if (r.cash >= 0) freeUntil = h;
       }
-      if (r.cash >= 0) freeUntil = h;
-    }
+      return { best, day, freeUntil };
+    };
+    const at = run(conservative);
+    const { best, day: bestDay, freeUntil } = bestOf(at);
+    const high = suspect && conservative < published ? bestOf(run(published)).best.cash : null;
     const loss = -best.cashPercent;
+    const doubts = [...(suspect ? (m.baseHealth?.reasons ?? []) : []), ...(m.impliedHealth?.status === 'suspect' ? m.impliedHealth.reasons : [])];
     out.push({
       m,
       pnl: best.cash,
@@ -229,6 +305,11 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       freeUntil,
       pointsExposure: best.notional * multiplier,
       perBasePoint: at(bestDay, 1).cash - best.cash,
+      ...(entryPrice !== undefined ? { confidence: 'executable' as const } : doubts.length ? { confidence: 'suspect' as const } : {}),
+      ...(high !== null ? { range: { low: Math.min(best.cash, high), high: Math.max(best.cash, high) } } : {}),
+      ...(doubts.length ? { doubts } : {}),
+      // A YT buy moves the pool by its notional: too large for the mid price without a quote.
+      ...(entryPrice === undefined && overPool(m, best.notional) ? { needsQuote: { side: 'yt' as const, usd: usdQ } } : {}),
     });
   }
   return out;

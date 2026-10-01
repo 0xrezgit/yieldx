@@ -111,7 +111,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
           suffix="٪"
           help="بهتر است کارمزد تحقق‌یافته‌ی ۷ یا ۳۰ روز گذشته باشد. نرخ میانگین استخر برای بازه‌ی باریک کمتر از درآمد واقعی است؛ اینجا همان به کار می‌رود (محافظه‌کارانه)."
           note={prefill.feeApr != null ? 'از Merkl: بازده بومی استخر (کارمزد) به نرخ فعلی' : undefined}
-          warning={Number.isFinite(fee) ? undefined : 'بدون نرخ کارمزد فقط تغییر ارزش پوزیشن نشان داده می‌شود.'}
+          warning={Number.isFinite(fee) ? undefined : 'بدون نرخ کارمزد.'}
         />
         {fromMerkl ? (
           <p className="text-sm text-secondary self-end">
@@ -120,7 +120,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
         ) : (
           <NumberField label="نرخ پاداش (سالانه، ساده)" value={rewardApr} onChange={(v) => setRewardApr(Number.isFinite(v) ? Math.max(0, v) : 0)} suffix="٪" />
         )}
-        <NumberField label="هزینه‌های ورود و خروج" value={costs} onChange={(v) => setCosts(Number.isFinite(v) ? Math.max(0, v) : 0)} suffix="دلار" help="گس، کارمزد سواپ برای متوازن کردن دو دارایی و کارمزد واریز/برداشت خزانه." />
+        <NumberField label="هزینه‌های ورود و خروج" value={costs} onChange={(v) => setCosts(Number.isFinite(v) ? Math.max(0, v) : 0)} suffix="دلار" help="گس و کارمزدها" />
         <div className="flex flex-col gap-1.5">
           <span className="text-sm text-secondary">جفت دو استیبل‌کوین دلاری است؟</span>
           <Segmented<'no' | 'yes'> value={stable ? 'yes' : 'no'} onChange={(v) => setStable(v === 'yes')} label="جفت استیبل" size="sm" options={[{ id: 'no', label: 'نه' }, { id: 'yes', label: 'بله' }]} />
@@ -180,7 +180,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
       {input.feeAprPct !== null && (
         <p className="text-sm text-secondary leading-7">
           {be.down === null && be.up === null ? (
-            'با این نرخ‌ها کارمزد و پاداش حتی بدون تغییر قیمت هزینه‌ها را نمی‌پوشاند.'
+            'کارمزد و پاداش هزینه‌ها را نمی‌پوشاند.'
           ) : (
             <>
               حد سربه‌سر در برابر HODL: کارمزد و پاداش تا وقتی تغییر ارزش را می‌پوشاند که قیمت <bdi dir="ltr">{a}</bdi> نسبت به <bdi dir="ltr">{b}</bdi> بین{' '}

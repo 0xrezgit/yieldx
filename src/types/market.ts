@@ -93,6 +93,29 @@ export interface MarketSummary extends MarketIdentityFields {
   categories: string[];
   /** Listed recently. */
   isNew: boolean;
+  /** Is the published base yield believable (see lib/opportunity/health)? Absent when not checked. */
+  baseHealth?: BaseHealth | null;
+  /** Is the market's implied APY believable (consistent with the PT price, recently traded)? */
+  impliedHealth?: ImpliedHealth | null;
+}
+
+export type BaseHealthStatus = 'ok' | 'suspect' | 'broken';
+
+export interface BaseHealth {
+  status: BaseHealthStatus;
+  /** Why, in Persian; empty when ok. */
+  reasons: string[];
+  /** The base yield to rank a suspect market on, %; null when nothing better is known. */
+  conservativePct: number | null;
+  /** 0% base on a points market: the YT pays only in points. */
+  pointsOnly: boolean;
+  /** The base yield measured on-chain over the last 30 days, %; null when not measurable. */
+  realizedPct?: number | null;
+}
+
+export interface ImpliedHealth {
+  status: BaseHealthStatus;
+  reasons: string[];
 }
 
 /** A list row as served by GET /api/:protocol — lifecycle computed from the maturity date. */

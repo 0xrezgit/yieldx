@@ -21,6 +21,7 @@ import { OpportunityDetails, usd } from './OpportunityDetails';
 import { Coverage } from './Coverage';
 import { LeaderRanking } from './LeaderRanking';
 import { StepStrip } from './ActionPlan';
+import { Confidence } from './Confidence';
 import { stepsFor } from '../../lib/market/steps';
 
 type View = 'all' | 'yt' | 'loop';
@@ -95,6 +96,7 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
         <span className="flex flex-col items-end gap-0.5 text-left">
           <span className={`font-bold text-lg leading-tight ${e.net !== null && e.net < 0 ? 'text-danger' : 'text-success'}`}>{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
           <span className="text-xs text-secondary">{e.netPct === null ? '—' : <Num>{formatPercent(e.netPct, 2)}</Num>}</span>
+          <Confidence confidence={e.confidence} range={e.range} why={e.confidence === 'suspect' ? e.assumptions.slice(0, 1) : undefined} />
           <span className="text-[11px] text-muted">{exitShort(e, row.o)}</span>
           <ChevronDown size={16} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
         </span>
@@ -181,7 +183,7 @@ export default function MarketAnalysis() {
       {st.view === 'all' && (
         <>
 
-      <p className="text-xs text-secondary">برآورد با نرخ‌های فعلی و هزینه‌های محاسبه‌شده؛ سرمایه در شبکه‌ی مقصد فرض شده است. سود ردیف‌ها قابل جمع نیست.</p>
+      <p className="text-xs text-secondary">سود هر ردیف جداست و جمع‌پذیر نیست.</p>
 
       <div className="flex flex-col sm:flex-row gap-2">
         <label className="relative flex-1">
@@ -203,7 +205,7 @@ export default function MarketAnalysis() {
           ))}
         </div>
       ) : m.failed ? (
-        <Empty>هیچ منبعی پاسخ نداد. کمی بعد به‌روزرسانی کنید.</Empty>
+        <Empty>منبعی پاسخ نداد.</Empty>
       ) : !top.length ? (
         <Empty>برای این سرمایه و افق فرصت سودده‌ای پیدا نشد.</Empty>
       ) : (

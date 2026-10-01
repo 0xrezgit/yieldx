@@ -55,7 +55,7 @@ function Money({ label, onAdd, needsDebt }: { label: string; onAdd: (e: EarnEven
       <TextField label="تاریخ" type="date" value={date} onChange={setDate} />
       <TextField label="توکن" value={token} onChange={setToken} ltr />
       <NumberField label="مقدار توکن" value={amount} onChange={setAmount} />
-      <NumberField label="نرخ دلاری هر توکن در آن زمان" value={rate} onChange={setRate} suffix="دلار" note="خالی = نامعلوم؛ سود و زیان «برآورد ناقص» می‌شود، صفر فرض نمی‌شود." />
+      <NumberField label="نرخ دلاری هر توکن در آن زمان" value={rate} onChange={setRate} suffix="دلار" note="خالی = نامعلوم" />
       <NumberField label="کارمزد جدا (گس)" value={fee} onChange={(v) => setFee(Number.isFinite(v) ? Math.max(0, v) : 0)} suffix="دلار" />
       <button
         type="button"
@@ -135,7 +135,7 @@ function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; 
           label={`موجودی فعلی در پروتکل (${p.asset.symbol})`}
           value={p.balance?.amount ?? NaN}
           onChange={(x) => set({ balance: Number.isFinite(x) ? { amount: x, at: now } : null })}
-          note={p.balance ? <>خوانده‌شده در {formatDate(p.balance.at)}</> : 'از اپ پروتکل بخوانید (با بهره‌ی انباشته)؛ بدون آن ارزش برآورد می‌شود.'}
+          note={p.balance ? <>خوانده‌شده در {formatDate(p.balance.at)}</> : 'از اپ پروتکل؛ خالی = برآورد'}
         />
         {p.debtAsset && (
           <NumberField label={`بدهی فعلی (${p.debtAsset.symbol})`} value={p.debt?.amount ?? NaN} onChange={(x) => set({ debt: Number.isFinite(x) ? { amount: x, at: now } : null })} note={p.debt ? <>خوانده‌شده در {formatDate(p.debt.at)}</> : undefined} />
@@ -145,10 +145,10 @@ function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; 
           value={v.rateUsed ?? NaN}
           onChange={(x) => set({ manualRate: Number.isFinite(x) ? x : null })}
           suffix="٪"
-          note={linked ? 'نرخ زنده از رتبه‌بندی؛ مقدار دستی فقط وقتی به کار می‌رود که نرخ زنده نباشد.' : 'نرخ دستی شما'}
+          note={linked ? 'نرخ زنده؛ دستی فقط اگر نباشد' : 'نرخ دستی شما'}
         />
         {p.debtAsset && <NumberField label="نرخ وام (APY)" value={v.borrowRateUsed ?? NaN} onChange={(x) => set({ manualBorrowRate: Number.isFinite(x) ? x : null })} suffix="٪" />}
-        <NumberField label="هزینه‌ی خروج اکنون" value={p.exitCostUsd ?? NaN} onChange={(x) => set({ exitCostUsd: Number.isFinite(x) ? Math.max(0, x) : null })} suffix="دلار" note="گس، کارمزد برداشت، اسلیپیج باز کردن اهرم؛ خالی = نامعلوم." />
+        <NumberField label="هزینه‌ی خروج اکنون" value={p.exitCostUsd ?? NaN} onChange={(x) => set({ exitCostUsd: Number.isFinite(x) ? Math.max(0, x) : null })} suffix="دلار" note="گس، کارمزد و اسلیپیج؛ خالی = نامعلوم" />
         <NumberField label={`قیمت دلاری ${p.asset.symbol}`} value={p.assetUsd ?? NaN} onChange={(x) => set({ assetUsd: Number.isFinite(x) ? x : null })} suffix="دلار" note={<QualityBadge q={v.assetUsd.quality} prefix="قیمت در محاسبه" />} />
       </div>
 
@@ -201,7 +201,7 @@ function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; 
           </p>
         )}
         <p className={`text-sm font-medium ${advice.verdict === 'switch' ? 'text-sx-green' : advice.verdict === 'stay' ? 'text-sx-text' : 'text-sx-amber'}`}>
-          {advice.verdict === 'switch' ? 'جابه‌جایی در این مدت به‌صرفه به نظر می‌رسد (با نرخ‌های امروز).' : advice.verdict === 'stay' ? 'ماندن در همین پوزیشن منطقی‌تر است.' : 'برای داوری داده‌ی کافی نیست.'}
+          {advice.verdict === 'switch' ? 'جابه‌جایی به‌صرفه است.' : advice.verdict === 'stay' ? 'ماندن بهتر است.' : 'داده کافی نیست.'}
         </p>
         {advice.why.length > 0 && (
           <ul className="text-xs text-sx-muted list-disc ps-5 leading-6">
@@ -210,7 +210,7 @@ function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; 
             ))}
           </ul>
         )}
-        <p className="text-xs text-sx-faint">جایگزین‌ها از رتبه‌بندی یکپارچه (Morpho، Aave V4، Midnight) برای همین مبلغ و مدت؛ پیشنهاد نیست، مقایسه با نرخ‌های امروز است.</p>
+        <p className="text-xs text-sx-faint">مقایسه با بهترین جایگزین برای همین مبلغ و مدت.</p>
       </div>
 
       <button type="button" className={`${btn.ghost} self-start text-sx-red`} onClick={() => confirm('این پوزیشن حذف شود؟') && remove()}>
@@ -356,7 +356,7 @@ export function EarnSection({ earn, saveEarn, removeEarn }: { earn: EarnPosition
     <Panel
       title="سپرده، خزانه، نرخ ثابت، لوپ و LP"
       icon={<Landmark size={18} aria-hidden />}
-      subtitle="پوزیشن‌هایی که PT/YT نیستند. در لوپ فقط ارزش خالص پس از بدهی در جمع می‌آید."
+      subtitle="وام‌دهی، خزانه، لوپ و غیره."
       actions={
         <button type="button" className={btn.ghost} onClick={() => { setDraft(null); setAdding(true); }}>
           <Plus size={15} aria-hidden /> افزودن
@@ -390,7 +390,7 @@ export function EarnSection({ earn, saveEarn, removeEarn }: { earn: EarnPosition
       )}
       {rows.length === 0 && !adding ? (
         <p className="text-sm text-sx-muted leading-7">
-          هنوز پوزیشنی ثبت نشده. از <Link href="/" className="underline underline-offset-4">تحلیل بازار</Link> دکمه‌ی «ثبت در پرتفوی» را بزنید یا دستی اضافه کنید.
+          هنوز پوزیشنی ثبت نشده. از <Link href="/" className="underline underline-offset-4">تحلیل بازار</Link> از تحلیل بازار «ثبت در پرتفوی» بزنید.
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-sx-border">

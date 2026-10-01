@@ -34,8 +34,8 @@ const ageText = (ms: number | null) => {
 };
 
 const LEAN = {
-  hold: { text: 'با فرض‌های فعلی، نگهداری نسبت به خروج اکنون برتری دارد.', cls: 'border-sx-green bg-sx-green/8' },
-  exit: { text: 'با فرض‌های فعلی، خروج یا بازخرید نسبت به ادامه منطقی‌تر به نظر می‌رسد.', cls: 'border-sx-orange bg-sx-orange/8' },
+  hold: { text: 'نگهداری بهتر از خروج است.', cls: 'border-sx-green bg-sx-green/8' },
+  exit: { text: 'خروج بهتر از ادامه است.', cls: 'border-sx-orange bg-sx-orange/8' },
   neutral: { text: 'تفاوت معناداری بین نگهداری و خروج دیده نمی‌شود.', cls: 'border-sx-border bg-sx-raised/50' },
   unknown: { text: 'داده‌ی کافی برای مقایسه‌ی نگهداری و خروج نیست.', cls: 'border-sx-border bg-sx-raised/50' },
 };
@@ -91,7 +91,7 @@ export function Answers({ x }: { x: PositionView }) {
         </Row>
         <Row q="ادامه یا جابه‌جایی؟">
           <span className={`w-full rounded-md border-r-2 px-4 py-3 text-sm leading-7 ${LEAN[a.lean].cls}`}>
-            {LEAN[a.lean].text} این یک پیشنهاد قطعی نیست؛ فرض‌ها را در بخش تحلیل ببینید.
+            {LEAN[a.lean].text} قطعی نیست.
           </span>
         </Row>
       </dl>
@@ -265,10 +265,10 @@ export function KindPanel({ x, onSave }: { x: PositionView; onSave: (p: Position
         </StatGrid>
         <p className="text-xs text-sx-muted leading-6">
           {v.unclaimedYield.quality === 'historical'
-            ? 'سود انباشته از سابقه‌ی روزانه‌ی بازده بازار محاسبه شده است.'
+            ? 'از سابقه‌ی روزانه‌ی بازده.'
             : v.unclaimedYield.quality === 'manual'
               ? 'سود انباشته از عددی است که دستی وارد کرده‌اید.'
-              : 'سابقه‌ی روزانه‌ی بازده در دسترس نیست؛ سود انباشته با نرخ فعلی تخمین زده شده. عدد دقیق را از پلتفرم بخوانید و دستی وارد کنید.'}
+              : 'تخمین با نرخ فعلی؛ عدد دقیق را دستی وارد کنید.'}
         </p>
       </Panel>
     );
@@ -325,9 +325,9 @@ export function KindPanel({ x, onSave }: { x: PositionView; onSave: (p: Position
       )}
       <p className="text-xs text-sx-muted leading-6">
         {lp.oracle === 'unknown'
-          ? 'اوراکل بازار وام‌دهی مشخص نشده؛ سلامت با قیمت بازار PT تخمین زده شده. بسیاری از بازارها از اوراکل خطی یا TWAP استفاده می‌کنند؛ عدد پلتفرم را مبنا قرار دهید.'
+          ? 'با قیمت بازار PT تخمین زده شد؛ عدد پلتفرم مبناست.'
           : lp.oracle === 'manual'
-            ? 'سلامت با قیمت اوراکلی که دستی وارد کرده‌اید محاسبه شده.'
+            ? 'با اوراکل دستی شما.'
             : 'سلامت با قیمت بازار PT محاسبه شده.'}{' '}
         {h?.debtQuality === 'estimate' ? `بدهی با نرخ ثبت‌شده‌ی ${formatPercent(lp.borrowAPY, 2)} تخمین زده شده؛ برای دقت، بدهی فعلی را از پلتفرم وارد کنید.` : ''}
       </p>
@@ -412,7 +412,7 @@ export function AnalysisPanel({ x }: { x: PositionView }) {
           </ul>
         </details>
       )}
-      <p className="text-xs text-sx-faint">هیچ تاریخ خروج یا سود آینده‌ای قطعی نیست و هیچ معامله‌ای خودکار انجام نمی‌شود.</p>
+      <p className="text-xs text-sx-faint">قطعی نیست؛ معامله‌ای خودکار انجام نمی‌شود.</p>
     </Panel>
   );
 }
@@ -438,7 +438,7 @@ function SwitchPanel({ x }: { x: PositionView }) {
           <Loader2 size={14} className="animate-spin" /> در حال دریافت بازارها…
         </p>
       ) : !res.length ? (
-        <p className="text-sm text-sx-muted">بازار قابل مقایسه‌ای با نقدینگی کافی پیدا نشد، یا داده‌ی این پوزیشن برای مقایسه کافی نیست.</p>
+        <p className="text-sm text-sx-muted">بازار قابل مقایسه‌ای پیدا نشد.</p>
       ) : (
         <ul className="flex flex-col divide-y divide-sx-border border-y border-sx-border">
           {res.map((c) => (
@@ -463,7 +463,7 @@ function SwitchPanel({ x }: { x: PositionView }) {
           ))}
         </ul>
       )}
-      <p className="text-xs text-sx-faint">فرض: قیمت دلاری دارایی ثابت و نرخ بازار جدید تا افق مقایسه بدون تغییر. کیفیت داده: خروج و ورود تخمینی.</p>
+      <p className="text-xs text-sx-faint">با فرض ثابت ماندن قیمت و نرخ.</p>
     </div>
   );
 }
@@ -486,7 +486,7 @@ function Targets({ x, onSave }: { x: PositionView; onSave: (p: Position) => void
   );
   return (
     <>
-      <p className="text-sm text-sx-muted">وقتی سود و زیان کل یا شاخص سلامت از این مرزها بگذرد، هشدار در بالای صفحه و در پرتفوی نمایش داده می‌شود.</p>
+      <p className="text-sm text-sx-muted">با عبور از این مرزها هشدار می‌گیرید.</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {field('takeProfitPct', 'هدف سود', '%')}
         {field('stopLossPct', 'سقف زیان', '%')}
@@ -519,7 +519,7 @@ function ManualMarks({ x, onSave }: { x: PositionView; onSave: (p: Position) => 
   );
   return (
     <>
-      <p className="text-sm text-sx-muted">عدد دستی تا وقتی حذف نشود جایگزین داده‌ی بازار می‌شود و با برچسب «دستی» نمایش داده می‌شود.</p>
+      <p className="text-sm text-sx-muted">عدد دستی جای داده‌ی بازار می‌نشیند.</p>
       {row(`قیمت ${p.kind === 'yt' ? 'YT' : 'PT'} (${p.assetSymbol || 'واحد دارایی'})`, price, setPrice, 'tokenPrice', p.manual.tokenPrice)}
       {row(`قیمت دلاری ${p.assetSymbol || 'دارایی پایه'}`, asset, setAsset, 'assetUsd', p.manual.assetUsd)}
       {p.kind === 'yt' && row(`سود دریافت‌نشده طبق پلتفرم (${p.assetSymbol || 'واحد دارایی'})`, yieldV, setYieldV, 'unclaimedYield', p.manual.unclaimedYield)}

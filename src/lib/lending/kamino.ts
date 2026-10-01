@@ -46,6 +46,8 @@ export interface KaminoStats {
   token?: string;
   status?: string;
   supplyApyBreakdown?: { lending?: string; incentives?: string };
+  /** Supply APY now and averaged (`avg7d` …), decimal strings. */
+  supplyApy?: { current?: string; avg7d?: string };
   supplyRewardApys?: KaminoRewardApy[];
   liquidityAvailableUsd?: string;
   depositLimit?: string | null;
@@ -96,7 +98,7 @@ export function kaminoReserve(r: KaminoReserveInput, fetchedAt: string): Opportu
     chain: 'solana:mainnet',
     market: { id: metric.reserve, address: metric.reserve, name: `${symbol ?? '—'} · ${market.name ?? 'Kamino'}` },
     assets: { deposit: [{ symbol, address: mint }] },
-    rate: { value: lendingApy * 100, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: fetchedAt },
+    rate: { value: lendingApy * 100, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: fetchedAt, avg7d: num(stats.supplyApy?.avg7d) === null ? null : (num(stats.supplyApy?.avg7d) as number) * 100 },
     maturity: null,
     capacity: { depositRemainingUsd: remainingUsd, withdrawableNowUsd: num(stats.liquidityAvailableUsd) },
     exit: { type: 'instant', note: 'برداشت تا نقدینگی آزاد ذخیره.' },

@@ -206,7 +206,7 @@ function dataIssues(c: CalcState, row: OpportunityListing | null, screen: Screen
   const items: { kind: 'bad' | 'ok'; text: ReactNode }[] = [];
   if (c.mode === 'yt') {
     if (row && (row.baseAPY === null || !Number.isFinite(row.baseAPY))) {
-      items.push({ kind: 'ok', text: <>بازده پایه‌ی این بازار از API نیامده؛ خانه‌ی «بازده پایه» را از سایت پروژه پر کنید. بدون آن، سود YT قابل محاسبه نیست.</> });
+      items.push({ kind: 'ok', text: <>بازده پایه نیامده؛ دستی وارد کنید.</> });
     }
     if (c.baseAPY > SUSPICIOUS_BASE_APY) {
       items.push({
@@ -361,7 +361,7 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
     yieldFeePercent: c.protocol ? (YT_YIELD_FEE_PCT[c.protocol] ?? 0) : 0,
     baseRateKind: c.protocol ? BASE_RATE_KIND[c.protocol] : undefined,
   };
-  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0 && c.underlyingPrice > 0)) return <ResultVerdict off={unreliable} kind="info">سرمایه، روز تا سررسید و نرخ ورود باید بیشتر از صفر باشند.</ResultVerdict>;
+  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0 && c.underlyingPrice > 0)) return <ResultVerdict off={unreliable} kind="info">ورودی‌ها باید بیشتر از صفر باشند.</ResultVerdict>;
 
   const t = simulateYt(input);
   const limits = ytEntryLimits(input, c.lossBudget);
@@ -429,7 +429,7 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
           </Metric>
         </div>
       </div>
-      <p className="text-xs text-muted">لیمیت‌ها فرض می‌کنند با همان نرخی که می‌خرید، می‌فروشید؛ یعنی لازم نیست بازار به نفع شما حرکت کند.</p>
+      <p className="text-xs text-muted">فروش با همان نرخ خرید.</p>
 
       <Details
         rows={[
@@ -461,7 +461,7 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
 // ─── PT ────────────────────────────────────────────────────────────────────────
 
 function PtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolean }) {
-  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0)) return <ResultVerdict off={unreliable} kind="info">سرمایه، روز تا سررسید و نرخ ورود باید بیشتر از صفر باشند.</ResultVerdict>;
+  if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0)) return <ResultVerdict off={unreliable} kind="info">ورودی‌ها باید بیشتر از صفر باشند.</ResultVerdict>;
   const input = { capital: c.capital, daysToMaturity: c.days, entryAPY: c.entryAPY, holdDays: c.holdDays, exitAPY: c.exitAPY, feePercent: c.fee };
   const t = simulatePt(input);
   const early = !t.toMaturity;
@@ -539,10 +539,10 @@ function LoopResult({ c, unreliable = false }: { c: CalcState; unreliable?: bool
   );
   if (t.healthFactor < 1) {
     kind = 'bad';
-    text = <>این اهرم از LLTV بیشتر است و موقعیت همان لحظه لیکوئید می‌شود.</>;
+    text = <>این اهرم همان لحظه لیکوئید می‌شود.</>;
   } else if (!beatsPt) {
     kind = 'bad';
-    text = <>بهره‌ی وام از نرخ ثابت PT بیشتر است؛ لوپ از نگه‌داری ساده‌ی PT بدتر است.</>;
+    text = <>بهره‌ی وام بیشتر از نرخ PT است.</>;
   } else if (t.healthFactor < minHealth) {
     kind = 'ok';
     text = <>سودده است اما Health Factor پایین است؛ اهرم را به ≤ <Num>{formatNumber(safeMax, 2)}×</Num> کم کنید.</>;

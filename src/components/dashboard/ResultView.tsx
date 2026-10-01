@@ -37,7 +37,7 @@ export function StartState({ onManual }: { onManual: () => void }) {
         </button>
       }
     >
-      پروتکل و بازار را از فرم انتخاب کنید و سرمایه را وارد کنید. نتیجه‌ی نقدی تخمینی هر استراتژی (PT، YT، لوپ و CLMM) با داده‌ی زنده‌ی همان بازار حساب می‌شود. تا انتخاب بازار، هیچ پیشنهاد یا سودی نمایش داده نمی‌شود.
+      بازار و سرمایه را انتخاب کنید.
       <span className="block mt-2 text-muted">
         <Search size={13} className="inline -mt-0.5" aria-hidden /> بازار مناسب را نمی‌دانید؟ از{' '}
         <Link href="/" className="text-accent underline underline-offset-4">
@@ -96,9 +96,9 @@ export function MarketHeader({ d }: { d: ReadyDashboard }) {
         ) : meta ? (
           <DataStatus source="api" sourceName={`API ${proto.name}`} fetchedAt={meta.fetchedAt} sourceUpdatedAt={meta.sourceUpdatedAt} stale={md.state === 'error'} />
         ) : (
-          <p className="text-xs text-warning">داده‌ی ذخیره‌شده از نسخه‌ی قبلی — زمان دریافت نامعلوم؛ «به‌روزرسانی داده» را بزنید.</p>
+          <p className="text-xs text-warning">داده‌ی قدیمی؛ به‌روزرسانی کنید.</p>
         )}
-        {d.fromScenario && <p className="text-xs text-info">سناریوی ذخیره‌شده: اعداد همان زمان ذخیره‌اند تا وقتی به‌روزرسانی کنید.</p>}
+        {d.fromScenario && <p className="text-xs text-info">سناریوی ذخیره‌شده</p>}
         <p className="text-xs text-muted">
           قیمت PT و YT بر حسب <bdi dir="ltr">{meta?.accountingSymbol || 'دارایی پایه'}</bdi>؛ مبالغ به دلار آمریکا
           {meta?.missing?.length ? <> · <span className="text-warning">ناموجود در API: {meta.missing.map(missingLabel).join('، ')}</span></> : null}
@@ -199,7 +199,7 @@ function LoopHealth({ p, a }: { p: ScenarioParams; a: Analysis }) {
     <div className="rounded-lg border border-default bg-surface p-4 flex flex-col gap-3">
       <div className="flex items-center gap-2 text-sm font-semibold text-primary">
         <ShieldAlert size={16} className={tone} aria-hidden /> سلامت پوزیشن (Health Factor){' '}
-        <InlineHelp term="Health Factor">نسبت آستانه‌ی لیکوئید به LTV فعلی. زیر ۱ یعنی لیکوئید. هر چه بالاتر، امن‌تر.</InlineHelp>
+        <InlineHelp term="Health Factor">زیر ۱ یعنی لیکوئید.</InlineHelp>
       </div>
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
         <div>

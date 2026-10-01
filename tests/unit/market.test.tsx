@@ -51,6 +51,53 @@ const pt = (key: string, maturityDays: number, over: Partial<Opportunity> = {}):
     ...over,
   });
 
+describe('non-dollar fiat deposits', () => {
+  it('give no dollar figure: a peso or euro return is an exchange-rate bet, not dollars', async () => {
+    const { nonUsdFiat } = await import('../../src/lib/opportunity/policy');
+    for (const [sym, code] of [['ARSs', 'ARS'], ['wARS', 'ARS'], ['EURC', 'EUR'], ['tGBP', 'GBP'], ['MXNB', 'MXN'], ['COLt', 'COL']] as const) expect(nonUsdFiat(sym)).toBe(code);
+    for (const sym of ['USDC', 'sUSDe', 'PENDLE', 'BOLD', 'PYUSD', 'AUSD', 'WETH', 'frxUSD']) expect(nonUsdFiat(sym)).toBeNull();
+    const ars = run([lend('ars', { assets: { deposit: [{ symbol: 'ARSs', address: '0xars' }] }, rate: { value: 22, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT } })]).rows[0].byHorizon[90];
+    expect(ars.placement).toBe('needs-model');
+    expect(ars.net).toBeNull();
+    expect(ars.reason).toContain('ARS');
+  });
+});
+
+describe('volatile deposits', () => {
+  it('give no dollar figure, except dollars, ETH/BTC, majors, PENDLE and established DeFi tokens', async () => {
+    const { volatileDeposit } = await import('../../src/lib/opportunity/policy');
+    for (const sym of ['USDC', 'sUSDe', 'wstETH', 'cbBTC', 'SOL', 'jitoSOL', 'fragSOL', 'kHYPE', 'PENDLE', 'AAVE', 'stkAAVE', 'CRV', 'MORPHO', 'ENA', 'PAXG']) expect(volatileDeposit(sym)).toBe(false);
+    for (const sym of ['CARROT', 'mtwCARROT', 'PEPE', 'veMEZO', 'KAITO']) expect(volatileDeposit(sym)).toBe(true);
+    const carrot = run([lend('c', { family: 'stake', assets: { deposit: [{ symbol: 'mtwCARROT', address: '0xc' }] } })]).rows[0].byHorizon[30];
+    expect(carrot.placement).toBe('needs-model');
+    expect(carrot.reason).toContain('پرنوسان');
+    expect(run([lend('p', { assets: { deposit: [{ symbol: 'PENDLE', address: '0xp' }] } })]).rows[0].byHorizon[30].placement).toBe('ranked');
+  });
+});
+
+describe('lending rate spikes', () => {
+  it('ranks on the lower of today and the 7-day average; a clear spike is marked and shown as a range', () => {
+    // 30% today at full utilization, 7.7% over the week (live USDC/USD3 on Morpho).
+    const spike = run([lend('s', { rate: { value: 30, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
+    const calm = run([lend('c', { rate: { value: 7.7, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT } })], 10_000).rows[0].byHorizon[90];
+    expect(spike.net).toBeCloseTo(calm.net!, 6);
+    expect(spike.confidence).toBe('suspect');
+    expect(spike.range!.high).toBeGreaterThan(spike.range!.low * 3);
+    // Slightly above the average: still the lower rate, but not marked.
+    const mild = run([lend('m', { rate: { value: 9, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
+    expect(mild.net).toBeCloseTo(calm.net!, 6);
+    expect(mild.confidence).toBeUndefined();
+    // High for most of the week and still there today: the new level, ranked on the last day, not marked.
+    const held = run([lend('h', { rate: { value: 30, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 24, avg1d: 29 } })], 10_000).rows[0].byHorizon[90];
+    const at29 = run([lend('x', { rate: { value: 29, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT } })], 10_000).rows[0].byHorizon[90];
+    expect(held.net).toBeCloseTo(at29.net!, 6);
+    expect(held.confidence).toBeUndefined();
+    // Below its average: today's rate stands.
+    const low = run([lend('l', { rate: { value: 5, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: AT, avg7d: 7.7 } })], 10_000).rows[0].byHorizon[90];
+    expect(low.net!).toBeLessThan(calm.net!);
+  });
+});
+
 describe('four horizons, each on its own', () => {
   const row = (d: number) => run([pt(`pt${d}`, d)]).rows[0].byHorizon;
 
