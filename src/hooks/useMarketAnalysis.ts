@@ -56,7 +56,7 @@ export function useMarketAnalysis(capital: number): MarketAnalysisState {
     const list = f ? f.opportunities.map((o) => liveAt(o, minute)).filter((o) => o.campaigns.length > 0) : [];
     return {
       opportunities: [...(lending.feed?.opportunities ?? []), ...ptOpps],
-      merkl: f ? { list, ctx: buildContext(list, f.markets, f.marketChains, minute), stale: merkl.stale, fetchedAt: new Date(f.fetchedAt).toISOString() } : null,
+      merkl: f ? { list, ctx: buildContext(list, f.markets, f.marketChains, minute, f.sells ?? {}), stale: merkl.stale, fetchedAt: new Date(f.fetchedAt).toISOString() } : null,
       gas: f?.gas ?? [],
     };
   }, [lending.feed, pt.markets, pt.feeds, merkl.feed, merkl.stale, minute]);

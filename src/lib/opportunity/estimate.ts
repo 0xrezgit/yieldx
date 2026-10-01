@@ -5,7 +5,7 @@ import { formatNumber, formatPercent } from '../utils/formatting';
 import { askDepth, fillAsks, impliedApy, sellIntoBids, settlementFeeAt } from './book';
 import { rateAfterDeposit } from './curve';
 import { leverageEstimate, type LeverageInput } from './leverage';
-import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS } from './policy';
+import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, PT_LOOP_POLICY } from './policy';
 import { periodGrowth, simpleIncome } from './rates';
 
 /**
@@ -143,7 +143,8 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (!(capital > 0) || !(days > 0)) return stop('insufficient', 'مبلغ و مدت باید بزرگ‌تر از صفر باشند.');
   if (o.quality === 'insufficient') return stop('insufficient', 'داده‌ی منبع برای برآورد کافی نیست.');
   if (o.risk?.paused) return stop('inactive', 'بازار متوقف یا منجمد است.');
-  if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, input.leverage, base, now);
+  // A loop with a maturity is a PT loop: its own, tighter policy.
+  if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, o.maturity !== null ? PT_LOOP_POLICY : input.leverage, base, now);
   if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
   if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
 

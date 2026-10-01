@@ -26,6 +26,23 @@ export const PAGE_SIZE = 20;
 export const LEVERAGE_POLICY = { version: 'lev-v1', minHealth: 1.25, maxLeverage: 4 } as const;
 
 /**
+ * PT loops: 3× the capital, or 2.5× where the loop is more fragile — a dollar peg known
+ * only from the name, a thin spread between the PT's rate and the variable borrow rate
+ * (each point the borrow rate rises costs L − 1 points), or a long maturity. Lower still
+ * only where health 1.25 or surviving a `rateBufferPp` jump of the PT's implied rate
+ * (its market price falls) requires. See `ptLoopLeverage`.
+ */
+export const PT_LOOP_POLICY = {
+  version: 'lev-pt-v2',
+  minHealth: 1.25,
+  maxLeverage: 3,
+  cautiousLeverage: 2.5,
+  longDays: 90,
+  minSpreadPp: 3,
+  rateBufferPp: 10,
+} as const;
+
+/**
  * Without an executable quote, an AMM entry (PT) is only estimated while the amount
  * stays under this share of the pool's liquidity; price impact is then small but
  * still listed as not included.

@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Calculator, ExternalLink, TrendingDown, TrendingUp } from 'lucide-react';
 import { buckets, leaderLoop, leaderYt, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import type { Opportunity } from '../../types/opportunity';
-import { defaultLoopSettings, defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
+import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
+import { PT_LOOP_POLICY } from '../../lib/opportunity/policy';
 import thresholds from '../../config/thresholds.json';
 import { isStable } from '../../lib/risk/opportunities';
 import { listingLink, marketAddress } from '../../lib/market/links';
@@ -88,6 +89,11 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
           {row.lender && (
             <Pill tone="info">
               وام <bdi dir="ltr">{row.lender.debtSymbol}</bdi> از <bdi dir="ltr">{row.lender.protocol}</bdi> · بهره <Num>{formatPercent(row.lender.borrowPct, 2)}</Num> · LLTV <Num>{formatPercent(row.lender.lltvPct, 1)}</Num>
+            </Pill>
+          )}
+          {row.leverage != null && (
+            <Pill tone={row.leverage < PT_LOOP_POLICY.maxLeverage ? 'warning' : 'muted'}>
+              اهرم <Num>{formatNumber(row.leverage, 1)}</Num>×{row.leverageReason && <span className="text-muted"> · {row.leverageReason}</span>}
             </Pill>
           )}
           {strategy === 'loop' && row.health != null && (
@@ -217,14 +223,13 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   const [fee, setFee] = useState(defaultScreenSettings.feePercent);
   const [by, setBy] = useState<RankBy>('total');
   const [pointsOnly, setPointsOnly] = useState(false);
-  const [leverage, setLeverage] = useState(defaultLoopSettings.leverage);
   const [hurdle, setHurdle] = useState(8);
   const s = useMemo(() => ({ ...defaultScreenSettings, feePercent: Number.isFinite(fee) ? Math.max(0, fee) : 0 }), [fee]);
   const lendingOpps = lending?.opportunities ?? null;
   const board: LoopBoard | null = useMemo(() => {
     if (strategy !== 'loop' || !(capital > 0) || !lendingOpps) return null;
-    return leaderLoop(markets, s, lendingOpps, { leverage: Number.isFinite(leverage) ? leverage : 1 }, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
-  }, [strategy, markets, s, lendingOpps, capital, leverage, hurdle]);
+    return leaderLoop(markets, s, lendingOpps, { capital, hurdle: Number.isFinite(hurdle) ? hurdle : 8 });
+  }, [strategy, markets, s, lendingOpps, capital, hurdle]);
   const rows = useMemo(() => {
     if (!(capital > 0)) return [];
     if (strategy === 'loop') return board?.rows ?? [];
@@ -253,16 +258,18 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
           )}
         </div>
         {strategy === 'loop' && (
-          <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-            <NumberField label="اهرم" value={leverage} onChange={setLeverage} suffix="×" />
+          <div className="grid grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] gap-3 items-end">
             <NumberField label="حداقل بازده سالانه" value={hurdle} onChange={setHurdle} suffix="%" />
+            <p className="text-xs text-secondary leading-6">
+              اهرم هر لوپ از داده‌ی زنده‌ی همان بازار: <Num>{formatNumber(PT_LOOP_POLICY.maxLeverage, 0)}</Num>×، یا <Num>{formatNumber(PT_LOOP_POLICY.cautiousLeverage, 1)}</Num>× اگر برابری با دلار تأیید نشده، فاصله‌ی نرخ PT و وام کمتر از <Num>{formatNumber(PT_LOOP_POLICY.minSpreadPp, 0)}</Num> واحد درصد یا سررسید بیش از <Num>{formatNumber(PT_LOOP_POLICY.longDays, 0)}</Num> روز باشد؛ و در هر حال سلامت دست‌کم <Num>{formatNumber(PT_LOOP_POLICY.minHealth, 2)}</Num>.
+            </p>
           </div>
         )}
         {board && (board.liquidated > 0 || board.shortLiquidity > 0) && (
           <p className="text-xs text-warning leading-6">
             {board.liquidated > 0 && (
               <>
-                <Num>{formatNumber(board.liquidated, 0)}</Num> لوپ با این اهرم در LLTV بازار وام خودش از همان ورود لیکویید می‌شود و نیامده است.{' '}
+                <Num>{formatNumber(board.liquidated, 0)}</Num> بازار وام LLTV پایینی دارد و با سلامت <Num>{formatNumber(PT_LOOP_POLICY.minHealth, 2)}</Num> اهرمی نمی‌دهد؛ نیامده است.{' '}
               </>
             )}
             {board.shortLiquidity > 0 && (

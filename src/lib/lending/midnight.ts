@@ -1,7 +1,8 @@
 import lending from '../../config/lending.json';
 import type { BookLevel, Opportunity, OrderBook } from '../../types/opportunity';
 import { networkByChainId } from '../registry/networks';
-import { UpstreamError, fetchJson, isObject, postGraphql } from '../protocols/base';
+import { UpstreamError, fetchJson, isObject, mapLimit, postGraphql } from '../protocols/base';
+import { HORIZONS } from '../opportunity/policy';
 import { formatPercent } from '../utils/formatting';
 
 /**
@@ -60,7 +61,7 @@ export interface TokenInfo {
   logoURI: string | null;
 }
 
-const isBooks = (b: unknown): b is { data: RawBook[]; cursor: string | null } => isObject<{ data: unknown }>(b) && Array.isArray(b.data);
+const isBooks = (b: unknown): b is { data: RawBook[]; cursor?: string | null } => isObject<{ data: unknown }>(b) && Array.isArray(b.data);
 const isLevels = (b: unknown): b is { data: RawLevel[] } => isObject<{ data: unknown }>(b) && Array.isArray(b.data);
 
 function levels(raw: RawLevel[], decimals: number): BookLevel[] {
@@ -132,54 +133,81 @@ export function midnightOpportunity(b: RawBook, tokens: Map<string, TokenInfo>, 
 
 // ─── Fetch ───────────────────────────────────────────────────────────────────
 
-const ASSET_QUERY = (n: number) =>
-  `query YieldXMidnightTokens(${Array.from({ length: n }, (_, i) => `$a${i}: String!, $c${i}: Int`).join(', ')}) {\n${Array.from({ length: n }, (_, i) => `  t${i}: assetByAddress(address: $a${i}, chainId: $c${i}) { address symbol decimals priceUsd logoURI }`).join('\n')}\n}`;
+// One list query per chain: `assetByAddress` for several tokens fails as a whole when any
+// one is unknown to Morpho (data: null), while a filtered list simply leaves it out.
+const ASSETS_QUERY = `query YieldXMidnightTokens($chain: Int!, $addresses: [String!]!, $first: Int!) {
+  assets(first: $first, where: { chainId_in: [$chain], address_in: $addresses }) {
+    items { address symbol decimals logoURI price { usd } }
+  }
+}`;
+
+interface RawAssetItem {
+  address: string;
+  symbol?: string;
+  decimals?: number;
+  logoURI?: string | null;
+  price?: { usd?: number | null } | null;
+}
 
 /** Symbol, decimals and USD price for each (chain, token) pair, from Morpho's API; missing ones are simply absent. */
 export async function fetchTokens(pairs: { chainId: number; address: string }[]): Promise<Map<string, TokenInfo>> {
-  const unique = [...new Map(pairs.filter((p) => isAddress(p.address)).map((p) => [`${p.chainId}:${p.address.toLowerCase()}`, p])).values()].slice(0, CFG.maxTokens);
+  const byChain = new Map<number, Set<string>>();
+  for (const p of pairs) if (isAddress(p.address)) byChain.set(p.chainId, (byChain.get(p.chainId) ?? new Set()).add(p.address.toLowerCase()));
   const out = new Map<string, TokenInfo>();
-  if (!unique.length) return out;
-  const vars: Record<string, unknown> = {};
-  unique.forEach((p, i) => {
-    vars[`a${i}`] = p.address;
-    vars[`c${i}`] = p.chainId;
-  });
-  // Unknown tokens make assetByAddress error; keep whatever resolved.
-  let data: Record<string, { symbol?: string; decimals?: number; priceUsd?: number | null; logoURI?: string | null } | null>;
-  try {
-    data = await postGraphql(lending.morpho.name, lending.morpho.graphql, ASSET_QUERY(unique.length), vars, (b): b is typeof data => isObject(b));
-  } catch {
-    return out;
-  }
-  unique.forEach((p, i) => {
-    const t = data[`t${i}`];
-    if (t && typeof t.symbol === 'string' && typeof t.decimals === 'number') {
-      out.set(`${p.chainId}:${p.address.toLowerCase()}`, { symbol: t.symbol, decimals: t.decimals, priceUsd: typeof t.priceUsd === 'number' && t.priceUsd > 0 ? t.priceUsd : null, logoURI: t.logoURI ?? null });
-    }
-  });
+  await Promise.all(
+    [...byChain].map(async ([chainId, set]) => {
+      const addresses = [...set].slice(0, CFG.maxTokens);
+      try {
+        const d = await postGraphql(lending.morpho.name, lending.morpho.graphql, ASSETS_QUERY, { chain: chainId, addresses, first: addresses.length }, (b): b is { assets: { items: RawAssetItem[] } } => isObject(b) && isObject((b as { assets?: unknown }).assets));
+        for (const t of d.assets.items ?? []) {
+          if (!isAddress(t.address) || typeof t.symbol !== 'string' || typeof t.decimals !== 'number') continue;
+          const usd = t.price?.usd;
+          out.set(`${chainId}:${t.address.toLowerCase()}`, { symbol: t.symbol, decimals: t.decimals, priceUsd: typeof usd === 'number' && usd > 0 ? usd : null, logoURI: t.logoURI ?? null });
+        }
+      } catch {
+        /* this chain's tokens stay unknown: its books are marked insufficient */
+      }
+    }),
+  );
   return out;
 }
 
+/** One chain's books, nearest maturity first, until maturities pass the longest horizon (they cannot be ranked). */
+async function listBooks(chainId: number, now: number): Promise<RawBook[]> {
+  const until = now / 1000 + Math.max(...HORIZONS) * 86_400;
+  const out: RawBook[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < CFG.maxPages; page++) {
+    const q = new URLSearchParams({ chain_ids: String(chainId), limit: String(CFG.pageSize), sort: 'maturity' });
+    if (cursor) q.set('cursor', cursor);
+    const d = await fetchJson(CFG.name, `${CFG.api}/books?${q}`, isBooks);
+    out.push(...d.data);
+    cursor = d.cursor ?? null;
+    if (!cursor || !d.data.length || d.data[d.data.length - 1].maturity > until) break;
+  }
+  return out.filter((b) => b.maturity <= until);
+}
+
 export async function fetchMidnight(fetchedAt: string, now = Date.now()): Promise<Opportunity[]> {
-  const q = new URLSearchParams({ chain_ids: CFG.chains.join(','), limit: String(CFG.maxBooks), sort: 'maturity' });
-  const { data } = await fetchJson(CFG.name, `${CFG.api}/books?${q}`, isBooks);
-  const live = data.filter((b) => b?.market_id && b.maturity * 1000 > now);
+  // The API takes one chain per request and at most 20 books per page (seen 2026-10-01).
+  const lists = await Promise.all(CFG.chains.map((c) => listBooks(c, now)));
+  // A book with no quote on either side can neither lend nor borrow: no row for it.
+  const live = lists.flat().filter((b) => b?.market_id && b.maturity * 1000 > now && ((b.asks?.length ?? 0) > 0 || (b.bids?.length ?? 0) > 0));
   // Full depth per side: the list only carries the top levels.
-  const depth = await Promise.all(
-    live.map(async (b) => {
-      const side = async (s: 'asks' | 'bids') => {
-        try {
-          return (await fetchJson(CFG.name, `${CFG.api}/books/${encodeURIComponent(b.market_id)}/${s}?depth=${CFG.depth}`, isLevels)).data;
-        } catch (e) {
-          if (e instanceof UpstreamError) return null;
-          throw e;
-        }
-      };
-      const [asks, bids] = await Promise.all([side('asks'), side('bids')]);
+  const side = async (b: RawBook, s: 'asks' | 'bids') => {
+    try {
+      return (await fetchJson(CFG.name, `${CFG.api}/books/${encodeURIComponent(b.market_id)}/${s}?depth=${CFG.depth}`, isLevels)).data;
+    } catch (e) {
+      if (e instanceof UpstreamError) return null;
+      throw e;
+    }
+  };
+  const depth = (
+    await mapLimit(live, CFG.concurrency, async (b) => {
+      const [asks, bids] = await Promise.all([side(b, 'asks'), side(b, 'bids')]);
       return asks && bids ? { asks, bids } : undefined;
-    }),
-  );
+    })
+  ).map((r) => (r.status === 'fulfilled' ? r.value : undefined));
   const tokens = await fetchTokens(live.flatMap((b) => [{ chainId: b.chain_id, address: b.loan_token }, ...(b.collaterals ?? []).map((c) => ({ chainId: b.chain_id, address: c.token }))]));
   return live.map((b, i) => midnightOpportunity(b, tokens, fetchedAt, depth[i])).filter((o): o is Opportunity => o !== null);
 }

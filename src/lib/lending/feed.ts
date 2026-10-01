@@ -23,13 +23,15 @@ interface Source {
   /** How long a good copy is served before asking upstream again (per source: limits and cost differ). */
   ttlMs: number;
   load: (fetchedAt: string) => Promise<Opportunity[]>;
+  /** Slow source: once cached, refresh in the background instead of making the feed wait. */
+  background?: boolean;
 }
 
 export const SOURCES: Source[] = [
   { id: 'morpho', name: 'Morpho', ttlMs: 60_000, load: async (at) => normalizeMorpho(await fetchMorpho(), at) },
   { id: 'aave', name: 'Aave V4', ttlMs: 60_000, load: async (at) => normalizeAave(await fetchAave(), at) },
   // Order books: several requests per market.
-  { id: 'midnight', name: 'Morpho Midnight', ttlMs: 2 * 60_000, load: (at) => fetchMidnight(at, new Date(at).getTime()) },
+  { id: 'midnight', name: 'Morpho Midnight', ttlMs: 2 * 60_000, load: (at) => fetchMidnight(at, new Date(at).getTime()), background: true },
   // Two requests per Kamino market; vault pages for Loopscale.
   { id: 'kamino', name: 'Kamino', ttlMs: 5 * 60_000, load: (at) => fetchKamino(at) },
   { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at) },
@@ -61,6 +63,12 @@ async function refresh(s: Source, now: number): Promise<Cached> {
 async function one(s: Source, now: number): Promise<{ list: Opportunity[]; status: SourceStatus }> {
   const hit = cache.get(s.id);
   if (hit && now - hit.at < s.ttlMs) return { list: hit.list, status: { id: s.id, name: s.name, state: 'ok', fetchedAt: hit.fetchedAt, count: hit.list.length, error: null } };
+  // Past its TTL but recent: serve the copy now and refresh behind it, so one slow source
+  // (Midnight pages through hundreds of books) never holds up the whole feed.
+  if (hit && s.background && now - hit.at < GRACE_MS) {
+    void refresh(s, now).catch(() => {});
+    return { list: hit.list, status: { id: s.id, name: s.name, state: 'ok', fetchedAt: hit.fetchedAt, count: hit.list.length, error: null } };
+  }
   try {
     const c = await refresh(s, now);
     return { list: c.list, status: { id: s.id, name: s.name, state: 'ok', fetchedAt: c.fetchedAt, count: c.list.length, error: null } };

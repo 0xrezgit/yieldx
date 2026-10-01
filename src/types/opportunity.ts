@@ -177,6 +177,8 @@ export interface LoopSpec {
   debt: { token: TokenRef; side: BorrowSide };
   maxLtv: number;
   pairClass: 'usd' | 'eth' | 'btc';
+  /** PT loops: false when the PT's dollar peg rests only on its name. */
+  pegVerified?: boolean;
 }
 
 export type DataQuality = 'current' | 'stale' | 'partial' | 'insufficient';
@@ -316,6 +318,8 @@ export interface LeverageResult {
   maxSafe: number;
   /** The leverage policy that chose it (versioned). */
   policy: string;
+  /** PT loops: why this leverage, in Persian (e.g. «سررسید طولانی»). */
+  reason?: string;
   /** Own money in, total collateral and debt, USD. */
   equity: number;
   gross: number;

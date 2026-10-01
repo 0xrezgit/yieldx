@@ -5,7 +5,7 @@ import { DEX_CHAINS, marketFromPairs } from '../../src/lib/merkl/markets';
 import { buildContext, checkRewardPrice, dedupe, gate, isMeme, RULES, suspicion, type VetContext } from '../../src/lib/merkl/vetting';
 import { calcCampaign, CONSERVATIVE, estimate, nativeYield, poolFeeTier, sellImpact, type Estimate, type EstimateSettings, type NoEstimate } from '../../src/lib/merkl/profit';
 import { flags, hasRobinhoodMeme, liveAt } from '../../src/lib/merkl/filters';
-import { tokenKey, type GasQuote, type MerklOpportunity, type TokenMarket } from '../../src/lib/merkl/types';
+import { tokenKey, type GasQuote, type MerklOpportunity, type SellQuote, type TokenMarket } from '../../src/lib/merkl/types';
 
 /**
  * Real Merkl API v4 responses and DexScreener markets captured on 2026-09-30,
@@ -23,8 +23,12 @@ const byId = (id: string) => {
   return o;
 };
 const chains = Object.keys(DEX_CHAINS).map(Number);
-const ctxFor = (list: MerklOpportunity[], markets = fx.markets): VetContext => buildContext(list, markets, chains, NOW);
-const ctx = ctxFor(ops);
+const ctxFor = (list: MerklOpportunity[], markets = fx.markets, sells: Record<string, SellQuote | null> = {}): VetContext => buildContext(list, markets, chains, NOW, sells);
+/** The fixture has no sale quotes; for the money tests every priced reward is given a clean route at Merkl's price. */
+const routes: Record<string, SellQuote> = Object.fromEntries(
+  ops.flatMap((o) => o.campaigns.map((c) => c.rewardToken)).filter((t) => t.price !== null).map((t) => [tokenKey(t.chainId, t.address), { keptPct: 99.5, usdPerToken: t.price as number, via: null, source: 'KyberSwap' as const }]),
+);
+const ctx = ctxFor(ops, fx.markets, routes);
 const gas: GasQuote[] = [{ chainId: 1, gwei: 0.263, nativeUsd: 2700, at: NOW * 1000 }];
 const S: EstimateSettings = { capital: 1000, horizon: 30, txEthereum: 1, txOther: 0.05 };
 const est = (o: MerklOpportunity, s: EstimateSettings = S, c: VetContext = ctx) => {
@@ -154,6 +158,23 @@ describe('estimated net profit', () => {
     expect(nativeYield(old, NOW).counted).toBe(false);
   });
 
+  it('counts a reward in dollars only when it can be sold: a sale route, else a deep DEX market', () => {
+    const carrotToken = byId(CARROT_POOL).campaigns[0].rewardToken;
+    const key = tokenKey(carrotToken.chainId, carrotToken.address);
+    const quote = (q: Partial<SellQuote>): SellQuote => ({ keptPct: 99.5, usdPerToken: carrotToken.price as number, via: null, source: 'KyberSwap', ...q });
+    // No route and no DEX pair: listed, never in dollars.
+    expect(checkRewardPrice(carrotToken, ctxFor(ops)).reason?.code).toBe('unsellable');
+    expect(checkRewardPrice(carrotToken, ctxFor(ops, fx.markets, { [key]: null })).reason?.code).toBe('unsellable');
+    // A clean route makes it sellable; a wrapper is followed to what it becomes when claimed.
+    expect(checkRewardPrice(carrotToken, ctxFor(ops, fx.markets, { [key]: quote({}) })).ok).toBe(true);
+    const viaCheck = checkRewardPrice(carrotToken, ctxFor(ops, fx.markets, { [key]: quote({ via: 'CARROT' }) }));
+    expect(viaCheck.ok).toBe(true);
+    expect(viaCheck.caveats.join()).toContain('CARROT');
+    // Selling loses more than 5%, or sells far from Merkl's price: not counted.
+    expect(checkRewardPrice(carrotToken, ctxFor(ops, fx.markets, { [key]: quote({ keptPct: 90 }) })).reason?.code).toBe('sell-impact');
+    expect(checkRewardPrice(carrotToken, ctxFor(ops, fx.markets, { [key]: quote({ usdPerToken: (carrotToken.price as number) / 2 }) })).reason?.code).toBe('price-gap');
+  });
+
   it('separates measured, assumed and model costs and lists the unknown ones', () => {
     const eth = est(byId(MORPHO_USD3));
     expect(eth.costs.find((c) => c.key === 'gas-entry')!.basis).toBe('measured');
@@ -175,7 +196,6 @@ describe('estimated net profit', () => {
     const carrot = est(pool);
     expect(carrot.costs.some((c) => c.key === 'sell-impact')).toBe(false);
     expect(carrot.unknownCosts.join()).toContain('mtwCARROT');
-    expect(carrot.why.join()).toContain('mtwCARROT');
     expect(sellImpact(1000, 1_000_000)).toBeCloseTo((1000 * 1000) / (500_000 + 1000), 9);
     expect(poolFeeTier({ ...pool, name: 'Provide liquidity to UniswapV4 SPY-NVDA 0.05%' })).toBeCloseTo(0.0005, 9);
     expect(poolFeeTier({ ...pool, action: 'LEND', name: 'Supply USDC on USD3/USDC 91.5%' })).toBeNull();

@@ -2,7 +2,7 @@ import thresholds from '../../config/thresholds.json';
 import type { Opportunity } from '../../types/opportunity';
 import { BASE_RATE_KIND, simulateLoop, simulateYt, YT_YIELD_FEE_PCT } from '../calculators/trade';
 import { ptOpportunity } from '../opportunity/from-market';
-import { ptLenders } from '../opportunity/leverage';
+import { PT_LEVERAGE_REASON, ptLenders, ptLoopLeverage } from '../opportunity/leverage';
 import { rateAfterBorrow } from '../opportunity/curve';
 import type { OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
@@ -13,8 +13,8 @@ import { isLoopable, isStable } from './opportunities';
  *
  * - A PT loop is built only on a real lending market that takes this exact PT as
  *   collateral (the market analysis' own matching): its borrow rate after the user's
- *   borrow, its LLTV and its borrowable liquidity. The user sets the leverage; the loop
- *   is held to maturity. A PT without such a market gets no dollar figure — without a
+ *   borrow, its LLTV and its borrowable liquidity. Leverage follows the PT loop policy
+ *   (`ptLoopLeverage`: 3× or 2.5× by the market's own live data); held to maturity. A PT without such a market gets no dollar figure — without a
  *   place to post the PT there is no loop. A loop liquidatable at entry (health below 1)
  *   or larger than the market can lend is left out and counted.
  * - YT is sold on its best day — the day with the highest cash result at today's
@@ -54,6 +54,9 @@ export interface LeaderRow {
   lender?: LoopLender;
   /** Unique row key (a PT can have several lending markets). */
   id?: string;
+  /** Loop only: the leverage used (PT loop policy) and why. */
+  leverage?: number;
+  leverageReason?: string;
   /** Loop only: false when the PT's dollar peg rests only on its name (see `ptClassOf`). */
   pegVerified?: boolean;
 }
@@ -78,7 +81,7 @@ export interface LoopBoard {
   rows: LeaderRow[];
   /** Loop candidates with no lending market for their PT in YieldX's sources: no dollar figure. */
   noLender: { m: OpportunityListing; pendleLoop: boolean }[];
-  /** Loops left out: liquidatable at entry at the market's LLTV, or bigger than it can lend. */
+  /** Loops left out: the policy allows no leverage at the market's LLTV, or it cannot lend enough. */
   liquidated: number;
   shortLiquidity: number;
 }
@@ -107,9 +110,8 @@ const fixedVerdict = (annualized: number, hurdle: number): Verdict => (annualize
  * the market analysis (markets with a borrow side). Markets Pendle lists for looping,
  * or deep stablecoin markets, that have no lending market are returned in `noLender`.
  */
-export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, lending: Opportunity[], l: { leverage: number }, i: LeaderInput, fetchedAt = new Date().toISOString()): LoopBoard {
+export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, lending: Opportunity[], i: LeaderInput, fetchedAt = new Date().toISOString()): LoopBoard {
   const board: LoopBoard = { rows: [], noLender: [], liquidated: 0, shortLiquidity: 0 };
-  const L = Math.max(1, l.leverage);
   for (const m of markets) {
     if (!(eligible(m, s) && m.daysToMaturity >= thresholds.opportunities.loopMinDays)) continue;
     const pt = ptOpportunity(m.protocol, m, fetchedAt);
@@ -119,17 +121,23 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
       continue;
     }
     const D = m.daysToMaturity;
-    const debt = i.capital * (L - 1);
     for (const { lender, collateral, debt: token } of lenders) {
       const side = lender.borrow!;
+      const lltv = collateral.maxLtv * 100;
+      const now = side.ratePct as number;
+      // PT loop policy (shared with the market analysis): 3× or 2.5×, lower only for health or a rate jump.
+      const { leverage: L, reason } = ptLoopLeverage({ impliedPct: m.impliedAPY, borrowPct: now, days: D, lltvPct: lltv, pegVerified: pt.ptClass?.pegVerified !== false, feePercent: s.feePercent });
+      if (!(L > 1)) {
+        board.liquidated++;
+        continue;
+      }
+      const debt = i.capital * (L - 1);
       if (side.availableUsd !== null && debt > side.availableUsd) {
         board.shortLiquidity++;
         continue;
       }
-      const now = side.ratePct as number;
       const after = side.curve ? rateAfterBorrow(side.curve, debt, now) : null;
       const rate = after ?? now;
-      const lltv = collateral.maxLtv * 100;
       const r = simulateLoop({ capital: i.capital, daysToMaturity: D, entryAPY: m.impliedAPY, leverage: L, borrowAPY: rate, lltv, feePercent: s.feePercent });
       if (r.healthFactor < 1) {
         board.liquidated++;
@@ -139,6 +147,8 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
       board.rows.push({
         m,
         id: `${m.protocol}-${m.id}-${lender.key}`,
+        leverage: L,
+        leverageReason: PT_LEVERAGE_REASON[reason],
         pnl: r.profit,
         pnlPercent: (r.profit / i.capital) * 100,
         days: D,

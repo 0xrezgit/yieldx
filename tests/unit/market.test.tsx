@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 import type { Opportunity, RewardStream } from '../../src/types/opportunity';
 import { evaluate, selectHorizon } from '../../src/lib/market/analysis';
-import { HORIZONS, LEVERAGE_POLICY, MAX_POOL_SHARE_WITHOUT_QUOTE, TOP_LIMIT } from '../../src/lib/opportunity/policy';
+import { HORIZONS, LEVERAGE_POLICY, MAX_POOL_SHARE_WITHOUT_QUOTE, PT_LOOP_POLICY, TOP_LIMIT } from '../../src/lib/opportunity/policy';
 import { buildPtLoops } from '../../src/lib/opportunity/leverage';
 import { estimate } from '../../src/lib/opportunity/estimate';
 import { ytOpportunity } from '../../src/lib/opportunity/from-market';
@@ -211,7 +211,8 @@ describe('leverage and PT loops', () => {
     const e = loop.byHorizon[60];
     expect(e.earningDays).toBe(45);
     const x = e.leverage!;
-    expect(x.policy).toBe(LEVERAGE_POLICY.version);
+    expect(x.policy).toBe(PT_LOOP_POLICY.version);
+    expect(x.leverage).toBeLessThanOrEqual(PT_LOOP_POLICY.maxLeverage);
     expect(e.debtCost).toBeCloseTo(x.debt * (Math.pow(1.05, 45 / 365) - 1), 9);
     expect(e.baseIncome).toBeCloseTo(x.gross * (Math.pow(1.12, 45 / 365) - 1), 9);
     expect(loop.byHorizon[125].net).toBeCloseTo(e.net!, 9);
