@@ -21,6 +21,8 @@ export interface LpPrefill {
   rewardUsd?: number | null;
   capital?: number;
   days?: number;
+  /** Where feeApr came from; Merkl by default (older links carry no source). */
+  source?: 'merkl' | 'vfat';
 }
 
 export function readLpPrefill(q: URLSearchParams): LpPrefill {
@@ -38,6 +40,7 @@ export function readLpPrefill(q: URLSearchParams): LpPrefill {
     rewardUsd: n('rewardUsd'),
     capital: n('capital') ?? undefined,
     days: n('days') ?? undefined,
+    source: q.get('src') === 'vfat' ? 'vfat' : undefined,
   };
 }
 
@@ -52,6 +55,7 @@ export function lpLink(p: LpPrefill): string {
   if (p.rewardUsd != null && Number.isFinite(p.rewardUsd)) q.set('rewardUsd', String(Math.round(p.rewardUsd * 100) / 100));
   if (p.capital) q.set('capital', String(p.capital));
   if (p.days) q.set('days', String(p.days));
+  if (p.source === 'vfat') q.set('src', 'vfat');
   return `/tools?${q}`;
 }
 
@@ -110,7 +114,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
           onChange={setFee}
           suffix="٪"
           help="بهتر است کارمزد تحقق‌یافته‌ی ۷ یا ۳۰ روز گذشته باشد. نرخ میانگین استخر برای بازه‌ی باریک کمتر از درآمد واقعی است؛ اینجا همان به کار می‌رود (محافظه‌کارانه)."
-          note={prefill.feeApr != null ? 'از Merkl: بازده بومی استخر (کارمزد) به نرخ فعلی' : undefined}
+          note={prefill.feeApr == null ? undefined : prefill.source === 'vfat' ? 'از vfat: کارمزد واقعی ۷ روز گذشته، میانگین کل استخر' : 'از Merkl: بازده بومی استخر (کارمزد) به نرخ فعلی'}
           warning={Number.isFinite(fee) ? undefined : 'بدون نرخ کارمزد.'}
         />
         {fromMerkl ? (

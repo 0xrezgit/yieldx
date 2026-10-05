@@ -18,6 +18,7 @@ import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from '../
 import { applyFilters, defaultFilters, FilterBar, type Filters } from '../opportunities/filters';
 import { LpAnalyzer, readLpPrefill, type LpPrefill } from '../opportunities/LpAnalyzer';
 import { BorrowTool } from './BorrowTool';
+import { LpPools } from './LpPools';
 
 type Tab = 'yt' | 'calc' | 'lp' | 'borrow';
 const TABS: Tab[] = ['yt', 'calc', 'lp', 'borrow'];
@@ -184,7 +185,19 @@ export default function Tools() {
         />
       </div>
 
-      {tab === 'lp' && <LpAnalyzer key={JSON.stringify(lpPrefill)} prefill={lpPrefill} />}
+      {tab === 'lp' && (
+        <>
+          <LpPools
+            onPick={(p) => {
+              setLpPrefill(p);
+              requestAnimationFrame(() => document.getElementById('lp-analyzer')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+            }}
+          />
+          <div id="lp-analyzer" className="scroll-mt-28">
+            <LpAnalyzer key={JSON.stringify(lpPrefill)} prefill={lpPrefill} />
+          </div>
+        </>
+      )}
       {tab === 'borrow' && <BorrowTool />}
 
       {tab === 'yt' && (
