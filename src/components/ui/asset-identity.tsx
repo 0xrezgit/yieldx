@@ -5,6 +5,7 @@ import { networkByName } from '../../lib/registry/networks';
 import { protocolIdentity } from '../../lib/registry/identity';
 import { formatDate, formatGregorian } from '../../lib/utils/formatting';
 import { TokenLogo } from './token-logo';
+import { tokenInfo } from '../../lib/portfolio/tokens';
 
 export type IdentitySize = 24 | 32 | 48;
 
@@ -19,9 +20,11 @@ const TEXT: Record<IdentitySize, { name: string; sub: string }> = {
 export function LogoWithNetwork({ icon, name, chain, size }: { icon?: string | null; name: string; chain: string; size: IdentitySize }) {
   const net = networkByName(chain);
   const b = BADGE[size];
+  // No logo from the source: a well-known token (USDC, ETH…) still gets its own.
+  const src = icon || tokenInfo(name)?.logo || null;
   return (
     <span className="relative shrink-0" style={{ width: size, height: size }}>
-      <TokenLogo src={icon} name={name} size={size} />
+      <TokenLogo src={src} name={name} size={size} />
       {chain && (
         <span className="absolute rounded-full ring-2 ring-surface bg-surface" style={{ insetInlineStart: -Math.round(b / 3), bottom: -Math.round(b / 3), width: b, height: b }} title={net.nameFa}>
           <TokenLogo src={net.logo} name={net.name} size={b} />

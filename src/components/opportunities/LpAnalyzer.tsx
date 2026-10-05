@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Droplets, SlidersHorizontal } from 'lucide-react';
-import { breakEven, defaultMoves, scenario, type LpInput, type LpScenario, type PoolShape } from '../../lib/lp/scenarios';
+import { Droplets, ExternalLink, SlidersHorizontal } from 'lucide-react';
+import { breakEven, defaultMoves, positionFeeApr, scenario, type LpInput, type LpScenario, type PoolShape } from '../../lib/lp/scenarios';
 import { typicalMove } from '../../lib/lp/estimate';
 import { logoOf } from '../../lib/lp/pools';
+import type { RealLpStats } from '../../lib/lp/revert';
 import { tokenInfo } from '../../lib/portfolio/tokens';
 import { tokenClass } from '../../lib/merkl/vetting';
 import { networkByName } from '../../lib/registry/networks';
@@ -37,6 +38,18 @@ export interface LpPrefill {
   protocol?: string;
   /** The pool's measured 7-day swing (95th percentile, percent): sets the scenarios. */
   move7d?: { down: number; up: number };
+  /** Concentrated-liquidity pool: positions take a price range. */
+  concentrated?: boolean;
+  /** This market's deposit page. */
+  url?: string;
+  /** The same pool on Revert (automatic range management). */
+  revertUrl?: string;
+  /** Days of history behind feeApr, the last week's rate (trend), and Aerodrome's unstaked-fee share (already out). Not carried in links. */
+  feeDays?: number;
+  feeTrendPct?: number | null;
+  unstakedFee?: number;
+  /** How the pool's real LPs have done (Revert; not carried in links). */
+  realLps?: RealLpStats | null;
   /** Logo URLs (not carried in links). */
   logoA?: string | null;
   logoB?: string | null;
@@ -63,6 +76,10 @@ export function readLpPrefill(q: URLSearchParams): LpPrefill {
     chain: q.get('chain') ?? undefined,
     protocol: q.get('dex') ?? undefined,
     move7d: md !== null && mu !== null && md >= 0 && mu >= 0 ? { down: md, up: mu } : undefined,
+    concentrated: q.get('cl') === '1',
+    // Only a vfat page: a link must not send the user anywhere else.
+    url: /^https:\/\/vfat\.io\/farm\?farmId=[^\s"'<>]+$/.test(q.get('go') ?? '') ? (q.get('go') as string) : undefined,
+    revertUrl: /^https:\/\/revert\.finance\/#\/discover\?[^\s"'<>]+$/.test(q.get('rv') ?? '') ? (q.get('rv') as string) : undefined,
   };
 }
 
@@ -84,6 +101,9 @@ export function lpLink(p: LpPrefill): string {
     q.set('md', String(p.move7d.down));
     q.set('mu', String(p.move7d.up));
   }
+  if (p.concentrated) q.set('cl', '1');
+  if (p.url) q.set('go', p.url);
+  if (p.revertUrl) q.set('rv', p.revertUrl);
   return `/tools?${q}`;
 }
 
@@ -177,15 +197,21 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
   const [stable, setStable] = useState(prefill.stable ?? false);
   const [capital, setCapital] = useState(prefill.capital ?? 1000);
   const [days, setDays] = useState(prefill.days ?? 30);
-  const [kind, setKind] = useState<'full' | 'range'>('full');
-  const [below, setBelow] = useState(10);
-  const [above, setAbove] = useState(10);
+  // A concentrated pool opens with the range the pool list assumed: its usual swing over the period.
+  const start = prefill.concentrated && prefill.move7d ? typicalMove({ move7d: prefill.move7d }, prefill.days ?? 30) : null;
+  const pct = (x: number) => Math.round(Math.max(1, x * 100) * 10) / 10;
+  const [kind, setKind] = useState<'full' | 'range'>(start ? 'range' : 'full');
+  const [below, setBelow] = useState(start ? pct(start.down) : 10);
+  const [above, setAbove] = useState(start ? pct(start.up) : 10);
   const [fee, setFee] = useState<number>(prefill.feeApr ?? NaN);
   const [rewardApr, setRewardApr] = useState<number>(0);
   const [costs, setCosts] = useState(0);
   const [custom, setCustom] = useState<number>(NaN);
   const fromMerkl = prefill.rewardUsd != null;
   const fromPool = !!prefill.name;
+  // vfat rates are per full-range dollar; a range earns them times its concentration.
+  const feeBasis = prefill.source === 'vfat' ? 'full-range' : 'position';
+  const canRange = prefill.source !== 'vfat' || !!prefill.concentrated;
 
   const shape: PoolShape = kind === 'full' ? { kind: 'full' } : { kind: 'range', low: 1 - Math.min(99, Math.max(0.1, below)) / 100, high: 1 + Math.max(0.1, above) / 100 };
   const input: LpInput = {
@@ -193,6 +219,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
     days: days > 0 ? days : 0,
     shape,
     feeAprPct: Number.isFinite(fee) ? fee : null,
+    feeBasis,
     rewardUsd: fromMerkl ? (prefill.rewardUsd as number) : null,
     rewardAprPct: fromMerkl ? null : rewardApr,
     costsUsd: costs > 0 ? costs : 0,
@@ -202,6 +229,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
   const rows = ready ? list.map((c) => ({ c, r: scenario(input, c.move) })) : [];
   const be = input.feeAprPct !== null && ready ? breakEven(input) : { down: null, up: null };
   const unitIsDollar = tokenClass({ symbol: b }) === 'usd';
+  const inRangeApr = positionFeeApr(input);
   const chain = prefill.chain ?? '';
   // From a vfat link (no logos carried): a symbol outside the token list is one of the verified stocks.
   const logo = (s: string) => tokenInfo(s)?.logo ?? (prefill.source === 'vfat' ? logoOf(s, 'stock') : null);
@@ -245,10 +273,63 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
             <TextField label="دارایی دوم" value={b} onChange={setB} ltr />
           </div>
         )}
-        <p className="text-sm text-secondary">
-          نرخ کارمزد سالانه: {Number.isFinite(fee) ? <b className="text-primary"><Num>{formatPercent(fee, 1)}</Num></b> : <span className="text-warning">وارد نشده (در «تنظیمات بیشتر»)</span>}
-          {Number.isFinite(fee) && prefill.feeApr != null && <span className="text-xs"> · {prefill.source === 'vfat' ? 'کارمزد واقعی ۷ روز گذشته‌ی استخر (vfat)' : 'بازده کارمزد استخر (Merkl)'}</span>}
+        {canRange && (
+          <div className="flex flex-col gap-2">
+            <Segmented<'full' | 'range'> value={kind} onChange={setKind} label="نوع پوزیشن" size="sm" options={[{ id: 'range', label: 'بازه‌ی قیمت' }, { id: 'full', label: 'تمام‌بازه' }]} />
+            {kind === 'range' && (
+              <div className="grid grid-cols-2 gap-3">
+                <NumberField label="پایین بازه" value={below} onChange={(v) => setBelow(Number.isFinite(v) ? v : 10)} suffix="٪" note="زیر قیمت فعلی" />
+                <NumberField label="بالای بازه" value={above} onChange={(v) => setAbove(Number.isFinite(v) ? v : 10)} suffix="٪" note="بالای قیمت فعلی" />
+              </div>
+            )}
+          </div>
+        )}
+        <p className="text-sm text-secondary leading-7">
+          {inRangeApr === null ? (
+            <span className="text-warning">نرخ کارمزد وارد نشده (در «تنظیمات بیشتر»).</span>
+          ) : (
+            <>
+              درآمد کارمزد این پوزیشن: <b className="text-primary"><Num>{formatPercent(inRangeApr, 1)}</Num></b> سالانه{kind === 'range' && ' تا وقتی قیمت داخل بازه است'}
+              {prefill.feeApr != null && (
+                <span className="text-xs block">
+                  {prefill.source === 'vfat' ? (
+                    <>
+                      از کارمزد واقعی <Num>{formatNumber(prefill.feeDays ?? 30, 0)}</Num> روز گذشته به ازای نقدینگی فعال استخر (vfat){kind === 'range' && <>؛ تمام‌بازه <Num>{formatPercent(fee, 1)}</Num></>}
+                      {!!prefill.unstakedFee && <> · سهم <Num>{formatPercent(prefill.unstakedFee * 100, 0)}</Num> استخر از کارمزد LP بدون استیک کسر شده</>}
+                      {prefill.feeTrendPct != null && Number.isFinite(fee) && fee > 0 && Math.abs(prefill.feeTrendPct / fee - 1) >= 0.2 && (
+                        <span className="block">
+                          هفته‌ی اخیر <Num>{formatPercent(Math.abs(prefill.feeTrendPct / fee - 1) * 100, 0)}</Num> {prefill.feeTrendPct > fee ? 'بالاتر' : 'پایین‌تر'} از میانگین ماه.
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    'بازده کارمزد استخر (Merkl)'
+                  )}
+                </span>
+              )}
+            </>
+          )}
         </p>
+        {prefill.realLps && (
+          <div className="rounded-lg border border-default bg-surface p-3 text-sm text-secondary leading-7">
+            <b className="text-primary">LPهای واقعی همین استخر</b> (<bdi dir="ltr">Revert</bdi>، <Num>{formatNumber(prefill.realLps.count, 0)}</Num> پوزیشن باز بالای ۱۰۰ دلار و یک هفته): کارمزد سالانه‌ی میانه <b className="text-primary"><Num>{formatPercent(prefill.realLps.feeApr.median, 0)}</Num></b> (نیمی بین <Num>{formatPercent(prefill.realLps.feeApr.p25, 0)}</Num> و <Num>{formatPercent(prefill.realLps.feeApr.p75, 0)}</Num>)؛ <Num>{formatPercent(prefill.realLps.inRangePct, 0)}</Num> الان داخل بازه‌اند.
+            <span className="block text-xs text-muted">بازه و زمان ورود هر کدام فرق دارد؛ برای مقایسه است، نه پیش‌بینی پوزیشن شما.</span>
+          </div>
+        )}
+        {(prefill.url || prefill.revertUrl) && (
+          <div className="flex flex-wrap gap-2">
+            {prefill.url && (
+              <a href={prefill.url} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1.5 rounded-md border border-strong px-3 min-h-10 text-sm font-medium text-primary hover:bg-raised">
+                <ExternalLink size={15} aria-hidden /> ورود به همین بازار در <bdi dir="ltr">vfat</bdi>
+              </a>
+            )}
+            {prefill.revertUrl && (
+              <a href={prefill.revertUrl} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-10 text-sm font-medium text-primary hover:bg-raised" title="ساخت پوزیشن با مدیریت خودکار بازه (Auto-Range) و ترکیب خودکار کارمزد">
+                <ExternalLink size={15} aria-hidden /> مدیریت خودکار بازه در <bdi dir="ltr">Revert</bdi>
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {rows.length > 0 && (
@@ -259,7 +340,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
             </h3>
             <p className="text-xs text-secondary leading-6">
               هر کارت یعنی «اگر قیمت <bdi dir="ltr">{a}</bdi> این‌قدر تغییر کند». سناریوی فرضی است و پیش‌بینی نیست.
-              {prefill.move7d && ' «معمول» یعنی تکانی که قیمت این استخر در ۹۵٪ هفته‌های اخیر از آن بیشتر نشده، برای مدت شما بزرگ‌تر شده؛ «شدید» دو برابر آن.'}
+              {prefill.move7d && ' «معمول» یعنی تکانی که قیمت این استخر در ۹۵٪ هفته‌های اخیر از آن بیشتر نشده، برای مدت شما بزرگ‌تر شده؛ «شدید» دو برابر آن. عدد فهرست استخرها میانگین مورد انتظار است؛ این کارت‌ها حالت‌های مشخص‌اند.'}
             </p>
           </div>
           <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -284,6 +365,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
               {unitIsDollar ? '.' : <> — اگر <bdi dir="ltr">{b}</bdi> هم تغییر کند، نتیجه فرق می‌کند.</>}
             </li>
             <li>کارمزد با همین نرخ ادامه فرض شده؛ حجم معاملات آینده معلوم نیست. پاداش‌های جدا و گس حساب نشده‌اند مگر در «تنظیمات بیشتر» وارد کنید.</li>
+            {kind === 'range' && <li>بیرون از بازه کارمزدی نیست و همه‌ی پوزیشن به یکی از دو دارایی تبدیل می‌شود؛ در سناریوهای شدید همین را می‌بینید.</li>}
           </ul>
         </section>
       )}
@@ -291,7 +373,7 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
       <Collapsible title="تنظیمات بیشتر" icon={<SlidersHorizontal size={18} aria-hidden />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <NumberField
-            label="نرخ کارمزد سالانه"
+            label={feeBasis === 'full-range' ? 'نرخ کارمزد سالانه (تمام‌بازه)' : 'نرخ کارمزد سالانه'}
             value={fee}
             onChange={setFee}
             suffix="٪"
@@ -311,17 +393,6 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
             <span className="text-sm text-secondary">هر دو دارایی استیبل‌کوین دلاری‌اند؟</span>
             <Segmented<'no' | 'yes'> value={stable ? 'yes' : 'no'} onChange={(v) => setStable(v === 'yes')} label="جفت استیبل" size="sm" options={[{ id: 'no', label: 'نه' }, { id: 'yes', label: 'بله' }]} />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm text-secondary">نوع پوزیشن</span>
-            <Segmented<'full' | 'range'> value={kind} onChange={setKind} label="نوع پوزیشن" size="sm" options={[{ id: 'full', label: 'تمام‌بازه (ساده)' }, { id: 'range', label: 'بازه‌ی متمرکز' }]} />
-          </div>
-          {kind === 'range' && (
-            <>
-              <NumberField label="پایین بازه، زیر قیمت فعلی" value={below} onChange={(v) => setBelow(Number.isFinite(v) ? v : 10)} suffix="٪" />
-              <NumberField label="بالای بازه، بالای قیمت فعلی" value={above} onChange={(v) => setAbove(Number.isFinite(v) ? v : 10)} suffix="٪" />
-              <p className="text-xs text-muted sm:col-span-2 leading-6">نرخ کارمزد میانگین کل استخر است؛ بازه‌ی باریک تا وقتی قیمت داخلش است بیشتر از این درآمد دارد و اینجا محافظه‌کارانه همان نرخ به کار رفته.</p>
-            </>
-          )}
         </div>
       </Collapsible>
     </section>

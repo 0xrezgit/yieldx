@@ -3,7 +3,8 @@
     "name": "vfat",
     "api": "https://api.vfat.io/v4/yield-opportunities",
     "app": "https://vfat.io/yield",
-    "revalidateS": 300,
+    "revalidateS": 60,
+    "historyRevalidateS": 21600,
     "pageSize": 200,
     "minTvlUsd": 250000,
     "minAgeDays": 7,
@@ -50,5 +51,8 @@
     }
   },
   "stockLogo": "https://financialmodelingprep.com/image-stock/",
-  "_stockLogoNote": "Ticker logos (checked 2026-10-05: all listed tickers answer with an image). A failed image falls back to a monogram."
+  "_stockLogoNote": "Ticker logos (checked 2026-10-05: all listed tickers answer with an image). A failed image falls back to a monogram.",
+  "unstakedFeeRpc": {
+    "8453": "https://base-rpc.publicnode.com"
+  }
 }
