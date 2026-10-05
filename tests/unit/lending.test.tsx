@@ -260,6 +260,7 @@ describe('sources fail independently', () => {
       ['midnight', 'error'],
       ['kamino', 'error'],
       ['loopscale', 'error'],
+      ['revert', 'error'],
     ]);
   });
 

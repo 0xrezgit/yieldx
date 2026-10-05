@@ -1,17 +1,22 @@
 import type { LpPool } from './pools';
-import { scenario, type LpInput, type LpScenario } from './scenarios';
+import { concentration, type LpInput, type PoolShape } from './scenarios';
 
 /**
- * A dollar figure for an LP pool, for ranking the pool list. Deliberately cautious:
+ * An expected dollar figure for an LP pool, for ranking the pool list.
  *
- * - fees: last week's realised fee rate of the whole pool, carried forward, on a
- *   full-range position (a narrow range earns more but can fall out of range);
- * - loss: the worse of the pool's usual swing down or up over the period — vfat's
- *   95th-percentile 7-day move, scaled by √(days ÷ 7) — against simply holding;
- * - incentive rewards and gas are not counted.
+ * - The position: in a concentrated pool, a range as wide as the pool's usual
+ *   swing over the period (vfat's 95th-percentile 7-day move scaled by √(days ÷ 7)),
+ *   so the price usually stays inside; in a plain pool, the full range.
+ * - Fees: the pool's full-range fee rate of the last 7 days (per unit of
+ *   liquidity), times the range's concentration.
+ * - Cost of volatility: an LP keeps selling the asset that rises and buying the
+ *   one that falls. Its expected cost against holding is σ²/8 of the position per
+ *   year for a full-range position (loss-versus-rebalancing, Milionis et al. 2022),
+ *   σ = the pair's realised volatility, and scales with concentration too.
  *
- * It is an estimate on stated assumptions, not a forecast; the analyzer shows the
- * same numbers per scenario.
+ * So the expected result is concentration × (fee rate − σ²/8) × capital × time.
+ * Incentive rewards, gas and leaving the range are not counted. An expectation
+ * on these assumptions, not a forecast; the analyzer shows single outcomes.
  */
 
 /** The pool's usual swing over `days` as fractions (0.08 = 8%), both positive. */
@@ -20,40 +25,55 @@ export function typicalMove(p: Pick<LpPool, 'move7d'>, days: number): { down: nu
   return { down: Math.min(0.9, (p.move7d.down / 100) * k), up: (p.move7d.up / 100) * k };
 }
 
-export const poolInput = (p: Pick<LpPool, 'feeAprPct'>, capital: number, days: number): LpInput => ({
+/** The position the estimate assumes; at least ±1% so a calm pair still has a range. */
+export function suggestedShape(p: Pick<LpPool, 'move7d' | 'concentrated'>, days: number): PoolShape {
+  if (!p.concentrated) return { kind: 'full' };
+  const m = typicalMove(p, days);
+  return { kind: 'range', low: 1 - Math.max(0.01, m.down), high: 1 + Math.max(0.01, m.up) };
+}
+
+export const poolInput = (p: Pick<LpPool, 'feeAprPct' | 'move7d' | 'concentrated'>, capital: number, days: number): LpInput => ({
   capital,
   days,
-  shape: { kind: 'full' },
+  shape: suggestedShape(p, days),
   feeAprPct: p.feeAprPct,
+  feeBasis: 'full-range',
   rewardUsd: null,
   rewardAprPct: 0,
   costsUsd: 0,
 });
 
+/** Expected yearly cost of volatility for a full-range position, % of its value: σ²/8. */
+export const volatilityCostPct = (volAnnualPct: number) => ((volAnnualPct / 100) ** 2 / 8) * 100;
+
 export interface PoolEstimate {
-  /** Fees earned in the worse of the two usual swings. */
+  /** Expected fees over the period. */
   feesUsd: number;
-  /** Loss against holding in that swing (≤ 0). */
+  /** Expected cost of volatility against holding (≤ 0). */
   lossUsd: number;
-  /** Fees + loss: what being an LP adds over holding the same two assets. */
+  /** Fees + loss. */
   netUsd: number;
-  /** The swing used. */
-  move: { down: number; up: number };
+  /** The position assumed. */
+  shape: PoolShape;
+  /** Yearly fee rate of that position while in range, %. */
+  positionAprPct: number;
 }
 
-export function estimatePool(p: Pick<LpPool, 'feeAprPct' | 'move7d'>, capital: number, days: number): PoolEstimate | null {
+type Estimable = Pick<LpPool, 'feeAprPct' | 'move7d' | 'concentrated' | 'volAnnualPct'>;
+
+export function estimatePool(p: Estimable, capital: number, days: number): PoolEstimate | null {
   if (!(capital > 0) || !(days > 0)) return null;
-  const move = typicalMove(p, days);
-  const input = poolInput(p, capital, days);
-  const down = scenario(input, -move.down);
-  const up = scenario(input, move.up);
-  const worse: LpScenario = (down.vsHodlUsd ?? -Infinity) <= (up.vsHodlUsd ?? -Infinity) ? down : up;
-  if (worse.feesUsd === null || worse.vsHodlUsd === null || !Number.isFinite(worse.vsHodlUsd)) return null;
-  return { feesUsd: worse.feesUsd, lossUsd: worse.ilUsd, netUsd: worse.vsHodlUsd, move };
+  const shape = suggestedShape(p, days);
+  const k = concentration(shape);
+  if (!Number.isFinite(k)) return null;
+  const t = days / 365;
+  const feesUsd = capital * t * (p.feeAprPct / 100) * k;
+  const lossUsd = -capital * t * (volatilityCostPct(p.volAnnualPct) / 100) * k;
+  return { feesUsd, lossUsd, netUsd: feesUsd + lossUsd, shape, positionAprPct: p.feeAprPct * k };
 }
 
 /** Pools with their estimate, best dollar figure first. */
-export function rankPools<P extends Pick<LpPool, 'id' | 'feeAprPct' | 'move7d'>>(pools: P[], capital: number, days: number): { pool: P; est: PoolEstimate }[] {
+export function rankPools<P extends Estimable & Pick<LpPool, 'id'>>(pools: P[], capital: number, days: number): { pool: P; est: PoolEstimate }[] {
   const out: { pool: P; est: PoolEstimate }[] = [];
   for (const pool of pools) {
     const est = estimatePool(pool, capital, days);

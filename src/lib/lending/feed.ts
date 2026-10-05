@@ -4,6 +4,7 @@ import { fetchKamino } from './kamino';
 import { fetchLoopscale } from './loopscale';
 import { fetchMidnight } from './midnight';
 import { fetchMorpho, normalizeMorpho } from './morpho';
+import { fetchRevert } from './revert';
 import type { LendingFeed, SourceStatus } from './types';
 
 /**
@@ -35,6 +36,8 @@ export const SOURCES: Source[] = [
   // Two requests per Kamino market; vault pages for Loopscale.
   { id: 'kamino', name: 'Kamino', ttlMs: 5 * 60_000, load: (at) => fetchKamino(at) },
   { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at) },
+  // Daily rate from Revert's API, vault state read on-chain (two RPC batches per vault).
+  { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at) },
 ];
 
 interface Cached {

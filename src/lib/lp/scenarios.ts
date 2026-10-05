@@ -19,8 +19,14 @@ export interface LpInput {
   capital: number;
   days: number;
   shape: PoolShape;
-  /** Trading-fee APR earned on the position while in range, %; null → unknown. */
+  /** Trading-fee APR, %; null → unknown. Its meaning is set by `feeBasis`. */
   feeAprPct: number | null;
+  /**
+   * 'position' (default): the rate this position earns while in range, as typed or
+   * as a pool average. 'full-range': the rate of a full-range dollar (vfat pools);
+   * a range position earns it times its concentration.
+   */
+  feeBasis?: 'position' | 'full-range';
   /** Rewards over the period, USD (e.g. Merkl engine), or null → use `rewardAprPct`. */
   rewardUsd: number | null;
   rewardAprPct: number | null;
@@ -56,6 +62,21 @@ function amounts(L: number, p: number, a: number, b: number) {
 
 const bounds = (s: PoolShape): [number, number] => (s.kind === 'full' ? [0, Infinity] : [s.low, s.high]);
 
+/**
+ * How many times more liquidity a dollar buys in this shape than over the full
+ * range (1 for full range; ≈ 20 for ±10%). Fees per dollar while in range scale by it.
+ */
+export function concentration(shape: PoolShape): number {
+  if (shape.kind === 'full') return 1;
+  const unit = amounts(1, 1, shape.low, shape.high);
+  const v = unit.x + unit.y;
+  return v > 0 ? 2 / v : NaN;
+}
+
+/** The yearly fee rate this position earns while in range, %. */
+export const positionFeeApr = (input: Pick<LpInput, 'feeAprPct' | 'feeBasis' | 'shape'>): number | null =>
+  input.feeAprPct === null ? null : input.feeBasis === 'full-range' ? input.feeAprPct * concentration(input.shape) : input.feeAprPct;
+
 /** Position value and HODL value at end price `p1` for `capital` deposited at price 1. */
 export function valueAt(shape: PoolShape, capital: number, p1: number) {
   const [a, b] = bounds(shape);
@@ -83,7 +104,8 @@ export function scenario(input: LpInput, move: number): LpScenario {
   const share = inRangeShare(input.shape, p1);
   const t = input.days / 365;
   // Fees accrue on the position's value; average of start and end is used over the path.
-  const feesUsd = input.feeAprPct === null ? null : ((input.capital + position) / 2) * (input.feeAprPct / 100) * t * share;
+  const apr = positionFeeApr(input);
+  const feesUsd = apr === null ? null : ((input.capital + position) / 2) * (apr / 100) * t * share;
   const rewardsUsd = input.rewardUsd ?? (input.rewardAprPct ? input.capital * (input.rewardAprPct / 100) * t : 0);
   const ilUsd = position - hodl;
   return {

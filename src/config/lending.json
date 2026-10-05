@@ -54,5 +54,32 @@
     "pageSize": 50,
     "maxPages": 4,
     "minSupplyUsd": 50000
+  },
+  "revert": {
+    "name": "Revert Lend",
+    "nameFa": "ریورت",
+    "api": "https://api.revert.finance/v1",
+    "app": "https://revert.finance/#/lending",
+    "_note": "USDC lending vaults (ERC-4626 V3Vault). Addresses from docs.revert.finance/revert/resources/contract-addresses (checked 2026-10-05). The Aerodrome vault on Base has no published rate series and is left out.",
+    "vaults": [
+      {
+        "network": "mainnet",
+        "chainId": 1,
+        "address": "0xa2754543f69dC036764bBfad16d2A74F5cD15667",
+        "rpc": "https://ethereum-rpc.publicnode.com"
+      },
+      {
+        "network": "arbitrum",
+        "chainId": 42161,
+        "address": "0x74e6afef5705beb126c6d3bf46f8fad8f3e07825",
+        "rpc": "https://arb1.arbitrum.io/rpc"
+      },
+      {
+        "network": "base",
+        "chainId": 8453,
+        "address": "0x36AEAe0E411a1E28372e0d66f02E57744EbE7599",
+        "rpc": "https://base-rpc.publicnode.com"
+      }
+    ]
   }
 }

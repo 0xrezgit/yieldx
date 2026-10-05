@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, Droplets, Loader2 } from 'lucide-react';
+import { Droplets, ExternalLink, Loader2 } from 'lucide-react';
 import config from '../../config/lp-pools.json';
-import type { AssetClass, LpPool, LpPoolFeed, RejectReason } from '../../lib/lp/pools';
+import type { LpPool, LpPoolFeed, RejectReason } from '../../lib/lp/pools';
 import { rankPools, type PoolEstimate } from '../../lib/lp/estimate';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
 import { networkByChainId } from '../../lib/registry/networks';
-import { formatNumber, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
+import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { DataStatus } from '../ui/data-status';
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
@@ -27,6 +27,7 @@ const REJECT_LABEL: Record<RejectReason, string> = {
   tvl: 'نقدینگی کم',
   age: 'سابقه‌ی کمتر از یک هفته',
   fees: 'بدون کارمزد ثبت‌شده',
+  history: 'بدون تاریخچه‌ی کامل کارمزد',
   outlier: 'نرخ غیرعادی',
   volatility: 'بدون داده‌ی نوسان',
   inactive: 'غیرفعال',
@@ -34,14 +35,8 @@ const REJECT_LABEL: Record<RejectReason, string> = {
 
 const signed = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 
-/** The side used as the price unit (B): a dollar first, then ETH/BTC, a stock last. */
-const UNIT_RANK: Record<AssetClass, number> = { usd: 0, eth: 1, btc: 1, stock: 2 };
-
-/** The pool as A/B: the more volatile side moves (A), the steadier one is the unit (B). */
-export function orient(p: LpPool) {
-  const [x, y] = p.tokens;
-  return UNIT_RANK[x.cls] < UNIT_RANK[y.cls] ? ([y, x] as const) : ([x, y] as const);
-}
+/** The pool as A/B (the pool list already keeps that order). */
+export const orient = (p: LpPool) => p.tokens;
 
 export function toPrefill(p: LpPool, capital?: number, days?: number): LpPrefill {
   const [a, b] = orient(p);
@@ -56,34 +51,72 @@ export function toPrefill(p: LpPool, capital?: number, days?: number): LpPrefill
     stable: p.stable,
     feeApr: Math.round(p.feeAprPct * 100) / 100,
     move7d: p.move7d,
+    concentrated: p.concentrated,
+    url: p.url,
+    revertUrl: p.revert?.url,
+    feeDays: p.feeDays,
+    feeTrendPct: p.feeTrendPct,
+    unstakedFee: p.unstakedFee,
+    realLps: p.realLps ?? null,
     source: 'vfat',
     ...(capital ? { capital } : {}),
     ...(days ? { days } : {}),
   };
 }
 
+/** Live refresh while the page is visible; quicker while the server is still preparing pools. */
+const REFRESH_MS = 60_000;
+const PREPARING_MS = 8_000;
+
 function useLpPools() {
   const [feed, setFeed] = useState<LpPoolFeed | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    fetch('/api/lp-pools')
-      .then((r) => (r.ok ? (r.json() as Promise<LpPoolFeed>) : Promise.reject(new Error(String(r.status)))))
-      .then((f) => live && setFeed(f))
-      .catch(() => live && setFailed(true));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = (ms: number) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(load, ms);
+    };
+    function load() {
+      // A hidden tab does not poll; coming back refreshes at once (below).
+      if (document.visibilityState !== 'visible') return schedule(REFRESH_MS);
+      fetch('/api/lp-pools', { cache: 'no-store' })
+        .then((r) => (r.ok ? (r.json() as Promise<LpPoolFeed>) : Promise.reject(new Error(String(r.status)))))
+        .then((f) => {
+          if (!live) return;
+          setFeed(f);
+          setFailed(false);
+          schedule(f.pending > 0 || f.realPending > 0 ? PREPARING_MS : REFRESH_MS);
+        })
+        // A failed refresh keeps the last good list on screen and tries again.
+        .catch(() => {
+          if (!live) return;
+          setFailed(true);
+          schedule(REFRESH_MS);
+        });
+    }
+    const now = () => document.visibilityState === 'visible' && load();
+    load();
+    document.addEventListener('visibilitychange', now);
+    window.addEventListener('online', now);
     return () => {
       live = false;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', now);
+      window.removeEventListener('online', now);
     };
   }, []);
-  return { feed, failed, loading: !feed && !failed };
+  return { feed, failed: failed && !feed, stale: failed && !!feed, loading: !feed && !failed };
 }
 
 function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: number; onPick: () => void }) {
   const net = networkByChainId(p.chainId);
   const [a, b] = orient(p);
+  const range = est.shape.kind === 'range' ? est.shape : null;
   return (
-    <li>
-      <button type="button" onClick={onPick} className="tap w-full text-right py-3 flex items-center gap-3 rounded-lg hover:bg-raised/50" aria-label={`تحلیل ${a.symbol}/${b.symbol}`}>
+    <li className="flex items-center gap-1">
+      <button type="button" onClick={onPick} className="tap flex-1 min-w-0 text-right py-3 flex items-center gap-3 rounded-lg hover:bg-raised/50" aria-label={`تحلیل ${a.symbol}/${b.symbol}`}>
         <span className="w-5 shrink-0 text-xs text-muted text-center">
           <Num>{formatNumber(rank, 0)}</Num>
         </span>
@@ -101,13 +134,35 @@ function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: num
           </span>
           <span className="text-xs text-secondary flex flex-wrap gap-x-2">
             <span className="whitespace-nowrap">
+              {range ? (
+                <>
+                  بازه <Num>{formatPercent((range.low - 1) * 100, 0, true)}</Num> تا <Num>{formatPercent((range.high - 1) * 100, 0, true)}</Num>
+                </>
+              ) : (
+                'تمام‌بازه'
+              )}
+            </span>
+            <span className="whitespace-nowrap">
               کارمزد <Num>{signed(est.feesUsd)}</Num>
             </span>
             <span className="whitespace-nowrap">
-              ضرر نوسان <Num>{signed(est.lossUsd)}</Num>
+              هزینه‌ی نوسان <Num>{signed(est.lossUsd)}</Num>
             </span>
             {p.incentives && <span className="whitespace-nowrap">پاداش جدا حساب نشده</span>}
           </span>
+          {p.realLps && (
+            <span className="text-xs text-secondary flex flex-wrap gap-x-2" title="پوزیشن‌های واقعی همین استخر در Revert">
+              <span className="whitespace-nowrap">
+                LPهای واقعی: کارمزد <Num>{formatPercent(p.realLps.feeApr.median, 0)}</Num>
+              </span>
+              <span className="whitespace-nowrap">
+                <Num>{formatPercent(p.realLps.inRangePct, 0)}</Num> در بازه
+              </span>
+              <span className="whitespace-nowrap">
+                <Num>{formatNumber(p.realLps.count, 0)}</Num> پوزیشن
+              </span>
+            </span>
+          )}
         </span>
         <span className="shrink-0 flex flex-col items-end leading-tight">
           <span className={`text-base font-semibold ${est.netUsd >= 0 ? 'text-success' : 'text-danger'}`}>
@@ -117,8 +172,10 @@ function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: num
             نقدینگی <Num>{formatUSDCompact(p.tvlUsd)}</Num>
           </span>
         </span>
-        <ChevronLeft size={16} className="text-muted shrink-0" aria-hidden />
       </button>
+      <a href={p.url} target="_blank" rel="noopener noreferrer" className="tap shrink-0 grid place-items-center size-10 rounded-md text-muted hover:text-primary hover:bg-raised" aria-label={`ورود به بازار ${a.symbol}/${b.symbol} در vfat`} title="ورود به همین بازار (vfat)">
+        <ExternalLink size={16} aria-hidden />
+      </a>
     </li>
   );
 }
@@ -135,7 +192,7 @@ interface Stored {
  * analyzer with the pool's own numbers.
  */
 export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
-  const { feed, failed, loading } = useLpPools();
+  const { feed, failed, stale, loading } = useLpPools();
   const [st, setSt] = useState<Stored>({ capital: 1000, days: 30, scope: 'focus' });
   const [shown, setShown] = useState(STEP);
   useEffect(() => {
@@ -159,7 +216,7 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
     return rankPools(scoped, st.capital, st.days);
   }, [feed, st]);
   const dropped = feed ? (Object.entries(feed.rejected) as [RejectReason, number][]).filter(([, n]) => n > 0) : [];
-  const partial = feed?.sources.some((s) => !s.ok) ?? false;
+  const partial = stale || (feed?.sources.some((s) => !s.ok) ?? false);
 
   return (
     <section className="flex flex-col gap-4" aria-label="استخرهای LP">
@@ -202,12 +259,17 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
         <div className="flex items-start justify-between gap-3 pb-2">
           <span className="flex flex-col gap-0.5">
             <span className="font-semibold text-primary">
-              سود برآوردی <Num>{formatNumber(st.days, 0)}</Num> روزه با <Num>{formatUSD(st.capital, 0)}</Num>
+              سود مورد انتظار <Num>{formatNumber(st.days, 0)}</Num> روزه با <Num>{formatUSD(st.capital, 0)}</Num>
             </span>
-            <span className="text-xs text-secondary leading-5">کارمزد منهای ضرر یک نوسان معمول قیمت، نسبت به نگه‌داشتن ساده. برای جزئیات و سناریوها روی هر ردیف بزنید.</span>
+            <span className="text-xs text-secondary leading-5">با بازه‌ای به اندازه‌ی نوسان معمول هر استخر: کارمزد منهای هزینه‌ی مورد انتظار نوسان قیمت، نسبت به نگه‌داشتن ساده. برای دیدن حالت‌های مختلف روی ردیف بزنید؛ برای ورود، آیکون کنار آن.</span>
           </span>
           {feed && <DataStatus source="api" fetchedAt={Date.parse(feed.fetchedAt)} stale={partial} label={<bdi dir="ltr">vfat</bdi>} />}
         </div>
+        {feed && feed.pending > 0 && (
+          <p className="text-xs text-secondary flex items-center gap-1.5 pb-2" aria-live="polite">
+            <Loader2 size={12} className="animate-spin" aria-hidden /> <Num>{formatNumber(feed.pending, 0)}</Num> استخر دیگر در حال آماده‌سازی؛ خودکار اضافه می‌شوند.
+          </p>
+        )}
 
         {loading ? (
           <p className="text-sm text-secondary flex items-center gap-2 py-8 justify-center" aria-busy="true">
@@ -215,6 +277,8 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
           </p>
         ) : failed ? (
           <Empty>vfat پاسخ نداد.</Empty>
+        ) : !ranked.length && feed?.pending ? (
+          <p className="text-sm text-secondary py-8 text-center">در حال محاسبه‌ی کارمزد استخرها…</p>
         ) : !ranked.length ? (
           <Empty>هیچ استخری همه‌ی معیارها را نداشت.</Empty>
         ) : (
@@ -233,7 +297,7 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
         )}
 
         <p className="text-xs text-muted leading-6 py-3 border-t border-default mt-1">
-          فقط جفت‌های استیبل، <bdi dir="ltr">ETH</bdi>، <bdi dir="ltr">BTC</bdi> و سهام توکنیزه‌ی تأییدشده. کارمزد از درآمد واقعی هفته‌ی گذشته‌ی کل استخر، برای پوزیشن تمام‌بازه.
+          فقط جفت‌های استیبل، <bdi dir="ltr">ETH</bdi>، <bdi dir="ltr">BTC</bdi> و سهام توکنیزه‌ی تأییدشده. نرخ کارمزد از درآمد واقعی ۳۰ روز گذشته به ازای نقدینگی فعال استخر (در Aerodrome پس از کسر سهم استخر از کارمزد LPهای بدون استیک)؛ هزینه‌ی نوسان از نوسان واقعی ۳۰ روز اخیر همان جفت (σ²/۸ در سال). خروج قیمت از بازه، پاداش‌های جدا و گس حساب نشده‌اند.
           {dropped.length > 0 && (
             <>
               {' '}کنار گذاشته شد:{' '}
