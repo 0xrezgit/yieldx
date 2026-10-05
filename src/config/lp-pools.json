@@ -48,5 +48,7 @@
       "TSM": "0x58ffe4a942d3885baa22d7520691f611ef09e7aa",
       "USO": "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344"
     }
-  }
+  },
+  "stockLogo": "https://financialmodelingprep.com/image-stock/",
+  "_stockLogoNote": "Ticker logos (checked 2026-10-05: all listed tickers answer with an image). A failed image falls back to a monogram."
 }

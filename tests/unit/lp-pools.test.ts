@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isStockToken, referencePrices, vetPool, vetPools, type RawItem } from '../../src/lib/lp/pools';
 import { toPrefill } from '../../src/components/tools/LpPools';
+import { estimatePool, rankPools, typicalMove } from '../../src/lib/lp/estimate';
 import { lpLink, readLpPrefill } from '../../src/components/opportunities/LpAnalyzer';
 
 // Controlled test data shaped like vfat's response; not market data.
@@ -92,5 +93,45 @@ describe('vfat LP pools: into the analyzer', () => {
     expect([p.a, p.b]).toEqual(['NVDA', 'USDG']);
     expect(p.source).toBe('vfat');
     expect(readLpPrefill(new URL(`https://x${lpLink(p)}`).searchParams)).toMatchObject({ a: 'NVDA', b: 'USDG', feeApr: p.feeApr, source: 'vfat' });
+  });
+});
+
+describe('vfat LP pools: logos and the dollar estimate', () => {
+  it('every kept token has a logo: stocks by ticker, majors from the token list', () => {
+    const r = vetPool(pool({ tokens: [WETH, { address: NVDA, symbol: 'NVDA', price: 235 }] }), REF, NOW);
+    if (typeof r === 'string') throw new Error(r);
+    expect(r.tokens.every((t) => typeof t.logo === 'string' && t.logo.startsWith('https://'))).toBe(true);
+    expect(r.tokens[1].logo).toContain('NVDA');
+  });
+
+  it('a pool without a measured price swing has no loss estimate, so it is dropped', () => {
+    const item = pool();
+    item.pool!.assetCorrelation = null;
+    expect(vetPool(item, REF, NOW)).toBe('volatility');
+  });
+
+  it('usual swing grows with √(days ÷ 7)', () => {
+    const m = typicalMove({ move7d: { down: 5, up: 8 } }, 28);
+    expect(m.down).toBeCloseTo(0.1, 12);
+    expect(m.up).toBeCloseTo(0.16, 12);
+  });
+
+  it('estimate: fees minus the worse swing against holding; a calm pool beats a wild one with the same fees', () => {
+    const calm = { id: 'calm', feeAprPct: 40, move7d: { down: 2, up: 2 } };
+    const wild = { id: 'wild', feeAprPct: 40, move7d: { down: 30, up: 40 } };
+    const e = estimatePool(calm, 1000, 30)!;
+    expect(e.feesUsd).toBeGreaterThan(0);
+    expect(e.lossUsd).toBeLessThanOrEqual(0);
+    expect(e.netUsd).toBeCloseTo(e.feesUsd + e.lossUsd, 9);
+    expect(rankPools([wild, calm], 1000, 30).map((r) => r.pool.id)).toEqual(['calm', 'wild']);
+    expect(estimatePool(calm, 0, 30)).toBeNull();
+  });
+
+  it('the analyzer gets the pool’s logos, network, venue, swing, and the list’s amount and period', () => {
+    const r = vetPool(pool(), REF, NOW);
+    if (typeof r === 'string') throw new Error(r);
+    const p = toPrefill(r, 2500, 90);
+    expect(p).toMatchObject({ a: 'NVDA', b: 'USDG', chain: 'Robinhood Chain', protocol: 'Uniswap', move7d: { down: 5.5, up: 8 }, capital: 2500, days: 90 });
+    expect(p.logoA).toContain('NVDA');
   });
 });

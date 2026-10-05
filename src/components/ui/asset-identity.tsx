@@ -31,6 +31,21 @@ export function LogoWithNetwork({ icon, name, chain, size }: { icon?: string | n
   );
 }
 
+/** Two token logos, overlapping, with the network badge on the front one (LP pairs). */
+export function PairLogo({ a, b, chain, size }: { a: { symbol: string; logo?: string | null }; b: { symbol: string; logo?: string | null }; chain: string; size: IdentitySize }) {
+  const back = Math.round(size * 0.8);
+  return (
+    <span className="relative shrink-0" style={{ width: size + Math.round(back * 0.7), height: size }}>
+      <span className="absolute top-0 rounded-full ring-2 ring-surface" style={{ insetInlineEnd: 0 }}>
+        <TokenLogo src={b.logo} name={b.symbol} size={back} />
+      </span>
+      <span className="absolute bottom-0" style={{ insetInlineStart: 0 }}>
+        <LogoWithNetwork icon={a.logo} name={a.symbol} chain={chain} size={size} />
+      </span>
+    </span>
+  );
+}
+
 interface Props {
   /** Official symbol (Latin, shown as is). */
   symbol: string;
