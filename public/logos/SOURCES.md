@@ -28,6 +28,9 @@ publishes these for identifying chains and protocols; brand terms of each owner 
 | networks/berachain.webp | Berachain | eip155:80094 | chains/rsz_berachain.jpg |
 | networks/katana.webp | Katana | eip155:747474 | chains/rsz_katana.jpg |
 | networks/solana.webp | Solana | solana:mainnet | chains/rsz_solana |
+| networks/unichain.webp | Unichain | eip155:130 | chains/rsz_unichain (retrieved 2026-10-06, `?w=64&h=64`) |
+| networks/polygon.webp | Polygon | eip155:137 | chains/rsz_polygon (retrieved 2026-10-06, `?w=64&h=64`) |
+| networks/arc.webp | Arc | eip155:5042 | chains/rsz_arc (retrieved 2026-10-06, `?w=64&h=64`) |
 | protocols/pendle.webp | Pendle | pendle | protocols/pendle |
 | protocols/exponent.webp | Exponent | exponent | protocols/exponent |
 | protocols/spectra.webp | Spectra | spectra | protocols/spectra |

@@ -3,6 +3,7 @@ import type { DataQuality, Opportunity } from '../../types/opportunity';
 import { networkByChainId } from '../registry/networks';
 import { fetchJson, isObject, mapLimit, postJson } from '../protocols/base';
 import { kinkedSupplyCurve } from '../opportunity/curve';
+import { tokenInfo } from '../portfolio/tokens';
 
 /**
  * Revert Lend — supplying USDC to a Revert V3Vault (ERC-4626; borrowers post
@@ -163,6 +164,7 @@ export function revertOpportunity(v: Vault, s: RevertVaultState, rates: DailyRat
       'وام‌گیرندگان پوزیشن‌های LP (Uniswap V3 / Aerodrome) را وثیقه می‌گذارند؛ ریسک نقدشدن وثیقه با خزانه است.',
     ],
     url: CFG.app,
+    icon: tokenInfo('USDC')?.logo ?? null,
   };
 }
 

@@ -135,6 +135,9 @@ export function midnightOpportunity(b: RawBook, tokens: Map<string, TokenInfo>, 
 
 // One list query per chain: `assetByAddress` for several tokens fails as a whole when any
 // one is unknown to Morpho (data: null), while a filtered list simply leaves it out.
+// `address_in` takes at most 100 addresses (checked 2026-10-06: 101 fails validation and
+// the whole chain's books lost their symbols), so a chain's tokens go in batches.
+const ADDRESS_BATCH = 100;
 const ASSETS_QUERY = `query YieldXMidnightTokens($chain: Int!, $addresses: [String!]!, $first: Int!) {
   assets(first: $first, where: { chainId_in: [$chain], address_in: $addresses }) {
     items { address symbol decimals logoURI price { usd } }
@@ -154,9 +157,13 @@ export async function fetchTokens(pairs: { chainId: number; address: string }[])
   const byChain = new Map<number, Set<string>>();
   for (const p of pairs) if (isAddress(p.address)) byChain.set(p.chainId, (byChain.get(p.chainId) ?? new Set()).add(p.address.toLowerCase()));
   const out = new Map<string, TokenInfo>();
+  const batches: { chainId: number; addresses: string[] }[] = [];
+  for (const [chainId, set] of byChain) {
+    const all = [...set].slice(0, CFG.maxTokens);
+    for (let i = 0; i < all.length; i += ADDRESS_BATCH) batches.push({ chainId, addresses: all.slice(i, i + ADDRESS_BATCH) });
+  }
   await Promise.all(
-    [...byChain].map(async ([chainId, set]) => {
-      const addresses = [...set].slice(0, CFG.maxTokens);
+    batches.map(async ({ chainId, addresses }) => {
       try {
         const d = await postGraphql(lending.morpho.name, lending.morpho.graphql, ASSETS_QUERY, { chain: chainId, addresses, first: addresses.length }, (b): b is { assets: { items: RawAssetItem[] } } => isObject(b) && isObject((b as { assets?: unknown }).assets));
         for (const t of d.assets.items ?? []) {
@@ -165,7 +172,7 @@ export async function fetchTokens(pairs: { chainId: number; address: string }[])
           out.set(`${chainId}:${t.address.toLowerCase()}`, { symbol: t.symbol, decimals: t.decimals, priceUsd: typeof usd === 'number' && usd > 0 ? usd : null, logoURI: t.logoURI ?? null });
         }
       } catch {
-        /* this chain's tokens stay unknown: its books are marked insufficient */
+        /* this batch's tokens stay unknown: their books are marked insufficient */
       }
     }),
   );
