@@ -1,11 +1,12 @@
-import { ChartCandlestick, Wallet } from 'lucide-react';
+import { ChartCandlestick, Wallet, Wrench } from 'lucide-react';
 
 /**
- * The app's two sections, shared by the desktop header and the mobile bottom bar.
+ * The app's three sections, shared by the desktop header and the mobile bottom bar.
  * `also`: paths that belong to a section (its tools, calculators, old addresses).
  */
 export const NAV = [
-  { href: '/', label: 'تحلیل بازار', short: 'تحلیل بازار', icon: ChartCandlestick, also: ['/tools', '/dashboard', '/history', '/guide', '/opportunities'] },
+  { href: '/', label: 'تحلیل بازار', short: 'تحلیل بازار', icon: ChartCandlestick, also: ['/dashboard', '/history', '/guide', '/opportunities'] },
+  { href: '/tools', label: 'ابزارها', short: 'ابزارها', icon: Wrench, also: [] as string[] },
   { href: '/portfolio', label: 'پرتفوی من', short: 'پرتفوی من', icon: Wallet, also: [] as string[] },
 ] as const;
 

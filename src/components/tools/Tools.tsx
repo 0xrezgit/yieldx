@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { ArrowRight, Calculator, Droplets, Gift, HandCoins, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
@@ -45,7 +44,7 @@ function sane<T extends object>(value: Partial<T> | undefined, fallback: T): T {
 }
 
 /**
- * «ابزارهای تخصصی» of the market analysis: what has no dollar estimate in the ranking
+ * «ابزارها» (its own section in the navigation): what has no dollar estimate in the ranking
  * (YT, LP) or answers another question (a trade calculator, the cost of a loan).
  */
 export default function Tools() {
@@ -144,10 +143,7 @@ export default function Tools() {
     <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <Link href="/" className="tap inline-flex items-center gap-1 text-sm text-secondary hover:text-primary self-start">
-            <ArrowRight size={14} aria-hidden /> تحلیل بازار
-          </Link>
-          <h1 className="page-title">ابزارهای تخصصی</h1>
+          <h1 className="page-title">ابزارها</h1>
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {loading ? (
               <p className="text-xs text-secondary flex items-center gap-1.5">
@@ -187,15 +183,25 @@ export default function Tools() {
 
       {tab === 'lp' && (
         <>
+          {lpPrefill.a || lpPrefill.name ? (
+            <div id="lp-analyzer" className="scroll-mt-28 flex flex-col gap-2">
+              <button type="button" onClick={() => setLpPrefill({})} className="tap self-start inline-flex items-center gap-1 text-sm text-secondary hover:text-primary">
+                <ArrowRight size={14} aria-hidden /> همه‌ی استخرها
+              </button>
+              <LpAnalyzer key={JSON.stringify(lpPrefill)} prefill={lpPrefill} />
+            </div>
+          ) : null}
           <LpPools
             onPick={(p) => {
               setLpPrefill(p);
               requestAnimationFrame(() => document.getElementById('lp-analyzer')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
             }}
           />
-          <div id="lp-analyzer" className="scroll-mt-28">
-            <LpAnalyzer key={JSON.stringify(lpPrefill)} prefill={lpPrefill} />
-          </div>
+          {!(lpPrefill.a || lpPrefill.name) && (
+            <Collapsible title="تحلیل دستی یک جفت دیگر" icon={<Droplets size={18} aria-hidden />}>
+              <LpAnalyzer />
+            </Collapsible>
+          )}
         </>
       )}
       {tab === 'borrow' && <BorrowTool />}

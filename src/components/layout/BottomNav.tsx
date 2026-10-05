@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { isActive, NAV } from './nav';
 
 /**
- * Mobile / PWA bar: the two sections, above the iPhone home indicator
+ * Mobile / PWA bar: the three sections, above the iPhone home indicator
  * (safe area). Pages reserve its height (.pb-safe) so it never covers a form or
  * a final action. Hidden on desktop, where the header carries navigation.
  */

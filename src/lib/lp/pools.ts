@@ -1,5 +1,6 @@
 import config from '../../config/lp-pools.json';
 import { tokenClass } from '../merkl/vetting';
+import { tokenInfo } from '../portfolio/tokens';
 import { networkByChainId } from '../registry/networks';
 
 /**
@@ -17,6 +18,8 @@ export interface PoolToken {
   symbol: string;
   address: string;
   cls: AssetClass;
+  /** Logo URL; null → the UI draws a monogram. */
+  logo: string | null;
 }
 
 export interface LpPool {
@@ -43,12 +46,12 @@ export interface LpPool {
   incentives: boolean;
   /** Both sides are dollar stablecoins. */
   stable: boolean;
-  /** 95th-percentile 7-day relative price move (percent), when vfat measured it. */
-  move7d: { down: number; up: number } | null;
+  /** 95th-percentile 7-day relative price move of one side against the other (percent, both positive). */
+  move7d: { down: number; up: number };
   ageDays: number;
 }
 
-export type RejectReason = 'asset' | 'price' | 'tvl' | 'age' | 'fees' | 'outlier' | 'inactive';
+export type RejectReason = 'asset' | 'price' | 'tvl' | 'age' | 'fees' | 'outlier' | 'volatility' | 'inactive';
 
 export interface LpPoolFeed {
   pools: LpPool[];
@@ -103,7 +106,10 @@ const STOCKS: Record<string, Set<string>> = Object.fromEntries(
 const DAY = 86_400_000;
 const num = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 
-export const emptyRejected = (): Record<RejectReason, number> => ({ asset: 0, price: 0, tvl: 0, age: 0, fees: 0, outlier: 0, inactive: 0 });
+export const emptyRejected = (): Record<RejectReason, number> => ({ asset: 0, price: 0, tvl: 0, age: 0, fees: 0, outlier: 0, volatility: 0, inactive: 0 });
+
+/** Stocks: the ticker's logo; everything else: the app's token list (majors and stablecoins). */
+export const logoOf = (symbol: string, cls: AssetClass): string | null => (cls === 'stock' ? `${config.stockLogo}${encodeURIComponent(symbol.toUpperCase())}.png` : (tokenInfo(symbol)?.logo ?? null));
 
 /** Tokenized stocks by address only — a token reusing a stock's symbol is not one. */
 export const isStockToken = (chainId: number, address: string) => STOCKS[String(chainId)]?.has(address.toLowerCase()) ?? false;
@@ -171,9 +177,11 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
   const feeAprPct = (fees / tvl) * (365 / 7) * 100;
   if (feeAprPct > CFG.maxFeeAprPct) return 'outlier';
 
+  // Without a measured price swing there is no loss estimate, so no dollar figure: dropped.
   const p95 = it.pool?.assetCorrelation?.relativePriceMovePercentiles?.find((x) => x.horizonHours === 168);
   const down = num(p95?.p95DownMovePercent);
   const up = num(p95?.p95UpMovePercent);
+  if (down === null || up === null || down < 0 || up < 0) return 'volatility';
   const fee = num(it.pool?.currentFee);
 
   return {
@@ -181,8 +189,8 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
     chainId,
     chain: networkByChainId(chainId).key,
     tokens: [
-      { symbol: under[0].symbol as string, address: (under[0].address as string).toLowerCase(), cls: a },
-      { symbol: under[1].symbol as string, address: (under[1].address as string).toLowerCase(), cls: b },
+      { symbol: under[0].symbol as string, address: (under[0].address as string).toLowerCase(), cls: a, logo: logoOf(under[0].symbol as string, a) },
+      { symbol: under[1].symbol as string, address: (under[1].address as string).toLowerCase(), cls: b, logo: logoOf(under[1].symbol as string, b) },
     ],
     protocol: opt.protocol?.name?.trim() || 'vfat',
     concentrated: it.pool?.type === 'concentrated',
@@ -194,7 +202,7 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
     feeAprPct,
     incentives: (it.options ?? []).some((o) => (o.weeklyRewards ?? []).some((r) => r.type !== 'swap-fee' && (num(r.amountUsd) ?? 0) > 0)),
     stable: a === 'usd' && b === 'usd',
-    move7d: down !== null && up !== null ? { down, up } : null,
+    move7d: { down, up },
     ageDays,
   };
 }

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ChevronDown, Database, ExternalLink, Loader2, RefreshCw, Search, Wrench } from 'lucide-react';
+import { ChevronDown, Database, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react';
 import { useMarketAnalysis } from '../../hooks/useMarketAnalysis';
 import { FAMILY_FILTERS, selectHorizon, type Evaluated, type FamilyFilter } from '../../lib/market/analysis';
 import { badgesOf, exitShort, FAMILY_LABEL } from '../../lib/market/labels';
@@ -276,9 +275,6 @@ export default function MarketAnalysis() {
         </>
       )}
 
-      <Link href="/tools" className="tap self-start inline-flex items-center gap-1.5 text-sm text-secondary hover:text-primary">
-        <Wrench size={14} aria-hidden /> ابزارهای تخصصی: YT، LP، هزینه‌ی وام
-      </Link>
     </main>
   );
 }

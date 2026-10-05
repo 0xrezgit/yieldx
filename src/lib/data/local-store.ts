@@ -28,4 +28,5 @@ export const STORAGE_KEYS = {
   market: 'yieldx-market-v1',
   stable: 'yieldx-stable-v1',
   portfolio: 'yieldx-portfolio-v1',
+  lpPools: 'yieldx-lp-pools-v1',
 } as const;

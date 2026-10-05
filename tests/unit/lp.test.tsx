@@ -73,12 +73,23 @@ describe('analyzer', () => {
     expect(p).toMatchObject({ name: 'WETH/USDC 0.05%', a: 'WETH', b: 'USDC', feeApr: 12.35, rewardUsd: 3.2, capital: 1000, days: 30, stable: false });
   });
 
-  it('renders the four parts per hypothetical scenario, in Persian', async () => {
+  it('a pool with a measured swing gets usual and sharp scenarios from it, scaled to the period', async () => {
+    const { renderToString } = await import('react-dom/server');
+    const { LpAnalyzer } = await import('../../src/components/opportunities/LpAnalyzer');
+    const html = renderToString(<LpAnalyzer prefill={{ name: 'NVDA/USDG · Uniswap', a: 'NVDA', b: 'USDG', feeApr: 40, capital: 1000, days: 7, chain: 'Robinhood Chain', protocol: 'Uniswap', move7d: { down: 5, up: 8 } }} />);
+    for (const t of ['افت شدید', 'افت معمول', 'رشد معمول', 'رشد شدید', 'رابین‌هود چین']) expect(html).toContain(t);
+    // 7 days: the usual swing is the measured one itself.
+    expect(html).toContain('−۵٪');
+    expect(html).toContain('+۸٪');
+    expect(html).not.toContain('NaN');
+  });
+
+  it('renders dollar results per hypothetical scenario, in Persian', async () => {
     const { renderToString } = await import('react-dom/server');
     const { LpAnalyzer } = await import('../../src/components/opportunities/LpAnalyzer');
     const { assertPersianMoney } = await import('../helpers/text');
     const html = renderToString(<LpAnalyzer prefill={{ a: 'WETH', b: 'USDC', feeApr: 15, rewardUsd: 4, capital: 1000, days: 30 }} />);
-    for (const t of ['سناریوی فرضی', 'پیش‌بینی نیست', 'نگه‌داشتن (HODL)', 'تغییر ارزش نسبت به HODL', 'کارمزد', 'پاداش', 'حد سربه‌سر']) expect(html).toContain(t);
+    for (const t of ['سناریوی فرضی', 'پیش‌بینی نیست', 'چقدر سرمایه می‌گذارید؟', 'قیمت ثابت', 'کارمزد دریافتی', 'پاداش', 'تغییر ارزش دارایی‌ها', 'در مقایسه با نگه‌داشتن ساده', 'سربه‌سر']) expect(html).toContain(t);
     expect(html).not.toContain('NaN');
     expect(html).not.toMatch(/احتمال\s*[۰-۹\d]/);
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/value="[^"]*"/g, '').replace(/<bdi dir="ltr"[^>]*>[^<]*<\/bdi>/g, ''));
