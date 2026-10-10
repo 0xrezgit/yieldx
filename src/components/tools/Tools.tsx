@@ -13,7 +13,9 @@ import { NumberField } from '../ui/field';
 import { ChoiceCards, type Choice } from '../ui/choice-cards';
 import { Segmented } from '../opportunities/parts';
 import { YtBoard } from '../opportunities/YtBoard';
-import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from '../opportunities/Calculator';
+import { defaultCalc, type CalcMode, type CalcState } from '../opportunities/Calculator';
+import { PendleCalculator } from '../opportunities/PendleCalculator';
+import { useMerkl } from '../../hooks/useMerkl';
 import { applyFilters, defaultFilters, FilterBar, type Filters } from '../opportunities/filters';
 import { LpAnalyzer, readLpPrefill, type LpPrefill } from '../opportunities/LpAnalyzer';
 import { ytFees } from '../../lib/calculators/yt-plan';
@@ -78,6 +80,7 @@ function sane<T extends object>(value: Partial<T> | undefined, fallback: T): T {
  */
 export default function Tools() {
   const { markets, loading, failed, stale, feeds, updatedAt, refresh } = useAllMarkets();
+  const gas = useMerkl().feed?.gas;
   const [st, setSt] = useState<Stored | null>(null);
   const [loadingMarket, setLoadingMarket] = useState(false);
   const [lpPrefill, setLpPrefill] = useState<LpPrefill>({});
@@ -251,7 +254,7 @@ export default function Tools() {
           )}
         </>
       )}
-      {tab === 'calc' && <CalculatorPanel screen={st.screen} c={st.calc} set={setCalc} markets={markets} onPick={(m) => pick(m)} loadingMarket={loadingMarket} />}
+      {tab === 'calc' && <PendleCalculator c={st.calc} set={setCalc} markets={markets.filter((m) => !m.expired)} onPick={(m) => pick(m)} gas={gas ?? []} />}
       {updatedAt === null && !loading && tab !== 'lp' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
     </main>
   );
