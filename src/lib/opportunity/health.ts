@@ -14,8 +14,13 @@ export type { BaseHealth, BaseHealthStatus, ImpliedHealth };
  *   stale    — a reward-only figure unchanged for weeks (a configured rate, not measured)
  *   zero     — 0% without a points program (missing data rather than no yield)
  *
- * «suspect»: the estimate uses a conservative base (the lower of today's figure and the
- * last 30 days' median) and shows a range. «broken»: no dollar figure at all — only on
+ * On-chain evidence comes first (`realized`, see realized.ts), per kind of market: an SY
+ * whose rate moves is held to its week and its long window; one that never moves cannot
+ * show an interest figure; a reward the SY pays no token for does not reach the YT; a
+ * points market published at 0 whose SY grows is ranked on that growth.
+ *
+ * «suspect»: the estimate uses a conservative base (`rankPct`, else the lower of today's
+ * figure and the last 30 days' median) and shows a range. «broken»: no dollar figure at all — only on
  * evidence: the chain delivered far less over both the last week and the last month, or
  * the figure is impossible. Guesses (range, jumps, stale figures) stop at «suspect»,
  * because a base yield rises and falls with its market for real.
@@ -46,6 +51,10 @@ export const HEALTH_RULES = {
   realizedGapPp: 5,
   /** …more than this many points above it: suspect, ranked on the realized yield. */
   realizedSuspectPp: 2,
+  /** A part of the base (interest or reward) below this, %, is too small to judge. */
+  minPartPct: 0.5,
+  /** The last 1 and 3 days must keep this share of the week's yield for the week to count as a level, not a burst. */
+  weekHeld: 0.7,
 } as const;
 
 const median = (xs: number[]) => {
@@ -64,8 +73,12 @@ export function assessBase(p: {
   /** Daily base yield, oldest first; null when the protocol gives no history. */
   history?: BaseHistoryPoint[] | null;
   categories: string[];
-  /** Base yield realized on-chain (7 days without a one-step jump, and 30 days), %; overrides the heuristics. */
-  realized?: { d7: number | null; d30: number | null; lumpy?: boolean } | null;
+  /**
+   * Base yield realized on-chain (the SY's exchange rate; the week without a one-step jump, and
+   * 30–120 days), whether the rate moved at all, and how many reward tokens the SY pays; %.
+   * Overrides the heuristics.
+   */
+  realized?: { d7: number | null; d1?: number | null; d3?: number | null; d30: number | null; d60?: number | null; d90?: number | null; d120?: number | null; lumpy?: boolean; moved?: boolean; rewardTokens?: number | null } | null;
 }): BaseHealth {
   const R = HEALTH_RULES;
   const reasons: string[] = [];
@@ -76,27 +89,70 @@ export function assessBase(p: {
   const base = p.basePct;
   const points = p.categories.includes('points');
   if (base === null || !Number.isFinite(base)) return { status: 'ok', reasons, conservativePct: null, pointsOnly: false };
+  if (base > R.impossiblePct) return { status: 'broken', reasons: [`بازده پایه‌ی ${formatPercent(base, 0)} ممکن نیست.`], conservativePct: null, pointsOnly: false };
+
+  // Pendle splits the base into interest (what the SY's exchange rate shows) and reward
+  // (tokens paid on top). Each part is checked against what can carry it on-chain.
+  const split = p.interestPct != null && p.rewardPct != null && Number.isFinite(p.interestPct) && Number.isFinite(p.rewardPct);
+  const interest = split ? (p.interestPct as number) : base;
+  const reward = split ? (p.rewardPct as number) : 0;
+  const real = p.realized;
+  // A reward the SY contract pays no token for does not reach the YT through the SY.
+  const rewardUnpaid = reward > R.minPartPct && real?.rewardTokens === 0;
+  const rewardCounted = rewardUnpaid ? 0 : reward;
+  const rewardNote = rewardUnpaid ? `بخش پاداش (${formatPercent(reward, 1)}) را قرارداد SY با هیچ توکنی نمی‌پردازد؛ به دارنده‌ی YT از این راه نمی‌رسد و حساب نشد.` : null;
+
+  // The SY's exchange rate did not move in 120 days: an interest figure is not seen on-chain.
+  if (real && real.moved === false) {
+    if (interest > R.minPartPct) {
+      const why = `نرخ تبدیل SY در ۱۲۰ روز اخیر تغییر نکرده؛ بهره‌ی اعلامی (${formatPercent(interest, 1)}) روی زنجیره دیده نمی‌شود و حساب نشد.`;
+      return { status: 'suspect', reasons: [why, ...(rewardNote ? [rewardNote] : [])], conservativePct: rewardCounted, rankPct: rewardCounted, pointsOnly: false, realizedPct: 0 };
+    }
+    if (rewardNote) return { status: 'suspect', reasons: [rewardNote], conservativePct: 0, rankPct: 0, pointsOnly: false, realizedPct: 0 };
+  }
+
+  // Measured on-chain: the delivered yield is the evidence, ahead of every guess below.
+  // A week counts as the market's level when its last days still hold it (a real rise, even
+  // if the month lags); when they fall well below it, the week carried a burst (USP: 7 days
+  // 54 %, the last 3 days 20 %) and the recent pace stands in for it, never above the long
+  // window (90 days, else 60 or 30).
+  if (real && real.moved !== false && (real.d7 != null || real.d30 != null)) {
+    const d7 = real.d7 ?? null;
+    const d30 = real.d30 ?? null;
+    const long = real.d90 ?? real.d60 ?? d30;
+    const recent = real.d1 != null && real.d3 != null ? Math.min(real.d1, real.d3) : null;
+    const burst = d7 !== null && recent !== null && d7 > 0 && recent < R.weekHeld * d7;
+    const week = d7 === null ? null : burst ? Math.min(d7, Math.max(real.d3 as number, long ?? -Infinity)) : d7;
+    const realizedPct = d30 ?? week;
+    const windows = [real.d3 != null && `۳ روز ${formatPercent(real.d3, 1)}`, d7 !== null && `۷ روز ${formatPercent(d7, 1)}`, d30 !== null && `۳۰ روز ${formatPercent(d30, 1)}`, real.d90 != null && `۹۰ روز ${formatPercent(real.d90, 1)}`].filter(Boolean).join('، ');
+    // A points market published at 0 while its SY grows: real dollars the YT earns.
+    const delivered = Math.min(...[week, d30].filter((x): x is number => x !== null));
+    if (base < R.minPartPct && Number.isFinite(delivered) && delivered > R.minPartPct) {
+      const why = `بازده پایه ${formatPercent(base, 1)} اعلام شده ولی SY روی زنجیره رشد کرده (${windows})؛ با ${formatPercent(delivered, 1)} حساب شد.`;
+      return { status: 'suspect', reasons: [why], conservativePct: delivered, rankPct: delivered, pointsOnly: false, realizedPct };
+    }
+    const best = Math.max(...[week, d30].filter((x): x is number => x !== null));
+    // A reward with no token on the SY is missing only when the SY's own growth does not
+    // already carry it (superWETH: «interest» 0 + «reward» 3.3 %, the SY grew 5 %).
+    const note = rewardNote && best < interest + reward - R.realizedSuspectPp ? rewardNote : null;
+    // A level the week delivers (and not a burst): the published interest is confirmed.
+    if (week !== null && !real.lumpy && !burst && week >= interest - R.realizedSuspectPp && !note) return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct };
+    const shape = real.lumpy ? '؛ رشد هفته یک‌جا آمده، نه پیوسته' : burst ? '؛ بازده هفته از یک جهش آمده و روزهای اخیر پایین‌ترند' : '';
+    const msg = `بازده واقعی روی زنجیره ${formatPercent(best, 2)} است (${windows})، نه ${formatPercent(interest, 1)}${shape}.`;
+    const gap = interest - best;
+    // «Broken» only on evidence: both the week and the month delivered far less.
+    if (week !== null && d30 !== null && interest > 2 * Math.max(best, 0.5) && gap > R.realizedGapPp)
+      return { status: 'broken', reasons: [msg, ...(note ? [note] : [])], conservativePct: best + rewardCounted, pointsOnly: false, realizedPct };
+    if (gap > R.realizedSuspectPp || note) {
+      const rank = Math.min(base, Math.max(0, best) + rewardCounted);
+      return { status: 'suspect', reasons: [...(gap > R.realizedSuspectPp ? [msg] : []), ...(note ? [note] : [])], conservativePct: rank, rankPct: rank, pointsOnly: false, realizedPct };
+    }
+    return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct };
+  }
+
   if (base === 0) {
     if (points) return { status: 'ok', reasons, conservativePct: 0, pointsOnly: true };
     return { status: 'suspect', reasons: ['بازده پایه صفر گزارش شده و بازار پوینتی هم نیست؛ احتمالاً داده گم شده است.'], conservativePct: 0, pointsOnly: false };
-  }
-
-  if (base > R.impossiblePct) return { status: 'broken', reasons: [`بازده پایه‌ی ${formatPercent(base, 0)} ممکن نیست.`], conservativePct: null, pointsOnly: false };
-
-  // Measured on-chain: the delivered yield is the evidence, ahead of every guess below.
-  const real = p.realized;
-  if (real && (real.d7 != null || real.d30 != null)) {
-    const d7 = real.d7 ?? null;
-    const d30 = real.d30 ?? null;
-    const realizedPct = d30 ?? d7;
-    // A steady (not one-step) week that delivers the published figure: a real rise, even if the month lags.
-    if (d7 !== null && !real.lumpy && d7 >= base - R.realizedSuspectPp) return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct };
-    const best = Math.max(...[d7, d30].filter((x): x is number => x !== null));
-    const both = d7 !== null && d30 !== null;
-    const msg = `بازده واقعی روی زنجیره ${formatPercent(best, 2)} است، نه ${formatPercent(base, 1)}${real.lumpy ? ' (رشد هفته یک‌جا آمده، نه پیوسته)' : ''}.`;
-    if (both && base > 2 * Math.max(best, 0.5) && base - best > R.realizedGapPp) return { status: 'broken', reasons: [msg], conservativePct: best, pointsOnly: false, realizedPct };
-    if (base - best > R.realizedSuspectPp) return { status: 'suspect', reasons: [msg], conservativePct: best, pointsOnly: false, realizedPct };
-    return { status: 'ok', reasons: [], conservativePct: base, pointsOnly: false, realizedPct };
   }
 
   const above = p.range ? base - p.range.max : -Infinity;

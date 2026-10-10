@@ -1,9 +1,10 @@
 import type { Opportunity } from '../../types/opportunity';
-import { fetchAave, normalizeAave } from './aave';
-import { fetchKamino } from './kamino';
+import { fetchAave, fetchAaveHistory, normalizeAave } from './aave';
+import { withHistory, type HistoryLoader } from './history';
+import { fetchKamino, fetchKaminoHistory } from './kamino';
 import { fetchLoopscale } from './loopscale';
 import { fetchMidnight } from './midnight';
-import { fetchMorpho, normalizeMorpho } from './morpho';
+import { fetchMorpho, fetchMorphoHistory, morphoHistoryAdjust, normalizeMorpho } from './morpho';
 import { fetchRevert } from './revert';
 import type { LendingFeed, SourceStatus } from './types';
 
@@ -26,15 +27,18 @@ interface Source {
   load: (fetchedAt: string) => Promise<Opportunity[]>;
   /** Slow source: once cached, refresh in the background instead of making the feed wait. */
   background?: boolean;
+  /** Daily rate history for the robust rate (robust-rate.ts), attached each time the list is served. */
+  history?: { load: HistoryLoader; adjust?: (o: Opportunity, pct: number) => number };
 }
 
 export const SOURCES: Source[] = [
-  { id: 'morpho', name: 'Morpho', ttlMs: 60_000, load: async (at) => normalizeMorpho(await fetchMorpho(), at) },
-  { id: 'aave', name: 'Aave V4', ttlMs: 60_000, load: async (at) => normalizeAave(await fetchAave(), at) },
+  // Variable rates with a daily history get the robust rate (robust-rate.ts), filled in the background.
+  { id: 'morpho', name: 'Morpho', ttlMs: 60_000, load: async (at) => normalizeMorpho(await fetchMorpho(), at), history: { load: () => fetchMorphoHistory(), adjust: morphoHistoryAdjust } },
+  { id: 'aave', name: 'Aave V4', ttlMs: 60_000, load: async (at) => normalizeAave(await fetchAave(), at), history: { load: fetchAaveHistory } },
   // Order books: several requests per market.
   { id: 'midnight', name: 'Morpho Midnight', ttlMs: 2 * 60_000, load: (at) => fetchMidnight(at, new Date(at).getTime()), background: true },
   // Two requests per Kamino market; vault pages for Loopscale.
-  { id: 'kamino', name: 'Kamino', ttlMs: 5 * 60_000, load: (at) => fetchKamino(at) },
+  { id: 'kamino', name: 'Kamino', ttlMs: 5 * 60_000, load: (at) => fetchKamino(at), history: { load: fetchKaminoHistory } },
   { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at) },
   // Daily rate from Revert's API, vault state read on-chain (two RPC batches per vault).
   { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at) },
@@ -92,7 +96,10 @@ async function one(s: Source, now: number): Promise<{ list: Opportunity[]; statu
 export async function getLendingFeed(now = Date.now()): Promise<LendingFeed> {
   const results = await Promise.all(SOURCES.map((s) => one(s, now)));
   return {
-    opportunities: results.flatMap((r) => r.list),
+    opportunities: results.flatMap((r, i) => {
+      const h = SOURCES[i].history;
+      return h ? withHistory(SOURCES[i].id, r.list, h.load, h.adjust, now) : r.list;
+    }),
     sources: results.map((r) => r.status),
     fetchedAt: new Date(now).toISOString(),
   };

@@ -69,9 +69,18 @@ export function useMarketAnalysis(capital: number): MarketAnalysisState {
   const usd = quoteAmount(deferredCapital);
   const input = useMemo(() => {
     if (!baseInput || !Object.keys(quotes).length) return baseInput;
+    // Quotes by PT market, every amount asked: a PT loop picks the one at its position's size.
+    const byMarket = new Map<string, ExecQuote[]>();
+    for (const [id, q] of Object.entries(quotes)) {
+      if (!q) continue;
+      const key = id.slice(0, id.lastIndexOf('|'));
+      byMarket.set(key, [...(byMarket.get(key) ?? []), q]);
+    }
+    // PT loops are built from their PT inside the analysis: the PT carries every quote of its market.
     const withQuote = (o: Opportunity) => {
       const q = (o.family === 'pt' || o.family === 'yt') && quotes[quoteId(o.key, usd)];
-      return q ? { ...o, quote: q } : o;
+      const all = o.family === 'pt' ? byMarket.get(o.key) : undefined;
+      return q || all ? { ...o, ...(q ? { quote: q } : {}), ...(all ? { ptQuotes: all } : {}) } : o;
     };
     return { ...baseInput, opportunities: baseInput.opportunities.map(withQuote) };
   }, [baseInput, quotes, usd]);

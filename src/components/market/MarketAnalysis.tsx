@@ -23,6 +23,9 @@ import { StepStrip } from './ActionPlan';
 import { primaryAction, Rank, secondaryAction, Stats, Tags } from './RowParts';
 import { Confidence } from './Confidence';
 import { stepsFor } from '../../lib/market/steps';
+import { platformById, platformOf, type PlatformId } from '../../lib/market/platforms';
+import { strategyById, type StrategyId } from '../../lib/market/strategies';
+import { PlatformCards, PlatformHeader, PlatformStrip, scopeTo, StrategyHeader, summarize, summarizeStrategies } from './Platforms';
 
 type View = 'all' | 'yt' | 'loop';
 
@@ -143,8 +146,15 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
   );
 }
 
-/** «تحلیل بازار»: the capital, four horizons, one ranking of at most sixty opportunities by estimated net dollars. */
-export default function MarketAnalysis() {
+/**
+ * «تحلیل بازار»: the capital, four horizons, one ranking of at most sixty opportunities by
+ * estimated net dollars. Without `platform`: every platform, with a card each; with it:
+ * that platform's own page (same capital and horizon, shared across pages).
+ */
+export default function MarketAnalysis({ platform: platformId = null, strategy: strategyId = null }: { platform?: PlatformId | null; strategy?: StrategyId | null }) {
+  const platform = platformId ? platformById(platformId) : null;
+  const strategy = strategyId ? strategyById(strategyId) : null;
+  const section = platform ?? strategy;
   const [st, setSt] = useState<Stored | null>(null);
   const [filter, setFilter] = useState<FamilyFilter>('all');
   const [query, setQuery] = useState('');
@@ -158,7 +168,12 @@ export default function MarketAnalysis() {
   const capital = st?.capital ?? 0;
   const days = st?.horizon ?? DEFAULT_HORIZON;
   const m = useMarketAnalysis(capital);
-  const view = useMemo(() => (m.analysis ? selectHorizon(m.analysis, days, filter, normalizeSearch(query)) : null), [m.analysis, days, filter, query]);
+  const scoped = useMemo(() => scopeTo(m.analysis, platform ? (r) => platformOf(r.o) === platform.id : strategy ? (r) => strategy.test(r.o) : null), [m.analysis, platform, strategy]);
+  const view = useMemo(() => (scoped ? selectHorizon(scoped, days, filter, normalizeSearch(query)) : null), [scoped, days, filter, query]);
+  const summaries = useMemo(() => summarize(m.analysis, days), [m.analysis, days]);
+  const strategies = useMemo(() => summarizeStrategies(m.analysis, days), [m.analysis, days]);
+  // Section pages rank every opportunity of the section; the separate YT and PT-loop boards live on «All».
+  const mode: View = section ? 'all' : (st?.view ?? 'all');
   // A new capital, horizon or domain starts from the first page.
   useEffect(() => setPage(0), [capital, days, filter, query]);
 
@@ -177,30 +192,40 @@ export default function MarketAnalysis() {
   return (
     <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-5 lg:py-8 flex flex-col gap-4">
       <header className="flex items-start justify-between gap-3">
-        <div className="flex flex-col">
-          <h1 className="page-title">تحلیل بازار</h1>
-          <p className="page-sub">فرصت‌ها به ترتیب سود خالص دلاری</p>
-        </div>
+        {platform ? (
+          <PlatformHeader platform={platform} summary={summaries.get(platform.id)} days={days} />
+        ) : strategy ? (
+          <StrategyHeader strategy={strategy} summary={strategies.get(strategy.id)} days={days} />
+        ) : (
+          <div className="flex flex-col">
+            <h1 className="page-title">تحلیل بازار</h1>
+            <p className="page-sub">فرصت‌ها در همه‌ی پلتفرم‌ها، به ترتیب سود خالص دلاری</p>
+          </div>
+        )}
         <button type="button" onClick={m.refresh} disabled={m.refreshing} className="tap shrink-0 inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-raised disabled:opacity-60" aria-label="به‌روزرسانی داده‌ها">
           <RefreshCw size={14} className={m.refreshing ? 'animate-spin' : ''} aria-hidden />
           {m.updatedAt ? formatAgo(m.updatedAt) : 'به‌روزرسانی'}
         </button>
       </header>
 
-      <Segmented<View>
-        value={st.view}
-        onChange={(view) => setSt({ ...st, view })}
-        label="رتبه‌بندی"
-        options={[
-          { id: 'all', label: 'همه‌ی فرصت‌ها' },
-          { id: 'yt', label: <>دلاری <bdi dir="ltr">YT</bdi></> },
-          { id: 'loop', label: <>لوپ <bdi dir="ltr">PT</bdi></> },
-        ]}
-      />
+      <PlatformStrip summaries={summaries} strategies={strategies} />
+
+      {!section && (
+        <Segmented<View>
+          value={st.view}
+          onChange={(view) => setSt({ ...st, view })}
+          label="رتبه‌بندی"
+          options={[
+            { id: 'all', label: 'همه‌ی فرصت‌ها' },
+            { id: 'yt', label: <>دلاری <bdi dir="ltr">YT</bdi></> },
+            { id: 'loop', label: <>لوپ <bdi dir="ltr">PT</bdi></> },
+          ]}
+        />
+      )}
 
       <section className="sx-card p-4 flex flex-col gap-3" aria-label="سرمایه و افق">
         <NumberField label="سرمایه‌ی اولیه" value={st.capital ?? NaN} onChange={(v) => setSt({ ...st, capital: Number.isFinite(v) && v > 0 ? v : null })} suffix="دلار" placeholder="مثلاً ۱۰۰۰" />
-        {st.view === 'all' && (
+        {mode === 'all' && (
           <Segmented<`${HorizonDays}`>
             value={`${days}`}
             onChange={(v) => setSt({ ...st, horizon: Number(v) as HorizonDays })}
@@ -210,9 +235,10 @@ export default function MarketAnalysis() {
         )}
       </section>
 
-      {st.view !== 'all' && (m.loading && !m.markets.length ? <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" /> : <LeaderRanking key={st.view} markets={m.markets} capital={capital} strategy={st.view} lending={m.lending} />)}
-      {st.view === 'all' && (
+      {mode !== 'all' && (m.loading && !m.markets.length ? <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" /> : <LeaderRanking key={mode} markets={m.markets} capital={capital} strategy={mode as Exclude<View, 'all'>} lending={m.lending} />)}
+      {mode === 'all' && (
         <>
+      {!section && capital > 0 && m.analysis && <PlatformCards summaries={summaries} strategies={strategies} capital={capital} days={days} />}
 
       <p className="text-xs text-secondary">سود هر ردیف جداست و جمع‌پذیر نیست.</p>
 
@@ -222,9 +248,11 @@ export default function MarketAnalysis() {
           <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی نماد، پروتکل یا شبکه" className="w-full pr-9 pl-3 text-sm" />
         </label>
-        <div className="min-w-0 sm:w-auto">
-          <Segmented<FamilyFilter> value={filter} onChange={setFilter} label="نوع" size="sm" options={FAMILY_FILTERS} />
-        </div>
+        {!strategy && (
+          <div className="min-w-0 sm:w-auto">
+            <Segmented<FamilyFilter> value={filter} onChange={setFilter} label="نوع" size="sm" options={FAMILY_FILTERS} />
+          </div>
+        )}
       </div>
 
       {!(capital > 0) ? (
@@ -244,7 +272,7 @@ export default function MarketAnalysis() {
           <h2 className="flex items-start justify-between gap-3 pb-1">
             <span className="flex flex-col gap-0.5">
               <span className="font-semibold text-primary">
-                سود خالص <Num>{formatNumber(days, 0)}</Num> روزه
+                {platform ? <>رتبه‌بندی <bdi dir="ltr">{platform.name}</bdi></> : strategy ? <>رتبه‌بندی {strategy.name}</> : 'رتبه‌بندی همه‌ی پلتفرم‌ها'} · سود خالص <Num>{formatNumber(days, 0)}</Num> روزه
               </span>
               <span className="text-xs text-secondary">
                 <Num>{formatNumber(top.length, 0)}</Num> فرصت برتر {view?.narrowed ? 'در همین دامنه' : 'بین بازارهای بررسی‌شده'} · حداکثر <Num>{formatNumber(TOP_LIMIT, 0)}</Num>

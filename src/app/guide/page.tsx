@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { BookOpen, ChartCandlestick, HardDriveDownload, Radar, Wallet, Activity } from 'lucide-react';
+import { BookOpen, ChartCandlestick, GraduationCap, HardDriveDownload, Radar, Wallet, Activity } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export const metadata: Metadata = { title: 'راهنما — YieldX' };
@@ -96,6 +96,9 @@ export default function GuidePage() {
         <a href="#terms" className="tap inline-flex items-center gap-1.5 rounded-full border border-default px-3 min-h-9 text-sm text-secondary hover:text-primary">
           <BookOpen size={16} aria-hidden /> اصطلاحات
         </a>
+        <Link href="/learn" className="tap inline-flex items-center gap-1.5 rounded-full border border-default px-3 min-h-9 text-sm text-accent hover:text-primary">
+          <GraduationCap size={16} aria-hidden /> آموزش روش‌های سود
+        </Link>
       </nav>
 
       {tasks.map((t) => (

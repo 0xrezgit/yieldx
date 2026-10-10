@@ -4,6 +4,8 @@ import { networkByChainId } from '../registry/networks';
 import { isObject, postGraphql } from '../protocols/base';
 import { formatPercent } from '../utils/formatting';
 import { morphoLink } from '../market/links';
+import { HISTORY_DAYS } from '../opportunity/robust-rate';
+import type { HistoryPoints } from './history';
 
 /**
  * Morpho — variable-rate supply to Morpho Blue markets and deposits into vaults
@@ -77,6 +79,10 @@ export interface RawMorphoMarket {
     timestamp: string | number;
     rewards: RawReward[];
   } | null;
+}
+interface RawPoint {
+  x: number;
+  y: number | null;
 }
 export interface RawMorphoVault {
   address: string;
@@ -328,3 +334,48 @@ export function normalizeMorpho(d: MorphoData, fetchedAt: string): Opportunity[]
     ...(d.vaultV2s.items ?? []).map((v) => morphoVaultV2(v, fetchedAt)),
   ].filter((o): o is Opportunity => o !== null);
 }
+
+// ─── Daily history (robust rate) ─────────────────────────────────────────────
+// A separate query: with the history inside the main one, a page of 100 is over the
+// API's complexity limit (3.6M of 1M). 50 items a page fit.
+
+const HISTORY_PAGE = 50;
+const SERIES = '(options: { startTimestamp: $since, interval: DAY }) { x y }';
+const HISTORY_QUERIES = {
+  markets: `query H($chains: [Int!], $minUsd: Float, $first: Int, $skip: Int, $since: Int) { markets(first: $first, skip: $skip, orderBy: SupplyAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, supplyAssetsUsd_gte: $minUsd }) { items { marketId loanAsset { chain { id } } historicalState { supplyApy${SERIES} } } } }`,
+  vaults: `query H($chains: [Int!], $minUsd: Float, $first: Int, $skip: Int, $since: Int) { vaults(first: $first, skip: $skip, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, totalAssetsUsd_gte: $minUsd }) { items { address chain { id } historicalState { netApyWithoutRewards${SERIES} } } } }`,
+  vaultV2s: `query H($chains: [Int!], $first: Int, $skip: Int, $since: Int) { vaultV2s(first: $first, skip: $skip, where: { chainId_in: $chains, listed: true }) { items { address chain { id } historicalState { avgNetApy${SERIES} } } } }`,
+} as const;
+
+type HistoryItem = { marketId?: string; address?: string; chain?: { id: number }; loanAsset?: { chain?: { id: number } }; historicalState?: Record<string, RawPoint[] | null> | null };
+const isHistoryPage = (b: unknown): b is Record<string, { items: HistoryItem[] | null }> => isObject(b);
+
+const toPoints = (list: RawPoint[] | null | undefined): HistoryPoints => (list ?? []).map((p) => ({ t: p.x * 1000, v: p.y === null ? null : p.y * 100 }));
+
+/**
+ * Daily rates (%) of every listed market and vault, keyed like the opportunities. The
+ * V2 series (`avgNetApy`) includes rewards; `withHistory`'s adjust takes them out.
+ */
+export async function fetchMorphoHistory(): Promise<Map<string, HistoryPoints>> {
+  const out = new Map<string, HistoryPoints>();
+  const since = Math.floor(Date.now() / 1000) - HISTORY_DAYS * 86_400;
+  for (const [list, query] of Object.entries(HISTORY_QUERIES) as [keyof typeof HISTORY_QUERIES, string][]) {
+    for (let page = 0; page < (CFG.maxPages * CFG.pageSize) / HISTORY_PAGE; page++) {
+      const d = await postGraphql(CFG.name, CFG.graphql, query, { chains: CFG.chains, minUsd: CFG.minSupplyUsd, first: HISTORY_PAGE, skip: page * HISTORY_PAGE, since }, isHistoryPage);
+      const items = d[list]?.items ?? [];
+      for (const it of items) {
+        const chainId = it.loanAsset?.chain?.id ?? it.chain?.id;
+        const id = it.marketId ?? it.address;
+        if (!chainId || !id) continue;
+        const series = it.historicalState?.supplyApy ?? it.historicalState?.netApyWithoutRewards ?? it.historicalState?.avgNetApy;
+        out.set(`morpho:${networkByChainId(chainId).key}:${id.toLowerCase()}:${list === 'markets' ? 'supply' : 'vault'}`, toPoints(series));
+      }
+      if (items.length < HISTORY_PAGE) break;
+    }
+  }
+  return out;
+}
+
+/** V2 vault history includes rewards: today's reward APR (%) is taken out of each day — an approximation. */
+export const morphoHistoryAdjust = (o: Opportunity, pctValue: number) =>
+  o.protocol.version === 'vault-v2' ? Math.max(0, pctValue - o.rewards.reduce((a, r) => a + (r.aprUsd ?? 0), 0)) : pctValue;

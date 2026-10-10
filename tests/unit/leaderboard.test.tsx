@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buckets, leaderLoop, leaderQuoteKey, leaderYt, type LeaderRow } from '../../src/lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderQuoteKey, leaderYt, YT_EXIT_SHIFT_PP, type LeaderRow } from '../../src/lib/risk/leaderboard';
 import { simulateLoop } from '../../src/lib/calculators/trade';
 import { defaultScreenSettings, type OpportunityListing } from '../../src/lib/risk/opportunities';
 import type { Opportunity } from '../../src/types/opportunity';
@@ -30,6 +30,28 @@ const s = defaultScreenSettings;
 const input = { capital: 10_000 };
 
 describe('leaderYt', () => {
+  it('a sale before maturity shows the range of the market rate moving on that day', () => {
+    const m = listing({ impliedAPY: 10, baseAPY: 9, daysToMaturity: 60 });
+    const [r] = leaderYt([m], s, input, true);
+    expect(r.days).toBeLessThan(60);
+    const at = (exit: number) => simulateYt({ capital: 10_000, underlyingPrice: 1, daysToMaturity: 60, entryAPY: 10, baseAPY: 9, holdDays: r.days, exitAPY: exit, feePercent: s.feePercent, pointsPerDay: 0, ytMultiplier: 1, pointsBasis: 'usd', valuePerPoint: 0, yieldFeePercent: 5 }).cash;
+    expect(r.range?.low).toBeCloseTo(Math.min(at(10 - YT_EXIT_SHIFT_PP), r.pnl), 6);
+    expect(r.range?.high).toBeCloseTo(Math.max(at(10 + YT_EXIT_SHIFT_PP), r.pnl), 6);
+  });
+
+  it('held to maturity: no exit price, no exit range', () => {
+    const [r] = leaderYt([listing({ impliedAPY: 6, baseAPY: 12, daysToMaturity: 60 })], s, input, true);
+    expect(r.days).toBe(60);
+    expect(r.range).toBeUndefined();
+  });
+
+  it('a points market published at 0 whose SY grows is ranked on the measured growth', () => {
+    const health = { status: 'suspect' as const, reasons: ['x'], conservativePct: 15.2, rankPct: 15.2, pointsOnly: false };
+    const [r] = leaderYt([listing({ impliedAPY: 12, baseAPY: 0, daysToMaturity: 60, baseHealth: health })], s, input, true);
+    const [zero] = leaderYt([listing({ impliedAPY: 12, baseAPY: 0, daysToMaturity: 60 })], s, input, true);
+    expect(r.pnl).toBeGreaterThan(zero.pnl);
+  });
+
   it('picks the day with the best cash result', () => {
     const m = listing({ impliedAPY: 12, baseAPY: 6, daysToMaturity: 60 });
     const [r] = leaderYt([m], s, input, true);
@@ -91,11 +113,19 @@ describe('leaderYt', () => {
 
   it('a quote for this capital replaces the mid entry price (fees and impact are in it)', () => {
     const m = listing({ id: '1-0xpool', impliedAPY: 8, baseAPY: 12, daysToMaturity: 60 });
-    const q = { side: 'yt' as const, usd: 1000, units: 20_000, unitUsd: 1, priceImpactPct: 3, at: '', source: 'Pendle' as const };
+    // A YT price consistent with 8 % for 60 days (mid 0.01257), 3 % worse for the impact.
+    const q = { side: 'yt' as const, usd: 1000, units: 77_000, unitUsd: 1, priceImpactPct: 3, at: '', source: 'Pendle' as const };
     const [r] = leaderYt([m], s, { capital: 1000, quotes: { [leaderQuoteKey('1-0xpool', 'yt', 1000)]: q } }, false);
     expect(r.confidence).toBe('executable');
-    // 20,000 units of yield exposure bought: the notional the points ride on.
-    expect(r.pointsExposure).toBeCloseTo(20_000, 6);
+    // 77,000 units of yield exposure bought: the notional the points ride on.
+    expect(r.pointsExposure).toBeCloseTo(77_000, 6);
+  });
+
+  it('a quote far from the market’s own rate is ignored (a data error, not a price)', () => {
+    const m = listing({ id: '1-0xpool', impliedAPY: 8, baseAPY: 12, daysToMaturity: 60 });
+    const bad = { side: 'yt' as const, usd: 1000, units: 20_000, unitUsd: 1, priceImpactPct: 3, at: '', source: 'Pendle' as const };
+    const [r] = leaderYt([m], s, { capital: 1000, quotes: { [leaderQuoteKey('1-0xpool', 'yt', 1000)]: bad } }, false);
+    expect(r.confidence).not.toBe('executable');
   });
 
   it('skips markets without points when asked', () => {

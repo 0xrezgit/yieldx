@@ -90,3 +90,53 @@ describe('implied APY health', () => {
     expect(assessImplied({ impliedPct: 12, ptPrice: null, days: 90, history: days([1, 1, 1, 1], [5, 5, 5.2, 12]) }).status).toBe('suspect');
   });
 });
+
+/**
+ * Live Pendle markets, 2026-10-10: SY exchange rate on-chain now and 1–120 days back, the
+ * published interest / reward split, and the SY's reward tokens (getRewardTokens).
+ */
+describe('base yield per kind of market (live numbers)', () => {
+  it('USP: the week carried a burst (7d 54 %, last 3 days 20 %) — not taken as a level', () => {
+    const h = assessBase({ basePct: 54.2, interestPct: 54.2, rewardPct: 0, categories: ['points'], realized: { d1: 29.6, d3: 20.3, d7: 54.2, d30: 21.3, d60: 17.3, d90: 14.9, lumpy: false, moved: true, rewardTokens: 0 } });
+    expect(h.status).toBe('broken');
+    expect(h.reasons[0]).toContain('جهش');
+  });
+
+  it('a real rise whose last days hold the week’s level is accepted even though the month lags', () => {
+    expect(assessBase({ basePct: 12, interestPct: 12, rewardPct: 0, categories: [], realized: { d1: 12.5, d3: 12.3, d7: 12.4, d30: 6, d90: 5, moved: true } })).toMatchObject({ status: 'ok' });
+  });
+
+  it('jrRoyAPYUSD: published 0 on a points market while the SY grew — ranked on the growth, not excluded', () => {
+    const h = assessBase({ basePct: 0, interestPct: 0, rewardPct: 0, categories: ['points'], realized: { d1: 15.3, d3: 15.3, d7: 15.2, d30: 34.5, d90: 89, moved: true } });
+    expect(h).toMatchObject({ status: 'suspect', pointsOnly: false, rankPct: 15.2 });
+  });
+
+  it('superUSDC: interest 5.1 % matches the chain; the 4.5 % reward has no token on the SY — not counted', () => {
+    const h = assessBase({ basePct: 9.6, interestPct: 5.1, rewardPct: 4.5, categories: ['points'], realized: { d1: 4.3, d3: 4.4, d7: 5.1, d30: 4.7, d90: 4.3, moved: true, rewardTokens: 0 } });
+    expect(h.status).toBe('suspect');
+    expect(h.rankPct).toBeCloseTo(5.1, 6);
+    expect(h.reasons.join()).toContain('پاداش');
+  });
+
+  it('superWETH: «interest» 0 + «reward» 3.3 % with no token, but the SY itself grew 5 % — covered, ok', () => {
+    expect(assessBase({ basePct: 3.27, interestPct: 0, rewardPct: 3.27, categories: ['points'], realized: { d1: 1.3, d3: 1.3, d7: 1.8, d30: 5.03, d90: 1.8, moved: true, rewardTokens: 0 } }).status).toBe('ok');
+  });
+
+  it('a reward the SY does pay a token for is kept', () => {
+    const h = assessBase({ basePct: 9.6, interestPct: 5.1, rewardPct: 4.5, categories: [], realized: { d1: 5, d3: 5, d7: 5.1, d30: 4.9, moved: true, rewardTokens: 1 } });
+    expect(h.status).toBe('ok');
+  });
+
+  it('NGI+ / STRCx: interest published but the SY rate never moved in 120 days — not counted', () => {
+    const h = assessBase({ basePct: 12.2, interestPct: 12.2, rewardPct: 0, categories: ['points'], realized: { d7: null, d30: null, moved: false, rewardTokens: 0 } });
+    expect(h).toMatchObject({ status: 'suspect', rankPct: 0 });
+  });
+
+  it('USDG: reward-only, the SY pays no reward token — not counted', () => {
+    expect(assessBase({ basePct: 3.3, interestPct: 0, rewardPct: 3.3, categories: ['stables'], realized: { d7: null, d30: null, moved: false, rewardTokens: 0 } })).toMatchObject({ status: 'suspect', rankPct: 0 });
+  });
+
+  it('a reward paid by the SY with a flat rate (SHROOM-like) is left to the other checks', () => {
+    expect(assessBase({ basePct: 9, interestPct: 0, rewardPct: 9, categories: [], realized: { d7: null, d30: null, moved: false, rewardTokens: 1 } }).status).toBe('ok');
+  });
+});

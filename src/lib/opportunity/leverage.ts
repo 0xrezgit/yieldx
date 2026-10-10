@@ -7,6 +7,8 @@ import { periodGrowth } from './rates';
 import { placeOf, reasonOf, worseQuality } from './estimate';
 import { LEVERAGE_POLICY, MAX_POOL_SHARE_WITHOUT_QUOTE, PT_LOOP_POLICY } from './policy';
 import { maturityState } from '../protocols/lifecycle';
+import { evmChainId } from './costs';
+import { afterAmmFee, afterRedeem, quoteCheck } from './pt-price';
 
 /**
  * Loops (leverage on a yield-bearing asset) — report §4-6.
@@ -180,7 +182,19 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
         supplyCurve: null,
         book: null,
         borrow: null,
-        loop: { collateral: { token, yield: { pct: p.rate.value as number, kind: 'apy', source: `Implied APY امروز ${p.protocol.name} تا سررسید` } }, debt: { token: debt, side }, maxLtv: c.maxLtv, pairClass: debtClass as 'usd' | 'eth' | 'btc', pegVerified: !unverified, entryUrl: p.url ?? null },
+        // The PT is bought in the AMM: its fee comes out of the rate (a quote for the whole position replaces it when asked).
+        loop: {
+          collateral: { token, yield: { pct: afterAmmFee(p.rate.value as number, p.ammFeeLn, 'pt'), kind: 'apy', source: p.ammFeeLn ? `Implied APY امروز ${p.protocol.name} تا سررسید، پس از کارمزد AMM` : `Implied APY امروز ${p.protocol.name} تا سررسید` } },
+          debt: { token: debt, side },
+          maxLtv: c.maxLtv,
+          pairClass: debtClass as 'usd' | 'eth' | 'btc',
+          pegVerified: !unverified,
+          entryUrl: p.url ?? null,
+        },
+        ammFeeLn: p.ammFeeLn ?? null,
+        ptRedeemFactor: p.ptRedeemFactor ?? null,
+        ptQuotes: p.ptQuotes ?? null,
+        ptMarket: p.protocol.id === 'pendle' && p.market.address && evmChainId(p.chain) !== null ? { key: p.key, chainId: evmChainId(p.chain) as number, address: p.market.address } : null,
         poolLiquidityUsd: p.poolLiquidityUsd ?? null,
         impliedHealth: p.impliedHealth ?? null,
         quality: worst,
@@ -211,7 +225,7 @@ export function leverageEstimate(
   const assumptions = [...base.assumptions];
   const stop = (p: Estimate['placement'], why: string): Estimate => ({ ...base, placement: p, reason: why, assumptions: [...assumptions, why] });
   // base.unknown already carries the caller's unknown costs.
-  const unknown = [...base.unknown, 'اسلیپیج سواپ ورود و خروج و کارمزد flash loan'];
+  const unknown = [...base.unknown];
   // Unwinding costs are not measured, so a loop is never a complete estimate.
   let quality: DataQuality = o.quality === 'current' ? 'partial' : o.quality;
   if (l.debt.side.ratePct === null) return stop('insufficient', 'نرخ وام گزارش نشده است.');
@@ -251,11 +265,27 @@ export function leverageEstimate(
   if (!(E > 0)) return stop('no-capacity', 'نقدینگی قابل وام ندارد.');
   const G = E * L;
   const B = E * (L - 1);
+  // A PT loop buys PT for the whole position (G), not just the capital. An executable quote at that
+  // size, once it agrees with the market's rate, gives the rate actually paid (fee, conversion from
+  // the debt asset and price impact included).
+  let ptYield = l.collateral.yield.pct;
+  let quoted = false;
+  const q = pt ? (o.ptQuotes ?? []).find((x) => x.side === 'pt' && Math.abs(x.usd - G) <= G * 0.05) : undefined;
+  if (q && m.days !== null) {
+    const chk = quoteCheck(q, l.collateral.yield.pct, m.days);
+    if (chk.ok && chk.quotePct !== null) {
+      ptYield = chk.quotePct;
+      quoted = true;
+      assumptions.push(`نرخ PT از quote اجرایی پندل برای کل موقعیت (${formatNumber(G, 0)} دلار): ${formatPercent(chk.quotePct, 2)}؛ کارمزد، تبدیل دارایی و اثر قیمت در آن است.`);
+    } else assumptions.push('quote اجرایی کل موقعیت با نرخ بازار نمی‌خواند و کنار گذاشته شد.');
+  }
+  if (pt && !quoted) unknown.push(o.ammFeeLn ? 'هزینه‌ی تبدیل دارایی وام به دارایی بازار و اثر قیمت خرید PT برای کل موقعیت (کارمزد AMM کم شد؛ quote اجرایی نگرفته)' : 'کارمزد و اثر قیمت خرید PT برای کل موقعیت (quote اجرایی نگرفته)');
+  if (pt) unknown.push('هزینه‌ی بستن: تبدیل دارایی بازخریدشده به دارایی وام');
   // A PT collateral is bought in an AMM without a quote: keep the whole position small against it.
-  if (o.poolLiquidityUsd !== undefined) {
+  if (o.poolLiquidityUsd !== undefined && !quoted) {
     const liq = o.poolLiquidityUsd;
     if (liq === null || !(liq > 0)) return stop('needs-model', 'نقدینگی استخر PT گزارش نشده؛ بدون quote برآورد نمی‌شود.');
-    if (G > liq * MAX_POOL_SHARE_WITHOUT_QUOTE) return stop('needs-model', 'حجم لوپ نسبت به نقدینگی استخر PT بزرگ است؛ quote لازم است.');
+    if (G > liq * MAX_POOL_SHARE_WITHOUT_QUOTE) return { ...stop('needs-model', 'حجم لوپ نسبت به نقدینگی استخر PT بزرگ است؛ quote لازم است.'), ...(o.ptMarket ? { quoteUsd: G } : {}) };
   }
 
   const r0 = loopBorrowPct(l.debt.side) as number;
@@ -267,8 +297,11 @@ export function leverageEstimate(
     else r = after;
   } else unknown.push('اثر وام شما بر نرخ وام مدل نشده است.');
 
-  const y = l.collateral.yield.pct + (l.collateral.supplyPct ?? 0);
-  const gG = periodGrowth({ value: l.collateral.yield.pct, kind: l.collateral.yield.kind }, days) ?? 0;
+  const y = ptYield + (l.collateral.supplyPct ?? 0);
+  const g0 = periodGrowth({ value: ptYield, kind: l.collateral.yield.kind }, days) ?? 0;
+  // A PT whose SY fell under the PY index redeems for less than one unit.
+  const gG = pt ? afterRedeem(g0, o.ptRedeemFactor) : g0;
+  if (gG !== g0) assumptions.push(`نرخ تبدیل SY زیر شاخص PY است: هر PT در سررسید ${formatPercent((o.ptRedeemFactor as number) * 100, 2)} یک واحد را پس می‌دهد و همین حساب شد.`);
   const gS = l.collateral.supplyPct ? (periodGrowth({ value: l.collateral.supplyPct, kind: 'apy' }, days) ?? 0) : 0;
   const gB = periodGrowth({ value: r, kind: 'apy' }, days) ?? 0;
   const dG = G * (gG + gS);

@@ -38,6 +38,13 @@ export interface MarketIdentityFields {
   sourceUpdatedAt?: string | null;
   /** The PT token (address on the market's network), when the API names it. */
   ptToken?: TokenRef | null;
+  /** Pendle's AMM fee, in log-rate per year (extendedInfo.feeRate): buying PT pays ln(1+implied) minus it. */
+  ammFeeLn?: number | null;
+  /**
+   * What one PT redeems for at maturity, as a share of one unit: the SY's exchange rate over the
+   * YT's PY index when the rate fell below it (on-chain), else 1. Null when not read.
+   */
+  ptRedeemFactor?: number | null;
 }
 
 export interface MarketData extends MarketIdentityFields {
@@ -109,8 +116,14 @@ export interface BaseHealth {
   conservativePct: number | null;
   /** 0% base on a points market: the YT pays only in points. */
   pointsOnly: boolean;
-  /** The base yield measured on-chain over the last 30 days, %; null when not measurable. */
+  /** The base yield measured on-chain over the last 30 days (else the week), %; null when not measurable. */
   realizedPct?: number | null;
+  /**
+   * The base to rank on when it differs from the published one, %: the on-chain yield of a
+   * suspect market, or of a points market published at 0 whose SY grows. Absent → published
+   * (or `conservativePct` for a suspect market).
+   */
+  rankPct?: number | null;
 }
 
 export interface ImpliedHealth {

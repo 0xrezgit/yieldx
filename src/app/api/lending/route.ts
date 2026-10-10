@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { getLendingFeed } from '../../../lib/lending/server';
+import { pendingHistories } from '../../../lib/lending/history';
 
 export const runtime = 'nodejs';
+/** Room for the rate histories still being fetched after the answer (see `after`). */
+export const maxDuration = 120;
 
 /**
  * GET /api/lending — variable-rate lending and vault opportunities (Morpho, Aave V4)
@@ -11,6 +14,8 @@ export const runtime = 'nodejs';
  */
 export async function GET() {
   const feed = await getLendingFeed();
+  const histories = pendingHistories();
+  if (histories) after(() => histories);
   const allDown = feed.sources.every((s) => s.state === 'error');
   return NextResponse.json(feed, {
     status: allDown ? 502 : 200,

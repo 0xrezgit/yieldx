@@ -6,6 +6,8 @@ import { askDepth, fillAsks, impliedApy, sellIntoBids, settlementFeeAt } from '.
 import { rateAfterDeposit } from './curve';
 import { leverageEstimate, type LeverageInput } from './leverage';
 import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, nonUsdFiat, PT_LOOP_POLICY, temporaryBase, volatileDeposit } from './policy';
+import { robustNote } from './robust-rate';
+import { afterAmmFee, afterRedeem, quoteCheck, REDEEM_IMPAIRED } from './pt-price';
 import { periodGrowth, simpleIncome } from './rates';
 
 /**
@@ -160,10 +162,11 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (health?.status === 'broken') return stop('needs-model', `داده‌ی بازده پایه‌ی این بازار خراب است؛ سود دلاری ساخته نمی‌شود. ${health.reasons.join(' ')}`);
   if (health?.status === 'suspect' && o.yt && o.rate.value !== null) {
     const clean = { ...o, yt: { ...o.yt, health: null } };
-    const conservative = health.conservativePct ?? o.rate.value;
-    const low = estimate({ ...clean, rate: { ...o.rate, value: Math.min(conservative, o.rate.value) } }, input);
+    // The on-chain base when health measured one (it can be above a published 0), else the lower of the two.
+    const ranked = health.rankPct ?? Math.min(health.conservativePct ?? o.rate.value, o.rate.value);
+    const low = estimate({ ...clean, rate: { ...o.rate, value: ranked } }, input);
     const high = estimate(clean, input);
-    const why = `بازده پایه مشکوک است: ${health.reasons.join(' ')} سود با بازده محافظه‌کارانه‌ی ${formatPercent(Math.min(conservative, o.rate.value), 1)} رتبه گرفت.`;
+    const why = `بازده پایه مشکوک است: ${health.reasons.join(' ')} سود با بازده ${formatPercent(ranked, 1)} رتبه گرفت.`;
     return {
       ...low,
       quality: worseQuality(low.quality, 'partial'),
@@ -188,8 +191,15 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     if (m.days < days) assumptions.push(`سررسید روز ${formatNumber(Math.ceil(m.days), 0)}؛ پس از آن نقد و بی‌درآمد.`);
   }
 
-  // An executable quote for this amount: the PT or YT actually bought, price impact included.
-  if ((o.family === 'pt' || o.family === 'yt') && quoteFits(o.quote, capital)) return fromQuote(o, input, { base, assumptions, unknown, quality, now, earningDays });
+  // An executable quote for this amount: the PT or YT actually bought, price impact included —
+  // once it agrees with the market's own rate. One that does not is a data error (an asset's
+  // dollar price that does not match the PT's), not a price: no dollar figure on it.
+  if ((o.family === 'pt' || o.family === 'yt') && quoteFits(o.quote, capital)) {
+    const implied = o.family === 'pt' ? o.rate.value : (o.yt?.impliedPct ?? null);
+    const check = implied !== null ? quoteCheck(o.quote, implied, exactDays(o.maturity, now)) : { ok: false, quotePct: null };
+    if (check.ok) return fromQuote(o, input, { base, assumptions, unknown, quality, now, earningDays });
+    return stop('insufficient', `قیمت اجرایی این بازار (نرخ ${check.quotePct === null ? 'نامعلوم' : formatPercent(check.quotePct, 1)}) با نرخ خود بازار (${formatPercent(implied ?? NaN, 1)}) نمی‌خواند؛ داده‌ی قیمت ناسازگار است و سود دلاری ساخته نمی‌شود.`);
+  }
 
   // Without a quote the mid rate decides, so it must be believable (lib/opportunity/health).
   if ((o.family === 'pt' || o.family === 'yt') && o.impliedHealth && o.impliedHealth.status !== 'ok') {
@@ -222,6 +232,12 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
 
   // The rate after the user's own deposit moves utilization, when the curve is known.
   let rateAfterEntry = o.rate.value;
+  // A PT bought in Pendle's AMM pays its fee in the rate.
+  if (o.family === 'pt' && rateAfterEntry !== null && o.ammFeeLn) {
+    const paid = afterAmmFee(rateAfterEntry, o.ammFeeLn, 'pt');
+    assumptions.push(`کارمزد AMM پندل از نرخ کم شد: ${formatPercent(rateAfterEntry, 2)} → ${formatPercent(paid, 2)}؛ هزینه‌ی تبدیل USDC به دارایی بازار و اثر قیمت بدون quote معلوم نیست.`);
+    rateAfterEntry = paid;
+  }
   if (o.rate.value !== null && o.supplyCurve) {
     const r = rateAfterDeposit(o.supplyCurve, allocatable, o.rate.value);
     if (r === null) unknown.push('نرخ پس از ورود سرمایه‌ی شما قابل محاسبه نبود؛ نرخ فعلی به کار رفت.');
@@ -233,28 +249,45 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     unknown.push('اثر ورود سرمایه‌ی شما بر نرخ مدل نشده است؛ نرخ فعلی به کار رفت.');
   }
 
-  // Ranked on the lower of today's rate and its own 7-day average: a utilization spike
-  // (lending markets near 100% often pay several times their average for a few days)
-  // is not held for the whole period. A clear spike is marked and shown as a range.
   let incomeRate = rateAfterEntry;
   let spikeRate: number | null = null;
-  const avg7d = o.rate.avg7d;
-  const avg1d = o.rate.avg1d;
-  // A high rate that held over the last day and covered most of the week is the market's new level, not a spike.
-  const sustained = avg7d != null && avg1d != null && incomeRate !== null && avg1d >= incomeRate * SUSTAINED.dayShare && avg7d >= incomeRate * SUSTAINED.weekShare;
-  if (sustained && incomeRate !== null && incomeRate > (avg1d as number) && (o.family === 'lend' || o.family === 'vault')) {
-    assumptions.push(`نرخ بالا ماندگار است؛ با میانگین یک روز (${formatPercent(avg1d as number, 2)}) حساب شد.`);
-    incomeRate = avg1d as number;
-  } else if (!sustained && incomeRate !== null && avg7d != null && Number.isFinite(avg7d) && incomeRate > avg7d && (o.family === 'lend' || o.family === 'vault')) {
-    if (incomeRate > SPIKE.ratio * avg7d && incomeRate - avg7d > SPIKE.minPp) {
-      spikeRate = incomeRate;
-      assumptions.push(`نرخ امروز (${formatPercent(incomeRate, 2)}) جهشی است و بیش از دو برابر میانگین ۷ روز (${formatPercent(avg7d, 2)})؛ سود با میانگین ۷ روز رتبه گرفت.`);
-    } else assumptions.push(`نرخ با میانگین ۷ روز (${formatPercent(avg7d, 2)}) حساب شد که از نرخ امروز کمتر است.`);
-    incomeRate = avg7d;
+  const robust = o.rate.robust;
+  if (robust && (o.family === 'lend' || o.family === 'vault')) {
+    // Daily history known: the robust rate (jump days out, the window chosen by the pattern,
+    // the last week's median for a smooth rate — see robust-rate.ts) replaces today's rate and
+    // the source's averages. The user's own deposit moves it by the same ratio as today's rate.
+    if (robust.pct === null) return { ...stop('insufficient', robustNote(robust)), earningDays, allocatable, unallocated, unallocatedReason, rateAfterEntry };
+    const entryRatio = o.rate.value !== null && o.rate.value > 0 && rateAfterEntry !== null ? rateAfterEntry / o.rate.value : 1;
+    incomeRate = robust.pct * entryRatio;
+    assumptions.push(robustNote(robust));
+    if (robust.trend === 'up') assumptions.push('روند: بازده هفته‌ی اخیر بالاتر از میانه‌ی ماه است.');
+    else if (robust.trend === 'down') assumptions.push('روند: بازده هفته‌ی اخیر پایین‌تر از میانه‌ی ماه است.');
+    if (robust.young) quality = worseQuality(quality, 'partial');
+  } else {
+    // Ranked on the lower of today's rate and its own 7-day average: a utilization spike
+    // (lending markets near 100% often pay several times their average for a few days)
+    // is not held for the whole period. A clear spike is marked and shown as a range.
+    const avg7d = o.rate.avg7d;
+    const avg1d = o.rate.avg1d;
+    // A high rate that held over the last day and covered most of the week is the market's new level, not a spike.
+    const sustained = avg7d != null && avg1d != null && incomeRate !== null && avg1d >= incomeRate * SUSTAINED.dayShare && avg7d >= incomeRate * SUSTAINED.weekShare;
+    if (sustained && incomeRate !== null && incomeRate > (avg1d as number) && (o.family === 'lend' || o.family === 'vault')) {
+      assumptions.push(`نرخ بالا ماندگار است؛ با میانگین یک روز (${formatPercent(avg1d as number, 2)}) حساب شد.`);
+      incomeRate = avg1d as number;
+    } else if (!sustained && incomeRate !== null && avg7d != null && Number.isFinite(avg7d) && incomeRate > avg7d && (o.family === 'lend' || o.family === 'vault')) {
+      if (incomeRate > SPIKE.ratio * avg7d && incomeRate - avg7d > SPIKE.minPp) {
+        spikeRate = incomeRate;
+        assumptions.push(`نرخ امروز (${formatPercent(incomeRate, 2)}) جهشی است و بیش از دو برابر میانگین ۷ روز (${formatPercent(avg7d, 2)})؛ سود با میانگین ۷ روز رتبه گرفت.`);
+      } else assumptions.push(`نرخ با میانگین ۷ روز (${formatPercent(avg7d, 2)}) حساب شد که از نرخ امروز کمتر است.`);
+      incomeRate = avg7d;
+    }
   }
 
   // Base income at that rate, read as published.
-  const growth = periodGrowth({ ...o.rate, value: incomeRate }, earningDays);
+  const published = periodGrowth({ ...o.rate, value: incomeRate }, earningDays);
+  // A PT whose SY fell under the PY index redeems for less than one unit.
+  const growth = published === null || o.family !== 'pt' ? published : afterRedeem(published, o.ptRedeemFactor);
+  if (o.family === 'pt' && growth !== published) assumptions.push(redeemNote(o.ptRedeemFactor as number));
   if (o.rate.kind === 'unknown') {
     assumptions.push('نوع نرخ (APR یا APY) اعلام نشده؛ به‌صورت ساده و محافظه‌کارانه حساب شد.');
     quality = worseQuality(quality, 'partial');
@@ -418,11 +451,14 @@ function fromQuote(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; 
   let income: number;
   const costs: CostItem[] = [...entry];
   if (q.side === 'pt') {
-    // One PT redeems for one unit of the accounting asset; spending S buys it.
-    income = units * q.unitUsd - S;
-    assumptions.push('PT در سررسید یک واحد دارایی حسابداری می‌شود؛ قیمت دلاری آن ثابت فرض شد.');
+    // One PT redeems for one unit of the accounting asset (less when the SY fell under the PY index).
+    const factor = o.ptRedeemFactor != null && o.ptRedeemFactor < REDEEM_IMPAIRED ? o.ptRedeemFactor : 1;
+    income = units * q.unitUsd * factor - S;
+    assumptions.push(factor < 1 ? redeemNote(factor) : 'PT در سررسید یک واحد دارایی حسابداری می‌شود؛ قیمت دلاری آن ثابت فرض شد.');
   } else {
-    const g = periodGrowth(o.rate, D);
+    const g0 = periodGrowth(o.rate, D);
+    // Under the PY index the YT earns nothing until the SY climbs back to it.
+    const g = g0 === null ? null : Math.max(0, afterRedeem(g0, o.ptRedeemFactor));
     if (g === null || o.rate.value === null || !o.yt) return { ...ctx.base, quality: 'insufficient', placement: 'insufficient', reason: 'بازده پایه معلوم نیست.', assumptions: [...assumptions, 'بازده پایه معلوم نیست.'] };
     const fee = o.yt.yieldFeePct;
     income = units * q.unitUsd * g * (1 - (fee ?? 0) / 100);
@@ -456,6 +492,9 @@ function fromQuote(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; 
   };
 }
 
+/** One sentence: a PT that redeems for less than one unit. */
+const redeemNote = (factor: number) => `نرخ تبدیل SY از شاخص PY پایین‌تر است: PT در سررسید ${formatPercent(factor * 100, 2)} یک واحد را پس می‌دهد (${formatPercent((1 - factor) * 100, 2)} کمتر) و همین حساب شد.`;
+
 const exactDays = (maturity: string | null, now: number) => (maturity ? (new Date(maturity).getTime() - now) / DAY_MS : NaN);
 /** YT price in underlying units: 1 − PT, PT = (1 + implied)^(−days/365). */
 const ytUnitPrice = (impliedPct: number, days: number) => (days > 0 ? 1 - Math.pow(1 + impliedPct / 100, -days / 365) : NaN);
@@ -474,9 +513,14 @@ const ytUnitPrice = (impliedPct: number, days: number) => (days > 0 ? 1 - Math.p
 function ytToMaturity(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; assumptions: string[]; unknown: string[]; quality: DataQuality; now: number }): Estimate {
   const { assumptions, unknown, now } = ctx;
   const D = exactDays(o.maturity, now);
-  const implied = o.yt!.impliedPct;
+  // A YT bought in Pendle's AMM pays its fee in the price (the PT sold against it goes cheaper).
+  const implied = afterAmmFee(o.yt!.impliedPct, o.ammFeeLn, 'yt');
   const p = ytUnitPrice(implied, D);
-  const baseGrowth = periodGrowth(o.rate, D);
+  const published = periodGrowth(o.rate, D);
+  // Under the PY index the YT earns nothing until the SY climbs back to it.
+  const baseGrowth = published === null ? null : Math.max(0, afterRedeem(published, o.ptRedeemFactor));
+  if (o.ammFeeLn) assumptions.push(`کارمزد AMM پندل در قیمت YT حساب شد (نرخ بازار ${formatPercent(o.yt!.impliedPct, 2)} → ${formatPercent(implied, 2)}).`);
+  if (baseGrowth !== published) assumptions.push(`نرخ تبدیل SY زیر شاخص PY است (${formatPercent((1 - (o.ptRedeemFactor as number)) * 100, 2)} کمتر)؛ YT تا جبران آن بازدهی نمی‌گیرد.`);
   if (!(p > 0 && p < 1) || baseGrowth === null || o.rate.value === null) return { ...ctx.base, quality: 'insufficient', placement: 'insufficient', reason: 'قیمت YT یا بازده پایه معلوم نیست.', assumptions: [...assumptions, 'قیمت YT یا بازده پایه معلوم نیست.'] };
   const entry = input.entryCosts ?? [];
   const S = Math.max(0, input.capital - sum(entry));
