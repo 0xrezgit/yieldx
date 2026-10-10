@@ -39,7 +39,7 @@ const TONE_CHIP: Record<Tone, string> = {
 
 export const btn = {
   primary:
-    'tap inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-lg bg-sx-primary text-white text-[15px] font-semibold hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed',
+    'tap inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-lg bg-sx-primary text-on-brand text-[15px] font-semibold hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed',
   secondary:
     'tap inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-lg border border-sx-accent/70 text-sx-text text-[15px] hover:bg-sx-accent/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
   ghost:

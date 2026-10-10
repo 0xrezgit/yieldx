@@ -147,3 +147,49 @@ export function loopLeaderSteps(p: { pt: string; ptUrl: string; lender: string; 
     ...swapStep(p.debt),
   ];
 }
+
+/**
+ * «وام با وثیقه»: post the holding, borrow dollars, (bridge,) run the dollar opportunity's
+ * own steps, watch both liquidations, then close in reverse. Money figures are rounded
+ * dollars; every step that has a page links to it.
+ */
+export function collateralSteps(p: {
+  collateral: string;
+  valueUsd: number;
+  ltv: number;
+  borrowUsd: number;
+  loanSymbol: string;
+  lender: string;
+  lenderChain: string;
+  lenderUrl: string | null;
+  liquidationDrop: number;
+  bridge: { from: string; to: string; usd: number } | null;
+  /** The token the second leg is entered with, when it differs from the loan (a stable swap first). */
+  swapTo: string | null;
+  deploySteps: Step[];
+  deployDrop: number | null;
+}): Step[] {
+  const $ = (x: number) => `${formatNumber(Math.round(x), 0)} دلار`;
+  const pct = (x: number) => `${formatNumber(Math.round(x * 100), 0)}٪`;
+  const watchDrop = Math.max(0, p.liquidationDrop / 2);
+  const closeDeploy = p.deploySteps.filter((s) => s.kind !== 'wait' && s.kind !== 'watch');
+  const enterDeploy = closeDeploy.filter((s) => s.kind === 'buy' || s.kind === 'deposit' || s.kind === 'collateral' || s.kind === 'loop');
+  const exitDeploy = closeDeploy.filter((s) => !enterDeploy.includes(s));
+  const hold = p.deploySteps.find((s) => s.kind === 'wait' || s.kind === 'watch');
+  return [
+    { kind: 'collateral', short: 'وثیقه', title: `سپردن ${$(p.valueUsd)} ${ltr(p.collateral)} به‌عنوان وثیقه در ${ltr(p.lender)} روی ${p.lenderChain}`, href: p.lenderUrl },
+    { kind: 'repay', short: 'وام دلار', title: `وام ${$(p.borrowUsd)} ${ltr(p.loanSymbol)} (LTV ${pct(p.ltv)}) از همان بازار`, href: p.lenderUrl },
+    ...(p.bridge ? [{ kind: 'swap' as const, short: 'پل', title: `پل ${ltr(p.loanSymbol)} از ${p.bridge.from} به ${p.bridge.to} (رفت‌وبرگشت حدود ${$(p.bridge.usd)})`, href: 'https://matcha.xyz' }] : []),
+    ...(p.swapTo ? [{ kind: 'swap' as const, short: 'تبدیل', title: `تبدیل ${ltr(p.loanSymbol)} به ${ltr(p.swapTo)} (دو استیبل‌کوین؛ کارمزد کم، در حساب نیامده)`, href: 'https://matcha.xyz' }] : []),
+    ...enterDeploy,
+    {
+      kind: 'watch',
+      short: 'پایش',
+      title: `${hold ? `${hold.title}؛ ` : ''}اگر ${ltr(p.collateral)} حدود ${pct(watchDrop)} افت کرد وثیقه اضافه کنید — با ${pct(p.liquidationDrop)} افت وام لیکویید می‌شود${p.deployDrop !== null ? `؛ لوپ با ${pct(p.deployDrop)} افت قیمت PT` : ''}`,
+    },
+    ...exitDeploy,
+    ...(p.swapTo ? [{ kind: 'swap' as const, short: 'تبدیل', title: `تبدیل ${ltr(p.swapTo)} به ${ltr(p.loanSymbol)} برای بازپرداخت`, href: 'https://matcha.xyz' }] : []),
+    ...(p.bridge ? [{ kind: 'swap' as const, short: 'پل برگشت', title: `پل ${ltr(p.loanSymbol)} به ${p.bridge.from}`, href: 'https://matcha.xyz' }] : []),
+    { kind: 'withdraw', short: 'بستن وام', title: `بازپرداخت وام و بهره در ${ltr(p.lender)} و برداشت ${ltr(p.collateral)}`, href: p.lenderUrl },
+  ];
+}

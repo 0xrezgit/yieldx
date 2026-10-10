@@ -13,8 +13,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#0B0D12',
-    theme_color: '#0B0D12',
+    background_color: '#070B11',
+    theme_color: '#070B11',
     categories: ['finance'],
     icons: [
       { src: '/pwa-icon/192', sizes: '192x192', type: 'image/png', purpose: 'any' },

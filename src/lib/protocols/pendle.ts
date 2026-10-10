@@ -3,6 +3,7 @@ import type { MarketData, MarketSummary } from '../../types/market';
 import { daysUntil } from '../utils/math';
 import { assessBase, assessImplied, type BaseHistoryPoint } from '../opportunity/health';
 import { cachedRealized } from './realized';
+import { levelsFrom } from '../opportunity/base-scenarios';
 import { BaseAdapter, MarketNotFoundError, UpstreamError, fetchJson, isObject, plausibleAPY, toPercent, type Shape } from './base';
 
 /** One row of GET /v1/{chain}/markets (paginated). */
@@ -197,6 +198,7 @@ export class PendleAdapter extends BaseAdapter {
       ammFeeLn: typeof m.extendedInfo?.feeRate === 'number' && m.extendedInfo.feeRate >= 0 ? m.extendedInfo.feeRate : null,
       ptRedeemFactor: cachedRealized(chainId, m.sy?.address, addressOf(m.yt))?.redeemFactor ?? null,
       baseHealth: healthOf(m, chainId, this.base, (m.categoryIds ?? []).map((c) => c.toLowerCase())),
+      baseLevels: levelsFrom(cachedHistory(this.base, chainId, m.address), cachedRealized(chainId, m.sy?.address, addressOf(m.yt))),
       impliedHealth: assessImplied({
         impliedPct: toPercent(m.impliedApy),
         ptPrice: typeof m.ptDiscount === 'number' ? 1 - m.ptDiscount : null,

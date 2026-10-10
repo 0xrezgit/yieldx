@@ -7,6 +7,7 @@ import {
   simulateYt,
   ytEntryLimits,
   ytPriceFromAPY,
+  YT_YIELD_FEE_PCT,
   type YtTradeInput,
 } from '../../src/lib/calculators/trade';
 import { calculateLooping } from '../../src/lib/calculators/looping';
@@ -83,6 +84,23 @@ describe('simulateYt', () => {
     expect(usd.points).toBeCloseTo(usd.notional * 2 * 180, 3);
     expect(unit.points).toBeCloseTo(unit.units * 2 * 180, 3);
     expect(usd.cash).toBeCloseTo(unit.cash, 9);
+  });
+
+  it("matches Exponent's own app for YT-ONyc (5.5% yield fee)", () => {
+    // app.exponent.finance, 2026-10-10: 100 ONyc ($115.42) → 3,829.52 YT, $96.63 yield to maturity.
+    const t = simulateYt({
+      ...yt,
+      capital: 115.42,
+      underlyingPrice: 1.1516,
+      daysToMaturity: 92,
+      holdDays: 92,
+      entryAPY: 12.9,
+      baseAPY: 11.02,
+      feePercent: 0.05,
+      yieldFeePercent: YT_YIELD_FEE_PCT.exponent ?? 0,
+    });
+    expect(t.notional).toBeCloseTo(3829.5, -1);
+    expect(t.yieldEarned).toBeCloseTo(96.63, 0);
   });
 });
 

@@ -5,6 +5,7 @@ import { allPools, getJson } from './server';
 import { dailyYields, feeBps, fromPrices, growthFromPrices, instantShare, MAX_MEASURED_PCT, onePerContract, type ExitStatus, type HolderSim, type VerifiedFeed, type VerifiedPool, type VerifyReject } from './verify';
 import type { YieldPool } from './yields';
 import { robustRate } from '../opportunity/robust-rate';
+import { createStore, type Kind } from './verify-store';
 
 /**
  * YieldX's own on-chain verification of DefiLlama pools (see `verify.ts` for the
@@ -194,6 +195,8 @@ async function findBlock(chain: ChainCfg, target: number): Promise<number> {
 }
 
 const blocks = new Map<string, Promise<number>>();
+/** The same blocks once found, for the disk copy. */
+const blockValues = new Map<string, number>();
 
 /** A search shared by every pool of that day: a passing network error must not fail them all. */
 async function findBlockRetried(chain: ChainCfg, target: number): Promise<number> {
@@ -214,7 +217,7 @@ function blockAt(chainName: string, ms: number): Promise<number> {
   if (!hit) {
     hit = findBlockRetried(CHAINS[chainName], Math.floor(ms / 1000));
     blocks.set(key, hit);
-    hit.catch(() => blocks.delete(key));
+    hit.then((n) => (blockValues.set(key, n), store.mark('block', key))).catch(() => blocks.delete(key));
   }
   return hit;
 }
@@ -328,6 +331,7 @@ async function vaultAddress(id: string, now: number): Promise<string | null> {
   const body = await getJson<{ data?: { pool_old?: string }[] }>(`https://yields.llama.fi/poolsEnriched?pool=${encodeURIComponent(id)}`, { cache: 'no-store' });
   const value = /0x[0-9a-fA-F]{40}/.exec(body.data?.[0]?.pool_old ?? '')?.[0] ?? null;
   addresses.set(id, { at: now, value });
+  store.mark('address', id);
   return value;
 }
 
@@ -355,6 +359,7 @@ async function cachedPrice(key: string, read: () => Promise<bigint>, scale: numb
     value = null;
   }
   prices.set(key, value);
+  store.mark('price', key);
   return value;
 }
 
@@ -601,6 +606,35 @@ interface Done {
 const results = new Map<string, Done>();
 const inFlight = new Set<string>();
 
+// A new server starts from the lasting copy (verify-store: Neon, else a local file):
+// verified vaults show at once and only the rest is worked on.
+const store = createStore<Done>({
+  all: () => ({
+    // Network failures are not kept: they are retried anyway.
+    results: [...results].filter(([, r]) => r.outcome !== null),
+    prices: [...prices],
+    addresses: [...addresses],
+    blocks: [...blockValues],
+  }),
+  one: (kind: Kind, key: string) => {
+    if (kind === 'result') {
+      const r = results.get(key);
+      return r && r.outcome !== null ? r : undefined;
+    }
+    if (kind === 'price') return prices.has(key) ? prices.get(key) : undefined;
+    if (kind === 'address') return addresses.get(key);
+    return blockValues.get(key);
+  },
+});
+const ready: Promise<void> = store.load().then((saved) => {
+  if (!saved) return;
+  // Memory wins over the copy: anything already worked on in this instance stays.
+  for (const [k, v] of saved.results) if (!results.has(k)) results.set(k, v);
+  for (const [k, v] of saved.prices) if (!prices.has(k)) prices.set(k, v);
+  for (const [k, v] of saved.addresses) if (!addresses.has(k)) addresses.set(k, v);
+  for (const [k, n] of saved.blocks) if (!blocks.has(k)) (blockValues.set(k, n), blocks.set(k, Promise.resolve(n)));
+});
+
 const today = (now: number) => Math.floor(now / DAY_MS) * DAY_MS;
 
 /** Done for today, or failed recently (network) and not due again yet. */
@@ -632,6 +666,7 @@ async function verifyOne(p: YieldPool, now: number): Promise<void> {
   const prev = results.get(p.id);
   results.set(p.id, outcome === null && prev?.outcome?.ok ? { ...prev, at: Date.now() } : { day: today(now), at: Date.now(), outcome });
   inFlight.delete(p.id);
+  store.mark('result', p.id);
 }
 
 export function candidates(pools: YieldPool[]): YieldPool[] {
@@ -639,7 +674,7 @@ export function candidates(pools: YieldPool[]): YieldPool[] {
 }
 
 export async function getVerified(now = Date.now()): Promise<{ feed: VerifiedFeed; background: Promise<unknown> | null }> {
-  const { pools, refresh } = await allPools(now);
+  const [{ pools, refresh }] = await Promise.all([allPools(now), ready]);
   const list = candidates(pools);
   const missing = list.filter((p) => !settled(p.id, now));
   const work = missing.length ? fill(missing, now) : null;
@@ -669,12 +704,14 @@ export async function getVerified(now = Date.now()): Promise<{ feed: VerifiedFee
   }
   return {
     feed: { pools: kept, pending, rejected, byChain, candidates: list.length, explorers: Object.fromEntries(Object.entries(CHAINS).map(([k, c]) => [k, c.explorer])), chainIds: Object.fromEntries(Object.entries(CHAINS).map(([k, c]) => [k, c.chainId])), minTvlUsd: CFG.minTvlUsd, fetchedAt: new Date(now).toISOString() },
-    background: work || refresh ? Promise.all([work, refresh]) : null,
+    // The run's last results are written before the function may be frozen (Vercel).
+    background: work || refresh ? Promise.all([work, refresh]).finally(() => store.flush()) : null,
   };
 }
 
 /** A deposit from `fromMs` (a day, 00:00 UTC) to the latest verified day, by the on-chain price. */
 export async function verifiedGrowth(id: string, amount: number, fromMs: number) {
+  await ready;
   const o = results.get(id)?.outcome;
   if (!o || !('value' in o)) return null;
   const v = o.value;

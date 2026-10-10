@@ -5,9 +5,12 @@ import { formatNumber } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
 
 /** The one filled action of a row (enter the market). */
-export const primaryAction = 'tap inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-4 min-h-11 text-sm font-medium text-white hover:brightness-110 active:brightness-95 transition';
+export const primaryAction = 'tap inline-flex items-center justify-center gap-1.5 rounded-md bg-brand px-4 min-h-11 text-sm font-medium text-on-brand hover:brightness-110 active:brightness-95 transition';
 /** Secondary actions beside it: same height, outlined. */
 export const secondaryAction = 'tap inline-flex items-center justify-center gap-1.5 rounded-md border border-strong bg-white/[0.03] px-3 min-h-11 text-sm font-medium text-secondary hover:text-primary hover:bg-hover transition-colors';
+
+/** A quiet row action (list rows): compact, outlined, no fill. */
+export const ghostAction = 'tap inline-flex items-center justify-center gap-1 rounded-md border border-default px-2.5 min-h-9 text-xs font-medium text-secondary hover:text-primary hover:border-strong hover:bg-elevated transition-colors';
 
 /** Rank before the logo: the first three stand out. */
 export function Rank({ n }: { n: number }) {

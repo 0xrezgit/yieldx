@@ -26,9 +26,11 @@ export function ytPriceFromAPY(apy: number, days: number): number {
 /**
  * Share of a YT's accrued yield the protocol keeps. Pendle deducts `interestFeeRate`
  * from YT interest (PendleYieldContractFactory, capped at 20% on-chain); its docs give
- * 5%. Spectra and Exponent: not verified — no fee is assumed and the result says so.
+ * 5%. Exponent: 5.5%, from its own app (ONyc, 2026-10-10: «1.0365 USD per day» on
+ * 3,829.52 USD of yield at 11.02% APY, and $96.63 to maturity, both leave 94.5%).
+ * Spectra: not verified — no fee is assumed and the result says so.
  */
-export const YT_YIELD_FEE_PCT: Record<string, number | null> = { pendle: 5, spectra: null, exponent: null };
+export const YT_YIELD_FEE_PCT: Record<string, number | null> = { pendle: 5, spectra: null, exponent: 5.5 };
 
 /**
  * How each API publishes a market's base yield: Pendle and Exponent as APY, Spectra's

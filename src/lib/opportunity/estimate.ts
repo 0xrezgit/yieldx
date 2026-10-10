@@ -9,6 +9,7 @@ import { MAX_POOL_SHARE_WITHOUT_QUOTE, MAX_RATE_AGE_HOURS, nonUsdFiat, PT_LOOP_P
 import { robustNote } from './robust-rate';
 import { afterAmmFee, afterRedeem, quoteCheck, REDEEM_IMPAIRED } from './pt-price';
 import { periodGrowth, simpleIncome } from './rates';
+import { baseScenarios, scenarioNote } from './base-scenarios';
 
 /**
  * «سود خالص قابل برآورد در این دوره» — the one number every family is ranked by:
@@ -160,19 +161,29 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   const health = o.family === 'yt' ? o.yt?.health : null;
   if (health?.pointsOnly) return stop('needs-model', POINTS_ONLY);
   if (health?.status === 'broken') return stop('needs-model', `داده‌ی بازده پایه‌ی این بازار خراب است؛ سود دلاری ساخته نمی‌شود. ${health.reasons.join(' ')}`);
-  if (health?.status === 'suspect' && o.yt && o.rate.value !== null) {
-    const clean = { ...o, yt: { ...o.yt, health: null } };
-    // The on-chain base when health measured one (it can be above a published 0), else the lower of the two.
-    const ranked = health.rankPct ?? Math.min(health.conservativePct ?? o.rate.value, o.rate.value);
-    const low = estimate({ ...clean, rate: { ...o.rate, value: ranked } }, input);
-    const high = estimate(clean, input);
-    const why = `بازده پایه مشکوک است: ${health.reasons.join(' ')} سود با بازده ${formatPercent(ranked, 1)} رتبه گرفت.`;
+  // A variable base yield is never held at today's figure: the YT is ranked on the likely
+  // reading (today fading into the market's own level) and shown under all three.
+  if (o.family === 'yt' && o.yt && o.rate.value !== null && o.yt.scenarioNote === undefined) {
+    const suspect = health?.status === 'suspect';
+    // A suspect base: the on-chain one when health measured it, else the lower of the two.
+    const today = suspect ? (health.rankPct ?? Math.min(health.conservativePct ?? o.rate.value, o.rate.value)) : o.rate.value;
+    const sc = baseScenarios(today, o.yt.levels, exactDays(o.maturity, now), suspect ? today : null);
+    const note = scenarioNote(sc, today, (x) => formatPercent(x, 2));
+    const run = (pct: number) => estimate({ ...o, rate: { ...o.rate, value: pct }, yt: { ...o.yt!, health: null, scenarioNote: note } }, input);
+    const likely = run(sc.likely);
+    const all = (['low', 'likely', 'high'] as const).map((kind) => {
+      const e = kind === 'likely' ? likely : run(sc[kind]);
+      return { kind, basePct: sc[kind], received: e.baseIncome, net: e.net, notional: e.ytNotional ?? null };
+    });
+    const nets = all.map((x) => x.net).filter((x): x is number => x !== null);
+    const why = suspect ? [`بازده پایه مشکوک است: ${health.reasons.join(' ')} سناریوها از ${formatPercent(today, 1)} ساخته شدند.`] : [];
     return {
-      ...low,
-      quality: worseQuality(low.quality, 'partial'),
-      confidence: 'suspect',
-      range: low.net !== null && high.net !== null ? { low: Math.min(low.net, high.net), high: Math.max(low.net, high.net) } : null,
-      assumptions: [why, ...low.assumptions],
+      ...likely,
+      quality: suspect ? worseQuality(likely.quality, 'partial') : likely.quality,
+      ...(suspect && likely.confidence !== 'executable' ? { confidence: 'suspect' as const } : {}),
+      range: likely.net !== null && nets.length > 1 ? { low: Math.min(...nets), high: Math.max(...nets) } : likely.range,
+      scenarios: all,
+      assumptions: [...why, ...likely.assumptions],
     };
   }
   // A base yield far above the market's own forecast is a temporary boost: no dollar figure on it.
@@ -463,7 +474,7 @@ function fromQuote(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; 
     const fee = o.yt.yieldFeePct;
     income = units * q.unitUsd * g * (1 - (fee ?? 0) / 100);
     costs.push({ key: 'yt-principal', label: 'بهای YT (در سررسید صفر می‌شود)', usd: S, basis: 'model' });
-    assumptions.push(`بازده پایه‌ی امروز (${formatPercent(o.rate.value, 2)}) تا سررسید ثابت فرض شد؛ متغیر است.`, 'YT در سررسید صفر می‌شود؛ فقط بازده جمع‌شده برمی‌گردد.');
+    assumptions.push(o.yt.scenarioNote ?? `بازده پایه‌ی امروز (${formatPercent(o.rate.value, 2)}) تا سررسید ثابت فرض شد؛ متغیر است.`, 'YT در سررسید صفر می‌شود؛ فقط بازده جمع‌شده برمی‌گردد.');
     if (fee !== null) assumptions.push(`کارمزد پروتکل از بازده YT (${formatPercent(fee, 0)}) کم شد.`);
     else unknown.push('کارمزد پروتکل از بازده YT تأیید نشده؛ کم نشد.');
     if (o.yt.hasPoints) assumptions.push('پوینت و ایردراپ این بازار در سود دلاری نیامده است.');
@@ -489,6 +500,7 @@ function fromQuote(o: Opportunity, input: EstimateInput, ctx: { base: Estimate; 
     placement,
     reason: reasonOf(placement),
     confidence: 'executable',
+    ...(q.side === 'yt' ? { ytNotional: units * q.unitUsd } : {}),
   };
 }
 
@@ -534,7 +546,7 @@ function ytToMaturity(o: Opportunity, input: EstimateInput, ctx: { base: Estimat
   const keep = 1 - (fee ?? 0) / 100;
   const breakEven = o.rate.kind === 'apr' ? (p / keep / (D / 365)) * 100 : (Math.pow(1 + p / keep, 365 / D) - 1) * 100;
   assumptions.push(
-    `بازده پایه‌ی امروز (${formatPercent(o.rate.value, 2)}) تا سررسید ثابت فرض شد؛ متغیر است.`,
+    o.yt!.scenarioNote ?? `بازده پایه‌ی امروز (${formatPercent(o.rate.value, 2)}) تا سررسید ثابت فرض شد؛ متغیر است.`,
     `هر یک واحد درصد تغییر بازده پایه حدود ${formatNumber(N * (up - baseGrowth) * (1 - (fee ?? 0) / 100), 2)} دلار نتیجه را جابه‌جا می‌کند؛ سربه‌سر در بازده پایه‌ی ${formatPercent(breakEven, 2)}.`,
     'YT در سررسید صفر می‌شود؛ فقط بازده جمع‌شده برمی‌گردد.',
   );
@@ -558,6 +570,7 @@ function ytToMaturity(o: Opportunity, input: EstimateInput, ctx: { base: Estimat
     assumptions,
     quality: ctx.quality,
     placement,
+    ytNotional: N,
     reason: reasonOf(placement),
   };
 }

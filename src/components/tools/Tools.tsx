@@ -10,7 +10,7 @@ import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store'
 import { defaultScreenSettings, type OpportunityListing, type ScreenSettings } from '../../lib/risk/opportunities';
 import { Collapsible } from '../ui/card';
 import { NumberField } from '../ui/field';
-import { DataStatus } from '../ui/data-status';
+import { ChoiceCards, type Choice } from '../ui/choice-cards';
 import { Segmented } from '../opportunities/parts';
 import { YtBoard } from '../opportunities/YtBoard';
 import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from '../opportunities/Calculator';
@@ -23,6 +23,32 @@ import { VerifiedYields } from './VerifiedYields';
 type Tab = 'yt' | 'calc' | 'lp' | 'borrow' | 'verified';
 const TABS: Tab[] = ['yt', 'calc', 'lp', 'borrow', 'verified'];
 
+const TOOL_CHOICES: Choice<Tab>[] = [
+  { id: 'calc', icon: Calculator, title: 'ماشین‌حساب', text: 'یک معامله‌ی YT، PT یا لوپ را با عددهای خودتان' },
+  { id: 'yt', icon: Gift, title: <>پوینت با <bdi dir="ltr">YT</bdi></>, text: 'پوینت را کجا ارزان‌تر بخرید و تا چه قیمتی' },
+  { id: 'lp', icon: Droplets, title: <>استخر <bdi dir="ltr">LP</bdi></>, text: 'کارمزد واقعی هر استخر و زیان ناپایدار' },
+  { id: 'borrow', icon: HandCoins, title: 'هزینه‌ی وام', text: 'ارزان‌ترین وام برای وثیقه‌ی شما' },
+  { id: 'verified', icon: BadgeCheck, title: 'تأییدشده', text: 'خزانه‌هایی که بازدهشان روی زنجیره چک شد' },
+];
+
+/** One line for every protocol feed: all fresh, or which ones are not (the details on hover). */
+function FeedStatus({ ids, loading, failed, stale, feeds }: { ids: ProtocolId[]; loading: boolean; failed: ProtocolId[]; stale: ProtocolId[]; feeds: Partial<Record<ProtocolId, { at: number | null } | undefined>> }) {
+  if (loading)
+    return (
+      <span className="text-xs text-muted flex items-center gap-1.5">
+        <Loader2 size={12} className="animate-spin" aria-hidden /> در حال دریافت…
+      </span>
+    );
+  const bad = ids.filter((id) => failed.includes(id) || stale.includes(id));
+  const title = ids.map((id) => `${protocols[id].name}: ${failed.includes(id) ? 'دریافت نشد' : stale.includes(id) ? 'قدیمی' : 'به‌روز'}`).join(' · ');
+  return (
+    <span className={`text-xs flex items-center gap-1.5 ${bad.length ? 'text-warning' : 'text-muted'}`} title={title}>
+      <span className={`size-1.5 rounded-full ${bad.length ? 'bg-warning' : 'bg-success'}`} aria-hidden />
+      {bad.length ? <>داده‌ی <bdi dir="ltr">{bad.map((id) => protocols[id].name).join('، ')}</bdi> کامل نیست</> : feeds && 'داده‌ها به‌روز'}
+    </span>
+  );
+}
+
 interface Stored {
   tab: Tab;
   screen: ScreenSettings;
@@ -31,7 +57,7 @@ interface Stored {
   ytPointsOnly: boolean;
 }
 
-const initial: Stored = { tab: 'yt', screen: defaultScreenSettings, calc: defaultCalc, filters: defaultFilters, ytPointsOnly: true };
+const initial: Stored = { tab: 'calc', screen: defaultScreenSettings, calc: defaultCalc, filters: defaultFilters, ytPointsOnly: true };
 
 /** Settings from storage or typing may hold NaN/null — fall back per field so the boards never silently empty. */
 function sane<T extends object>(value: Partial<T> | undefined, fallback: T): T {
@@ -90,6 +116,7 @@ export default function Tools() {
               marketId: m.id,
               marketName: m.name,
               icon: m.icon,
+              ytUnit: 'asset',
               days: m.daysToMaturity,
               entryAPY: round(m.impliedAPY),
               exitAPY: round(m.impliedAPY),
@@ -114,6 +141,7 @@ export default function Tools() {
               calc: {
                 ...s.calc,
                 underlyingPrice: market.underlyingPrice ?? s.calc.underlyingPrice,
+                ytUnit: market.ytUnit ?? 'asset',
                 ...(market.points ? { pointsPerDay: market.points.pointsPerDay, pointsBasis: market.points.basis, ytMultiplier: market.points.ytMultiplier } : {}),
               },
             }
@@ -143,46 +171,20 @@ export default function Tools() {
 
   return (
     <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex flex-col">
           <h1 className="page-title">ابزارها</h1>
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {loading ? (
-              <p className="text-xs text-secondary flex items-center gap-1.5">
-                <Loader2 size={12} className="animate-spin" aria-hidden /> در حال دریافت بازارها…
-              </p>
-            ) : (
-              ids.map((id) =>
-                failed.includes(id) ? (
-                  <p key={id} className="text-xs text-danger flex items-center gap-1.5">
-                    <span className="size-2 rounded-full bg-danger" aria-hidden /> <bdi dir="ltr">{protocols[id].name}</bdi>: دریافت نشد
-                  </p>
-                ) : (
-                  <DataStatus key={id} source="api" fetchedAt={feeds[id]?.at ?? null} stale={stale.includes(id)} label={<bdi dir="ltr">{protocols[id].name}</bdi>} />
-                ),
-              )
-            )}
-          </div>
+          <p className="page-sub">برای وقتی که می‌خواهید یک معامله را خودتان دقیق حساب کنید.</p>
         </div>
-        <button type="button" onClick={refresh} className="tap inline-flex items-center gap-1.5 rounded-lg px-3 min-h-10 text-sm text-secondary hover:text-primary hover:bg-elevated">
-          <RefreshCw size={14} aria-hidden /> به‌روزرسانی
-        </button>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <button type="button" onClick={refresh} className="tap inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-elevated">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden /> به‌روزرسانی
+          </button>
+          <FeedStatus ids={ids} loading={loading} failed={failed} stale={stale} feeds={feeds} />
+        </div>
       </header>
 
-      <div className="sticky below-header z-20 -mx-[var(--space-page-x)] px-[var(--space-page-x)] py-2 bg-canvas/95 backdrop-blur">
-        <Segmented
-          value={tab}
-          onChange={(t) => patch({ tab: t })}
-          label="ابزار"
-          options={[
-            { id: 'yt', label: <><Gift size={15} aria-hidden /> YT</> },
-            { id: 'calc', label: <><Calculator size={15} aria-hidden /> ماشین‌حساب</> },
-            { id: 'lp', label: <><Droplets size={15} aria-hidden /> LP</> },
-            { id: 'borrow', label: <><HandCoins size={15} aria-hidden /> هزینه‌ی وام</> },
-            { id: 'verified', label: <><BadgeCheck size={15} aria-hidden /> تأییدشده</> },
-          ]}
-        />
-      </div>
+      <ChoiceCards value={tab} onChange={(t) => patch({ tab: t })} options={TOOL_CHOICES} label="ابزار" />
 
       {tab === 'lp' && (
         <>

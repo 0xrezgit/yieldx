@@ -55,6 +55,8 @@ export interface MarketData extends MarketIdentityFields {
   underlyingPrice: number | null;
   /** Symbol of the accounting asset PT redeems into, when the API reports it. */
   assetSymbol?: string | null;
+  /** What one YT pays the yield of: one asset unit (default) or $1 (Exponent markets quoted in USD). */
+  ytUnit?: 'asset' | 'usd';
   ptPrice: number;
   ytPrice: number;
   impliedAPY: number;
@@ -102,11 +104,20 @@ export interface MarketSummary extends MarketIdentityFields {
   isNew: boolean;
   /** Is the published base yield believable (see lib/opportunity/health)? Absent when not checked. */
   baseHealth?: BaseHealth | null;
+  /** The base yield's own recent levels, for the scenarios (lib/opportunity/base-scenarios). */
+  baseLevels?: BaseLevels | null;
   /** Is the market's implied APY believable (consistent with the PT price, recently traded)? */
   impliedHealth?: ImpliedHealth | null;
 }
 
 export type BaseHealthStatus = 'ok' | 'suspect' | 'broken';
+
+/** Mean base yield over the last 7, 30 and 90 days, %; null where not known. */
+export interface BaseLevels {
+  d7: number | null;
+  d30: number | null;
+  d90: number | null;
+}
 
 export interface BaseHealth {
   status: BaseHealthStatus;

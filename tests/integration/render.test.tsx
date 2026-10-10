@@ -122,7 +122,7 @@ describe('dashboard layouts render', () => {
     }
   });
 
-  it('renders the app chrome: four sections, «تحلیل بازار» active on its calculator /dashboard', () => {
+  it('renders the app chrome: five sections, «تحلیل بازار» active on its calculator /dashboard', () => {
     const html = renderToString(
       <ShellContext.Provider value={shell('result')}>
         <AppHeader />
@@ -137,8 +137,10 @@ describe('dashboard layouts render', () => {
     expect(html).toContain('href="/tools"');
     expect(html).toContain('آموزش');
     expect(html).toContain('href="/learn"');
+    expect(html).toContain('وام با وثیقه');
+    expect(html).toContain('href="/collateral"');
     expect(html).not.toContain('فرصت‌ها');
-    expect((html.match(/<li/g) ?? []).length).toBe(4);
+    expect((html.match(/<li/g) ?? []).length).toBe(5);
     // The market analysis stays the active section on its sub-pages.
     expect(html.match(/aria-current="page"[^>]*>(?:(?!<\/a>)[\s\S])*تحلیل بازار/)).not.toBeNull();
   });

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GLOSSARY, WALKTHROUGHS } from '../../src/lib/learn/content';
 import { COMPARE, LESSONS } from '../../src/lib/learn/lessons';
-import { PLATFORMS } from '../../src/lib/market/platforms';
-import { STRATEGIES } from '../../src/lib/market/strategies';
 
 const TOOL_TABS = ['yt', 'calc', 'lp', 'borrow', 'verified'];
 
@@ -11,11 +9,8 @@ function resolves(href: string): boolean {
   if (href === '/' || href === '/portfolio/new' || href === '/portfolio') return true;
   const tab = /^\/tools\?tab=(\w+)$/.exec(href);
   if (tab) return TOOL_TABS.includes(tab[1]);
-  const p = /^\/p\/([\w-]+)$/.exec(href);
-  if (p) return PLATFORMS.some((x) => x.id === p[1]);
-  const s = /^\/s\/([\w-]+)$/.exec(href);
-  if (s) return STRATEGIES.some((x) => x.id === s[1]);
-  return false;
+  // The market analysis: a view (YT dollar, PT loop) or a search.
+  return /^\/\?(view=(yt|loop)|q=\w+)$/.test(href);
 }
 
 const years = (days: number) => days / 365;

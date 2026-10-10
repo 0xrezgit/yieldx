@@ -493,24 +493,84 @@ export function VerifiedYields() {
   const dropped = feed ? (Object.entries(feed.rejected) as [VerifyReject, number][]).filter(([, n]) => n > 0) : [];
   const preset = presetById(st.preset);
 
+  const checked = feed ? feed.candidates - feed.pending : 0;
+
   return (
     <section className="flex flex-col gap-4" aria-label="بازده تأییدشده">
-      <div className="sx-card p-4 flex flex-col gap-3">
-        <h2 className="font-semibold flex items-center gap-2">
+      <header className="flex flex-col gap-2">
+        <h2 className="font-semibold text-primary flex items-center gap-2">
           <BadgeCheck size={18} className="text-accent" aria-hidden /> بازده تأییدشده روی زنجیره
         </h2>
-        <ul className="text-sm text-secondary leading-7 flex flex-col gap-1">
-          <li>
-            <b className="text-primary">بازده واقعی:</b> قیمت هر سهم خزانه (در Aave شاخص سود) هر روز در یک بلوک ثابت (۰۰:۰۰ UTC) روی زنجیره خوانده می‌شود؛ رشد آن همان چیزی است که دارندگان واقعاً گرفته‌اند، نه نرخ اعلام‌شده. نرخ رتبه‌بندی از بازده روزانه است: روزهای جهش کنار می‌روند و خود خزانه می‌ماند؛ برای خزانه‌ی یکنواخت میانه‌ی ۷ روز اخیر، برای پله‌ای میانگین ۹۰ روزه، و برای پرنوسان کمترینِ این دو. استخرهای زیر ۳۰ روز در بخش «نوپا» جدا می‌آیند.
-          </li>
-          <li>
-            <b className="text-primary">برداشت:</b> بزرگ‌ترین دارندگان واقعی خزانه پیدا می‌شوند و برداشت کامل هرکدام در همان بلوک شبیه‌سازی می‌شود؛ آنچه بیرون آمد ثبت می‌شود.
-          </li>
-          <li>
-            <b className="text-primary">فهرست:</b> فقط خزانه‌هایی که هر دو آزمون را گذراندند. نامزدها از DefiLlama می‌آیند: تک‌دارایی، نقدینگی <Num>{formatUSDCompact(feed?.minTvlUsd ?? 1e6)}</Num> و بیشتر، روی {feed ? Object.keys(feed.explorers).map((c) => networkByName(c).nameFa).join('، ') : 'شبکه‌های پشتیبانی‌شده'}.
-          </li>
-        </ul>
-        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="فیلتر آماده">
+        <p className="text-sm text-secondary leading-7">خزانه‌هایی که YieldX بازده واقعی و امکان برداشتشان را خودش روی زنجیره چک کرده، به ترتیب سود خالص دلاری.</p>
+        <details className="group rounded-lg border border-default bg-surface">
+          <summary className="tap flex items-center justify-between gap-2 px-4 min-h-10 text-sm text-secondary hover:text-primary">
+            روش بررسی و منابع
+            <ChevronDown size={14} className="transition-transform group-open:rotate-180" aria-hidden />
+          </summary>
+          <ul className="px-4 pb-4 text-sm text-secondary leading-7 flex flex-col gap-2">
+            <li>
+              <b className="text-primary">بازده واقعی:</b> قیمت هر سهم خزانه (در Aave شاخص سود) هر روز در یک بلوک ثابت (۰۰:۰۰ UTC) روی زنجیره خوانده می‌شود؛ رشد آن همان چیزی است که دارندگان واقعاً گرفته‌اند، نه نرخ اعلام‌شده. روزهای جهش کنار می‌روند؛ برای خزانه‌ی یکنواخت میانه‌ی ۷ روز اخیر، برای پله‌ای میانگین ۹۰ روزه، و برای پرنوسان کمترینِ این دو. استخرهای زیر ۳۰ روز در بخش «نوپا» جدا می‌آیند.
+            </li>
+            <li>
+              <b className="text-primary">برداشت:</b> بزرگ‌ترین دارندگان واقعی خزانه پیدا می‌شوند و برداشت کامل هرکدام در همان بلوک شبیه‌سازی می‌شود.
+            </li>
+            <li>
+              <b className="text-primary">فهرست:</b> نامزدها از DefiLlama: تک‌دارایی، نقدینگی <Num>{formatUSDCompact(feed?.minTvlUsd ?? 1e6)}</Num> و بیشتر، روی {feed ? Object.keys(feed.explorers).map((c) => networkByName(c).nameFa).join('، ') : 'شبکه‌های پشتیبانی‌شده'}.
+            </li>
+            <li>
+              <b className="text-primary">امتیاز ثبات:</b> ۱۰۰ × (۱ − انحراف معیار ÷ میانگین) بازده واقعی هر ۵ روز در ۳۰ روز اخیر. «حسابرسی‌شده» یعنی DefiLlama برای پروتکل گزارش حسابرسی ثبت کرده. منابع: DefiLlama، Blockscout و RPC عمومی؛ همه رایگان.
+              {dropped.length > 0 && (
+                <>
+                  {' '}کنار گذاشته شد:{' '}
+                  {dropped.map(([r, n], i) => (
+                    <span key={r}>
+                      {i > 0 && '، '}
+                      {REJECT_LABEL[r]} <Num>{formatNumber(n, 0)}</Num>
+                    </span>
+                  ))}
+                  .
+                </>
+              )}
+            </li>
+          </ul>
+        </details>
+      </header>
+
+      {feed && feed.pending > 0 && (
+        <div className="sx-card px-4 py-3 flex flex-col gap-2" aria-live="polite">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="flex items-center gap-2 text-secondary">
+              <Loader2 size={14} className="animate-spin text-accent" aria-hidden />
+              <span>
+                <Num>{formatNumber(checked, 0)}</Num> از <Num>{formatNumber(feed.candidates, 0)}</Num> خزانه بررسی شد
+              </span>
+            </span>
+            <span className="text-xs text-muted">بزرگ‌ترها اول · خودکار اضافه می‌شوند</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-canvas overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={feed.candidates} aria-valuenow={checked}>
+            <div className="h-full rounded-full bg-brand transition-[width] duration-700" style={{ width: `${feed.candidates ? (checked / feed.candidates) * 100 : 0}%` }} />
+          </div>
+          <span className="text-xs text-muted">نتیجه‌ها ذخیره می‌شوند؛ بار بعد فقط خزانه‌های تازه بررسی می‌شوند.</span>
+        </div>
+      )}
+
+      <div className="sx-card p-4 flex flex-col gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1.2fr)] gap-3 md:items-end">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm text-secondary">جست‌وجو</span>
+            <span className="relative">
+              <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" aria-hidden />
+              <input type="search" dir="auto" value={typed} onChange={(e) => (setTyped(e.target.value), setShown(STEP))} placeholder="نماد یا پروتکل" aria-label="جست‌وجوی خزانه" className="w-full pr-10 pl-3 text-base" />
+            </span>
+          </label>
+          <NumberField label="سرمایه" value={st.capital} onChange={(v) => Number.isFinite(v) && v > 0 && patch({ capital: v })} suffix="دلار" />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm text-secondary">مدت</span>
+            <Segmented<`${HorizonDays}`> value={`${st.horizon}`} onChange={(v) => patch({ horizon: Number(v) as HorizonDays })} label="مدت" size="sm" options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))} />
+          </div>
+        </div>
+
+        <div className="strip -mx-4 px-4 flex gap-2" role="radiogroup" aria-label="فیلتر آماده">
           {PRESETS.map((p) => (
             <button
               key={p.id}
@@ -518,7 +578,7 @@ export function VerifiedYields() {
               role="radio"
               aria-checked={st.preset === p.id}
               onClick={() => patch({ preset: p.id })}
-              className={`tap inline-flex items-center gap-1.5 rounded-full border px-3 min-h-9 text-sm ${st.preset === p.id ? 'border-accent bg-accent/10 text-primary' : 'border-default text-secondary hover:text-primary'}`}
+              className={`tap shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 min-h-9 text-sm whitespace-nowrap ${st.preset === p.id ? 'border-accent bg-accent/10 text-primary' : 'border-default text-secondary hover:text-primary'}`}
             >
               {p.label}
               {feed && (
@@ -529,35 +589,30 @@ export function VerifiedYields() {
             </button>
           ))}
         </div>
-        <p className="text-xs text-secondary leading-6">{preset.rule}</p>
-        <div className="relative">
-          <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" aria-hidden />
-          <input type="search" dir="auto" value={typed} onChange={(e) => (setTyped(e.target.value), setShown(STEP))} placeholder="جست‌وجوی نماد یا پروتکل" aria-label="جست‌وجوی خزانه" className="w-full pr-10 pl-3 text-base" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <NumberField label="سرمایه" value={st.capital} onChange={(v) => Number.isFinite(v) && v > 0 && patch({ capital: v })} suffix="دلار" />
+        {st.preset !== 'all' && <p className="text-xs text-muted leading-6 -mt-1">{preset.rule}</p>}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:items-end">
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm text-secondary">مدت</span>
-            <Segmented<`${HorizonDays}`> value={`${st.horizon}`} onChange={(v) => patch({ horizon: Number(v) as HorizonDays })} label="مدت" size="sm" options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))} />
+            <span className="text-sm text-secondary">گروه</span>
+            <Segmented<'mature' | 'young'>
+              value={group}
+              onChange={(g) => (setGroup(g), setShown(STEP), setOpenId(null))}
+              label="گروه"
+              size="sm"
+              options={[
+                { id: 'mature', label: <><BadgeCheck size={14} aria-hidden /> تأییدشده</> },
+                { id: 'young', label: <><Sprout size={14} aria-hidden /> نوپا (<Num>{formatNumber(youngCount, 0)}</Num>)</> },
+              ]}
+            />
           </div>
+          <SelectField label="شبکه" value={st.chain} onChange={(chain) => patch({ chain })} options={[{ value: '', label: 'همه' }, ...chains.map(([name, n]) => ({ value: name, label: `${networkByName(name).nameFa} (${formatNumber(n, 0)})` }))]} />
+          <SelectField label="مرتب‌سازی" value={st.sort} onChange={(sort) => patch({ sort: sort as SortKey })} options={(Object.keys(SORT_LABEL) as SortKey[]).map((id) => ({ value: id, label: SORT_LABEL[id] }))} />
         </div>
-        <SelectField label="شبکه" value={st.chain} onChange={(chain) => patch({ chain })} options={[{ value: '', label: 'همه' }, ...chains.map(([name, n]) => ({ value: name, label: `${networkByName(name).nameFa} (${formatNumber(n, 0)})` }))]} />
-        <Segmented<'mature' | 'young'>
-          value={group}
-          onChange={(g) => (setGroup(g), setShown(STEP), setOpenId(null))}
-          label="گروه"
-          size="sm"
-          options={[
-            { id: 'mature', label: <><BadgeCheck size={14} aria-hidden /> تأییدشده</> },
-            { id: 'young', label: <><Sprout size={14} aria-hidden /> نوپا (<Num>{formatNumber(youngCount, 0)}</Num>)</> },
-          ]}
-        />
         {group === 'young' && (
           <p className="text-xs text-warning leading-6">
-            استخرهای نوپا (۳ تا ۲۹ روز سابقه) جدا از رتبه‌بندی اصلی‌اند: نرخ آن‌ها میانه‌ی هفته‌ی اخیر است و اغلب با ورود پول پایین می‌آید؛ کنار هر ردیف سودِ «اگر به سطح عادی همان نوع دارایی برگردد» هم آمده. روزهای اول راه‌اندازی حساب نمی‌شوند و خزانه‌ای که یک دارنده تقریباً همه‌اش را دارد کنار می‌رود. بعد از ۳۰ روز خودکار به رتبه‌بندی اصلی می‌روند.
+            نوپا = ۳ تا ۲۹ روز سابقه، جدا از رتبه‌بندی اصلی: نرخ آن‌ها میانه‌ی هفته‌ی اخیر است و اغلب با ورود پول پایین می‌آید؛ کنار هر ردیف سودِ «اگر به سطح عادی همان نوع دارایی برگردد» هم آمده. بعد از ۳۰ روز خودکار به رتبه‌بندی اصلی می‌روند.
           </p>
         )}
-        <Segmented<SortKey> value={st.sort} onChange={(sort) => patch({ sort })} label="مرتب‌سازی" size="sm" options={(Object.keys(SORT_LABEL) as SortKey[]).map((id) => ({ id, label: SORT_LABEL[id] }))} />
       </div>
 
       <div className="sx-card px-3 pt-3 sm:px-4 pb-1 flex flex-col">
@@ -571,18 +626,12 @@ export function VerifiedYields() {
                 </span>
               )}
             </span>
-            <span className="text-xs text-secondary leading-5">
-              عدد بزرگ: سود خالص <Num>{formatNumber(st.horizon, 0)}</Num> روزه با <Num>{formatUSD(st.capital, 0)}</Num>، از بازده واقعی روزانه (روزهای جهش کنار، بازه به‌اندازه‌ی الگوی هر خزانه)، پس از هزینه‌ی خروج و گس. برای جزئیات شبیه‌سازی و ماشین‌حساب روی ردیف بزنید.
+            <span className="text-xs text-muted leading-5">
+              عدد بزرگ: سود خالص <Num>{formatNumber(st.horizon, 0)}</Num> روزه با <Num>{formatUSD(st.capital, 0)}</Num>، پس از هزینه‌ی خروج و گس. برای شبیه‌سازی برداشت و ماشین‌حساب روی ردیف بزنید.
             </span>
           </span>
           {feed && <DataStatus source="api" fetchedAt={Date.parse(feed.fetchedAt)} stale={stale} label="روی زنجیره" />}
         </div>
-        {feed && feed.pending > 0 && (
-          <p className="text-xs text-secondary flex items-center gap-1.5 pb-2" aria-live="polite">
-            <Loader2 size={12} className="animate-spin" aria-hidden /> <Num>{formatNumber(feed.pending, 0)}</Num> خزانه‌ی دیگر از <Num>{formatNumber(feed.candidates, 0)}</Num> در حال بررسی روی زنجیره؛ خودکار اضافه می‌شوند (بزرگ‌ترها اول).
-          </p>
-        )}
-
         {loading ? (
           <p className="text-sm text-secondary flex items-center gap-2 py-8 justify-center" aria-busy="true">
             <Loader2 size={14} className="animate-spin" aria-hidden /> در حال دریافت…
@@ -608,21 +657,7 @@ export function VerifiedYields() {
           </>
         )}
 
-        <p className="text-xs text-muted leading-6 py-3 border-t border-default mt-1">
-          «امتیاز ثبات» فرمول YieldX است: ۱۰۰ × (۱ − انحراف معیار ÷ میانگین) بازده واقعی هر ۵ روز در ۳۰ روز اخیر. «حسابرسی‌شده» در فیلترها یعنی DefiLlama برای پروتکل گزارش حسابرسی ثبت کرده است. منابع: فهرست DefiLlama، کاوشگر Blockscout و RPC عمومی؛ همه رایگان.
-          {dropped.length > 0 && (
-            <>
-              {' '}کنار گذاشته شد:{' '}
-              {dropped.map(([r, n], i) => (
-                <span key={r}>
-                  {i > 0 && '، '}
-                  {REJECT_LABEL[r]} <Num>{formatNumber(n, 0)}</Num>
-                </span>
-              ))}
-              .
-            </>
-          )}
-        </p>
+        <div className="pb-2" />
       </div>
     </section>
   );

@@ -10,11 +10,16 @@ interface ExponentMarket {
   tokenName: string;
   platformName?: string;
   underlyingAsset?: { mint: string; ticker?: string };
+  /** The unit PT redeems into and YT pays yield in; «USD» on dollar-quoted markets (ONyc). */
+  quoteAsset?: { ticker?: string };
   categories?: string[];
   ptPriceInAsset: number;
   ytPriceInAsset: number;
   impliedApy: number;
   underlyingApy: number;
+  /** Base yield averaged over the last 7 and 30 epochs (days), fractions. */
+  underlyingApy7Epoch?: number;
+  underlyingApy30Epoch?: number;
   maturityDateUnixTs: number;
   startDateUnixTs?: number;
   marketStatus: string;
@@ -45,6 +50,15 @@ const program = (pb: NonNullable<ExponentMarket['pointsBoost']>): MarketPointsPr
   lpMultiplier: pb.lp_multiplier,
   season: pb.season ?? null,
 });
+
+const fraction = (x: number | undefined) => (typeof x === 'number' && Number.isFinite(x) ? toPercent(x) : null);
+
+/** The base yield's 7- and 30-day levels, as Exponent publishes them. */
+const levels = (m: ExponentMarket) => {
+  const d7 = fraction(m.underlyingApy7Epoch);
+  const d30 = fraction(m.underlyingApy30Epoch);
+  return d7 === null && d30 === null ? null : { d7, d30, d90: null };
+};
 
 const marketSizeUnits = (m: ExponentMarket) =>
   Number.isFinite(m.totalMarketSize) ? (m.totalMarketSize as number) : null;
@@ -80,6 +94,7 @@ export class ExponentAdapter extends BaseAdapter {
         maturity: new Date(m.maturityDateUnixTs * 1000).toISOString(),
         impliedAPY: toPercent(m.impliedApy),
         baseAPY: plausibleAPY(toPercent(m.underlyingApy)),
+        baseLevels: levels(m),
         liquidity: marketSizeUsd(m, token),
         hasPoints: !!pb,
         ytMultiplier: pb?.yt_multiplier ?? null,
@@ -107,6 +122,8 @@ export class ExponentAdapter extends BaseAdapter {
       // Exponent quotes prices in the asset; the USD price comes from Jupiter when available.
       underlyingPrice: token?.usdPrice ?? null,
       assetSymbol: m.tokenName ?? null,
+      // A USD-quoted market's YT pays the yield of $1, not of one asset unit.
+      ytUnit: m.quoteAsset?.ticker === 'USD' ? 'usd' : 'asset',
       ptPrice: m.ptPriceInAsset,
       ytPrice: m.ytPriceInAsset,
       impliedAPY: toPercent(m.impliedApy),

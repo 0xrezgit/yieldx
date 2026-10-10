@@ -61,42 +61,43 @@
 }
 
 /*
- * Tokens — the only place colours are defined. Dark-first, depth by luminance stacking
- * (bg → surface → raised → hover), never by drop shadows. Contrast measured (WCAG 2.x):
- *   text      #F7F8F8  17.9:1 on surface   secondary #D0D6E0 13.0:1
- *   muted     #8A8F98   5.9:1 on surface, 5.4:1 on raised (never below 4.5:1)
- *   accent    #8A89FF   6.4:1 on surface (selection, links, focus — not a fill for text)
- *   brand     #5E6AD2   white text on it 4.7:1 (the one primary action)
- *   success #3ECF8E 9.5:1 · danger #F0636B 6.1:1 · warning #F2C94C 12.0:1 · info #4EA7FC 7.5:1
- *   control-border #62666D 3.0:1 on raised (non-text boundary ≥ 3:1)
+ * Tokens — the only place colours are defined. «Midnight»: a navy-tinted dark, depth by
+ * luminance stacking (bg → surface → raised → hover), never by drop shadows. One sky-blue
+ * fill for the primary action (dark text on it), and status colours kept apart from it.
+ * Contrast (WCAG 2.x, on surface #0E141C):
+ *   text #F1F5F9 17.4:1 · secondary #C3CDD9 12.4:1 · muted #8794A6 6.2:1 (5.6:1 on raised)
+ *   brand #38BDF8 with on-brand #04121C 9.6:1 · accent #7DD3FC 11.0:1 (links, selection, focus)
+ *   success #4ADE80 10.8:1 · danger #FB7185 6.9:1 · warning #FACC15 12.3:1 · info #A78BFA 6.6:1
+ *   control-border #5A6779 3.1:1 on raised (non-text boundary ≥ 3:1)
  */
 :root {
   color-scheme: dark;
-  --c-bg: #08090a;
-  --c-surface: #0f1011;
-  --c-raised: #18191b;
-  --c-hover: #222327;
-  --c-border: #202226;
-  --c-border-strong: #2e3036;
-  --c-control-border: #62666d;
-  --c-text: #f7f8f8;
-  --c-secondary: #d0d6e0;
-  --c-muted: #8a8f98;
-  --c-accent: #8a89ff;
-  --c-brand: #5e6ad2;
-  --c-success: #3ecf8e;
-  --c-danger: #f0636b;
-  --c-warning: #f2c94c;
-  --c-info: #4ea7fc;
-  --c-st-pt: #4ea7fc;
-  --c-st-loop: #a594ff;
-  --c-st-yt: #2fd2e8;
-  --c-st-clmm: #e27ff5;
+  --c-bg: #070b11;
+  --c-surface: #0e141c;
+  --c-raised: #151d28;
+  --c-hover: #1d2734;
+  --c-border: #1a2330;
+  --c-border-strong: #293547;
+  --c-control-border: #5a6779;
+  --c-text: #f1f5f9;
+  --c-secondary: #c3cdd9;
+  --c-muted: #8794a6;
+  --c-accent: #7dd3fc;
+  --c-brand: #38bdf8;
+  --c-on-brand: #04121c;
+  --c-success: #4ade80;
+  --c-danger: #fb7185;
+  --c-warning: #facc15;
+  --c-info: #a78bfa;
+  --c-st-pt: #60a5fa;
+  --c-st-loop: #c4b5fd;
+  --c-st-yt: #2dd4bf;
+  --c-st-clmm: #f0abfc;
 
   --space-page-x: 1rem;
   --header-h: 3.25rem;
   --bottom-nav-h: 4rem;
-  --focus-ring: 0 0 0 2px var(--c-bg), 0 0 0 4px rgb(138 137 255 / 0.7);
+  --focus-ring: 0 0 0 2px var(--c-bg), 0 0 0 4px rgb(125 211 252 / 0.7);
 }
 
 @media (min-width: 1024px) {
@@ -127,7 +128,7 @@ body {
 
 ::selection {
   background: var(--c-brand);
-  color: #ffffff;
+  color: var(--c-on-brand);
 }
 
 /* Numbers: fixed-width digits (Persian too — the font's tnum), isolated from RTL text. */
@@ -258,7 +259,7 @@ details > summary::-webkit-details-marker {
 .sx select:focus,
 .sx textarea:focus {
   border-color: var(--c-accent);
-  box-shadow: 0 0 0 3px rgb(138 137 255 / 0.25);
+  box-shadow: 0 0 0 3px rgb(125 211 252 / 0.25);
 }
 .sx input[aria-invalid='true'] {
   border-color: var(--c-danger);
@@ -292,7 +293,7 @@ details > summary::-webkit-details-marker {
   content: '';
   width: 11px;
   height: 6px;
-  border: solid #ffffff;
+  border: solid var(--c-on-brand);
   border-width: 0 0 2px 2px;
   transform: translateY(-1px) rotate(-45deg) scale(0);
   transition: transform 120ms ease-out;
@@ -302,7 +303,7 @@ details > summary::-webkit-details-marker {
   width: 8px;
   height: 8px;
   border-radius: 9999px;
-  background: #ffffff;
+  background: var(--c-on-brand);
   transform: scale(0);
   transition: transform 120ms ease-out;
 }
@@ -538,5 +539,86 @@ details > summary::-webkit-details-marker {
   .rank-row > .a-act {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/*
+ * View chooser: cards that act as tabs (icon, title, one line). The selected card takes
+ * the accent border and a faint tint — the only coloured surface in the controls.
+ */
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.75rem;
+  text-align: right;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 14px;
+  transition: border-color 150ms ease-out, background-color 150ms ease-out;
+}
+.choice:hover {
+  border-color: var(--c-border-strong);
+}
+.choice[aria-selected='true'] {
+  border-color: rgb(56 189 248 / 0.55);
+  background: linear-gradient(180deg, rgb(56 189 248 / 0.09), rgb(56 189 248 / 0.02)), var(--c-surface);
+}
+.choice-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9px;
+  color: var(--c-muted);
+  background: var(--c-raised);
+  border: 1px solid var(--c-border);
+}
+.choice[aria-selected='true'] .choice-icon {
+  color: var(--c-on-brand);
+  background: var(--c-brand);
+  border-color: var(--c-brand);
+}
+@media (min-width: 640px) {
+  .choice {
+    padding: 1rem;
+  }
+}
+
+/* The page's one answer (best pick): a soft sky glow from the start corner and a tinted border. */
+.spotlight {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid rgb(56 189 248 / 0.3);
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgb(56 189 248 / 0.13), transparent 55%),
+    radial-gradient(90% 120% at 0% 100%, rgb(74 222 128 / 0.06), transparent 60%),
+    var(--c-surface);
+}
+
+/*
+ * Compact list row: one line once the list is wide (identity | figures | dollars | actions),
+ * stacked on a phone. Chips, when any, take a line of their own under it.
+ */
+.line-row {
+  display: grid;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  /* Phone: the name gets the full width; figures and dollars under it, chips and actions last. */
+  grid-template-areas: 'id id' 'stats pnl' 'tags act';
+}
+.line-row > .l-id { grid-area: id; }
+.line-row > .l-stats { grid-area: stats; }
+.line-row > .l-pnl { grid-area: pnl; }
+.line-row > .l-act { grid-area: act; }
+.line-row > .l-tags { grid-area: tags; }
+@container (min-width: 46rem) {
+  .line-row {
+    gap: 0.5rem 1.25rem;
+    grid-template-columns: minmax(0, 1fr) 14rem 9rem 10.5rem;
+    grid-template-areas: 'id stats pnl act' 'tags tags tags tags';
   }
 }

@@ -50,7 +50,7 @@ export function TokenSelect({ label, value, onChange, tokens }: { label: string;
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="w-full h-[46px] flex items-center justify-between gap-2 bg-sx-raised border border-sx-border hover:border-[#4a4a55] rounded-md px-3 text-sx-text text-base transition-colors"
+        className="w-full h-[46px] flex items-center justify-between gap-2 bg-sx-raised border border-sx-border hover:border-strong rounded-md px-3 text-sx-text text-base transition-colors"
       >
         {value ? <TokenBadge symbol={value} fallbackLogo={selected?.logo} /> : <span className="text-sx-faint">انتخاب ارز</span>}
         <ChevronDown size={14} className="text-sx-muted shrink-0" aria-hidden />

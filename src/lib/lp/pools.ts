@@ -120,9 +120,21 @@ export interface RawItem {
     createdAt?: string | null;
     currentFee?: number | null;
     volumeUsd7d?: number | null;
-    assetCorrelation?: { baseTokenAddress?: string; relativeRealizedVolatilityAnnualizedPercent?: number | null; relativePriceMovePercentiles?: { horizonHours?: number; p95DownMovePercent?: number; p95UpMovePercent?: number }[] } | null;
+    assetCorrelation?: RawRangeRisk | null;
   };
   options?: RawOption[];
+}
+
+/**
+ * The pair's price behaviour, measured by vfat over 30 days of 4-hour returns. Until
+ * 2026-10 it came with the list (`pool.assetCorrelation`); vfat now sends only the
+ * correlation there and the full block — 7-day move percentiles and realized volatility —
+ * with each pool's history (`currentRangeRisk`). Both places are read.
+ */
+export interface RawRangeRisk {
+  baseTokenAddress?: string;
+  relativeRealizedVolatilityAnnualizedPercent?: number | null;
+  relativePriceMovePercentiles?: { horizonHours?: number; p95DownMovePercent?: number; p95UpMovePercent?: number }[];
 }
 
 /**
@@ -149,6 +161,8 @@ export interface RawHistory {
     averageLiquidity?: string | number | null;
     closePriceToken1PerToken0?: number | null;
   }[];
+  /** The pair's measured price moves (see `RawRangeRisk`). */
+  currentRangeRisk?: RawRangeRisk | null;
 }
 
 const CFG = config.vfat;
@@ -290,11 +304,18 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
   if (fees === null || fees <= 0) return 'fees';
 
   // Without a measured price swing there is no loss estimate, so no dollar figure: dropped.
-  const p95 = it.pool?.assetCorrelation?.relativePriceMovePercentiles?.find((x) => x.horizonHours === 168);
+  // The full measurement now comes with the pool's history; the list keeps only part of it.
+  const p168 = (r: RawRangeRisk | null | undefined) => r?.relativePriceMovePercentiles?.find((x) => x.horizonHours === 168);
+  const fromHistory = data?.history?.currentRangeRisk;
+  const risk = p168(fromHistory) ? fromHistory : p168(it.pool?.assetCorrelation) ? it.pool?.assetCorrelation : null;
+  // History not fetched yet, or not received (vfat rate-limits): the history decides — counted
+  // as missing history and asked again, never as a volatile pair.
+  if (!risk) return !data?.history ? 'history' : 'volatility';
+  const p95 = p168(risk);
   const down = num(p95?.p95DownMovePercent);
   const up = num(p95?.p95UpMovePercent);
-  const base = it.pool?.assetCorrelation?.baseTokenAddress?.toLowerCase();
-  const vol = num(it.pool?.assetCorrelation?.relativeRealizedVolatilityAnnualizedPercent);
+  const base = risk.baseTokenAddress?.toLowerCase();
+  const vol = num(risk.relativeRealizedVolatilityAnnualizedPercent);
   if (down === null || up === null || down < 0 || up < 0 || !base || vol === null || vol < 0) return 'volatility';
   const aIsBase = base === ta.address?.toLowerCase();
   if (!aIsBase && base !== tb.address?.toLowerCase()) return 'volatility';
@@ -353,12 +374,12 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
   };
 }
 
-/** Pools that pass every rule needing no fee data, deduplicated: the ones worth a fee-data request. */
+/** Pools that pass every rule needing no history, deduplicated: the ones worth a history request (fee rate, price moves). */
 export function historyCandidates(items: RawItem[], now: number): RawItem[] {
   const ref = referencePrices(items);
   const seen = new Set<string>();
   return items.filter((it) => {
-    if (!it.id || seen.has(it.id) || it.pool?.type !== 'concentrated') return false;
+    if (!it.id || seen.has(it.id)) return false;
     seen.add(it.id);
     return vetPool(it, ref, now) === 'history';
   });

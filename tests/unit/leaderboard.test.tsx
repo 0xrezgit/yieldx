@@ -39,10 +39,24 @@ describe('leaderYt', () => {
     expect(r.range?.high).toBeCloseTo(Math.max(at(10 + YT_EXIT_SHIFT_PP), r.pnl), 6);
   });
 
-  it('held to maturity: no exit price, no exit range', () => {
+  it('held to maturity: no exit price; the range is the base-yield scenarios', () => {
     const [r] = leaderYt([listing({ impliedAPY: 6, baseAPY: 12, daysToMaturity: 60 })], s, input, true);
     expect(r.days).toBe(60);
-    expect(r.range).toBeUndefined();
+    const low = r.scenarios!.find((x) => x.kind === 'low')!;
+    expect(r.range).toEqual({ low: low.cash, high: r.pnl });
+    // No history: likely is today's base, low a fixed share of it.
+    expect(r.scenarios!.find((x) => x.kind === 'likely')!.basePct).toBe(12);
+    expect(low.basePct).toBeCloseTo(9, 9);
+  });
+
+  it('ranks on the base fading into its own level, not on today held', () => {
+    const today = listing({ impliedAPY: 10, baseAPY: 20, daysToMaturity: 90 });
+    const [held] = leaderYt([today], s, input, true);
+    const [faded] = leaderYt([{ ...today, baseLevels: { d7: 14, d30: 12, d90: null } }], s, input, true);
+    expect(faded.pnl).toBeLessThan(held.pnl);
+    const likely = faded.scenarios!.find((x) => x.kind === 'likely')!.basePct;
+    expect(likely).toBeGreaterThan(12);
+    expect(likely).toBeLessThan(20);
   });
 
   it('a points market published at 0 whose SY grows is ranked on the measured growth', () => {

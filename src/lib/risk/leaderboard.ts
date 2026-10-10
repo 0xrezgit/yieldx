@@ -8,6 +8,7 @@ import { rateAfterBorrow } from '../opportunity/curve';
 import type { OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
 import { quoteCheck } from '../opportunity/pt-price';
+import { baseScenarios } from '../opportunity/base-scenarios';
 
 /**
  * Dollar leaderboards kept beside the market analysis («رتبه‌بندی دلاری YT» and
@@ -27,6 +28,18 @@ import { quoteCheck } from '../opportunity/pt-price';
  * told apart from a good one: `annualized` and `perDay` normalise by time.
  */
 export type LeaderStrategy = 'yt' | 'loop';
+
+export interface YtScenarioRow {
+  kind: 'low' | 'likely' | 'high';
+  /** Base yield over the hold, % a year. */
+  basePct: number;
+  /** Yield received plus the sale before maturity, USD. */
+  received: number;
+  /** Cash result, USD. */
+  cash: number;
+  /** USD of yield exposure (what points and a points «APY» are counted on). */
+  notional: number;
+}
 
 export type Verdict = 'worth' | 'thin' | 'loss' | 'free' | 'cheap' | 'costly';
 
@@ -59,6 +72,8 @@ export interface LeaderRow {
   /** Loop only: the leverage used (PT loop policy) and why. */
   leverage?: number;
   leverageReason?: string;
+  /** YT only: the same sale under the low / likely / high base yield (lib/opportunity/base-scenarios). */
+  scenarios?: YtScenarioRow[];
   /** Loop only: false when the PT's dollar peg rests only on its name (see `ptClassOf`). */
   pegVerified?: boolean;
   /** «executable»: entry from a quote for this capital; «suspect»: a doubtful input (see `doubts`). */
@@ -260,13 +275,16 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
     const published = m.baseAPY as number;
     // The on-chain base when health measured one (it can be above a published 0), else the lower of the two.
     const conservative = m.baseHealth?.rankPct ?? (suspect ? Math.min(published, m.baseHealth?.conservativePct ?? published) : published);
-    const run = (baseAPY: number) => (h: number, shift = 0, exitShift = 0) =>
+    // The base yield is never held at today's figure: the likely reading fades it into the
+    // market's own level over the hold (lib/opportunity/base-scenarios), and that is ranked.
+    const scen = (h: number) => baseScenarios(conservative, m.baseLevels, h, suspect ? conservative : null);
+    const run = (baseFor: (h: number) => number) => (h: number, shift = 0, exitShift = 0) =>
       simulateYt({
         capital: i.capital,
         underlyingPrice: 1,
         daysToMaturity: D,
         entryAPY: m.impliedAPY,
-        baseAPY: baseAPY + shift,
+        baseAPY: baseFor(h) + shift,
         holdDays: h,
         exitAPY: Math.max(0, m.impliedAPY + exitShift),
         feePercent: s.feePercent,
@@ -293,13 +311,18 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       }
       return { best, day, freeUntil };
     };
-    const at = run(conservative);
+    const at = run((h) => scen(h).likely);
     const { best, day: bestDay, freeUntil } = bestOf(at);
-    const high = suspect && conservative < published ? bestOf(run(published)).best.cash : null;
+    const s0 = scen(bestDay);
+    const scenarios: YtScenarioRow[] = (['low', 'likely', 'high'] as const).map((kind) => {
+      const r = kind === 'likely' ? best : run(() => s0[kind])(bestDay);
+      return { kind, basePct: s0[kind], received: r.yieldEarned + r.saleValue, cash: r.cash, notional: r.notional };
+    });
+    const high = suspect && conservative < published ? bestOf(run(() => published)).best.cash : null;
     // A sale before maturity is priced at that day's implied APY, assumed unchanged: the range
     // shows the same sale with the market's rate `YT_EXIT_SHIFT_PP` lower or higher.
     const exitRange = bestDay < D ? [at(bestDay, 0, -YT_EXIT_SHIFT_PP).cash, at(bestDay, 0, YT_EXIT_SHIFT_PP).cash] : [];
-    const spread = [best.cash, ...(high !== null ? [high] : []), ...exitRange];
+    const spread = [best.cash, ...scenarios.map((x) => x.cash), ...(high !== null ? [high] : []), ...exitRange];
     const loss = -best.cashPercent;
     const doubts = [...(suspect ? (m.baseHealth?.reasons ?? []) : []), ...(m.impliedHealth?.status === 'suspect' ? m.impliedHealth.reasons : [])];
     out.push({
@@ -315,6 +338,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       freeUntil,
       pointsExposure: best.notional * multiplier,
       perBasePoint: at(bestDay, 1).cash - best.cash,
+      scenarios,
       ...(entryPrice !== undefined ? { confidence: 'executable' as const } : doubts.length ? { confidence: 'suspect' as const } : {}),
       ...(spread.length > 1 ? { range: { low: Math.min(...spread), high: Math.max(...spread) } } : {}),
       ...(doubts.length ? { doubts } : {}),

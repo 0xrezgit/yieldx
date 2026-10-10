@@ -95,7 +95,7 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
 
 /** Shared button looks. */
 export const button = {
-  primary: 'tap inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-md bg-brand text-white text-[15px] font-medium hover:brightness-110 active:brightness-95 transition disabled:opacity-40 disabled:cursor-not-allowed',
+  primary: 'tap inline-flex items-center justify-center gap-2 min-h-11 px-5 rounded-md bg-brand text-on-brand text-[15px] font-medium hover:brightness-110 active:brightness-95 transition disabled:opacity-40 disabled:cursor-not-allowed',
   secondary: 'tap inline-flex items-center justify-center gap-2 min-h-11 px-4 rounded-md border border-strong bg-white/[0.03] text-primary text-[15px] font-medium hover:bg-hover transition-colors disabled:opacity-40',
   ghost: 'tap inline-flex items-center justify-center gap-1.5 min-h-10 px-3 rounded-md text-secondary text-sm hover:text-primary hover:bg-hover transition-colors disabled:opacity-40',
 };

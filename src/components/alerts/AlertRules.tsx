@@ -94,7 +94,7 @@ export function AlertRules({ analysis, alerts }: { analysis: Analysis; alerts: A
         <button
           type="button"
           onClick={() => alerts.add({ metric, operator, threshold, enabled: true })}
-          className="tap col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 rounded-lg px-4 min-h-11 font-semibold text-white bg-brand"
+          className="tap col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 rounded-lg px-4 min-h-11 font-semibold text-on-brand bg-brand"
         >
           <Plus size={16} /> افزودن
         </button>

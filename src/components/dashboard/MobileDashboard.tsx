@@ -59,7 +59,7 @@ export function MobileDashboard({ d }: { d: ReadyDashboard }) {
             // In the page flow (not floating), so it never covers the form or its last field.
             <button type="button" onClick={() => setTab('result')} className={`${button.primary} w-full justify-between`}>
               <span>دیدن نتیجه — {s.name}</span>
-              {!loading && s.available && <FinancialNumber value={s.pnl} kind="usd" digits={0} signed className="text-white [&_.text-secondary]:text-white" />}
+              {!loading && s.available && <FinancialNumber value={s.pnl} kind="usd" digits={0} signed className="text-on-brand [&_.text-secondary]:text-on-brand" />}
             </button>
           )}
         </>

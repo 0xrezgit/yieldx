@@ -19,7 +19,7 @@ export function SaveBar({ d }: { d: DashboardState }) {
         type="button"
         onClick={save.run}
         disabled={save.state === 'saving'}
-        className="tap flex items-center gap-1.5 rounded-lg px-4 min-h-11 font-semibold text-white bg-brand disabled:opacity-50 shrink-0"
+        className="tap flex items-center gap-1.5 rounded-lg px-4 min-h-11 font-semibold text-on-brand bg-brand disabled:opacity-50 shrink-0"
       >
         {save.state === 'saved' ? <Check size={16} /> : <Save size={16} />}
         {save.state === 'saved' ? 'ذخیره شد' : save.isUpdate ? 'به‌روزرسانی سناریو' : 'ذخیره به‌عنوان سناریو'}

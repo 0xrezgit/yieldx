@@ -9,7 +9,7 @@ import { isActive, NAV } from './nav';
 export function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2 shrink-0 min-h-11" aria-label="YieldX — تحلیل بازار">
-      <span className="grid place-items-center size-7 rounded-md bg-brand text-white">
+      <span className="grid place-items-center size-7 rounded-lg bg-brand text-on-brand">
         <Sparkles size={15} aria-hidden />
       </span>
       <span className="font-semibold text-[17px] text-primary" dir="ltr">
@@ -32,7 +32,7 @@ export function AppHeader() {
       <div className="max-w-matrix mx-auto px-[var(--space-page-x)] h-[var(--header-h)] flex items-center justify-between gap-3">
         <div className="flex items-center gap-6 h-full">
           <Logo />
-          <nav className="hidden lg:flex items-center gap-1" aria-label="ناوبری اصلی">
+          <nav className="hidden lg:flex items-center gap-0.5 rounded-full border border-default bg-surface/80 p-1" aria-label="ناوبری اصلی">
           {NAV.map((item) => {
             const { href, label, icon: Icon } = item;
             const active = isActive(pathname, item);
@@ -41,7 +41,7 @@ export function AppHeader() {
                 key={href}
                 href={href}
                 aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-2 px-3 min-h-9 rounded-md text-sm font-medium transition-colors ${active ? 'bg-hover text-primary' : 'text-muted hover:text-primary hover:bg-raised'}`}
+                className={`flex items-center gap-2 px-3.5 min-h-8 rounded-full text-sm font-medium transition-colors ${active ? 'bg-hover text-primary shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]' : 'text-muted hover:text-primary'}`}
               >
                 <Icon size={16} aria-hidden className={active ? 'text-accent' : ''} /> {label}
               </Link>
