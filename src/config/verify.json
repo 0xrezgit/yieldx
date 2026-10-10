@@ -1,0 +1,99 @@
+{
+  "_note": "Own on-chain verification of ERC-4626 vaults listed by DefiLlama (free API). Checked 2026-10-10 per chain with real vaults: the RPCs listed answered historical eth_call (archive, 90 days back) and state overrides without a key (Blast's public endpoints are closed for Avalanche and Polygon; Avalanche's only keyless archive RPC is the official one, heavily rate-limited, hence one call at a time). Holders: Blockscout API v2 where it answers; Routescan (etherscan-style tokenholderlist, sorted here) for Avalanche and Plasma; else Transfer logs of the last days where the RPC allows wide eth_getLogs ranges (Katana 500k blocks, Cronos 2k). Not listed — no free holder source: BSC (getLogs rate-limited or refused), Monad (getLogs 100 blocks, 0.3 s blocks), Hyperliquid (drpc ~hundreds of blocks, official RPC rate-limited, explorer behind Cloudflare), Robinhood Chain (0.1 s blocks, Blockscout behind Cloudflare); Blockscout's multichain PRO API (api.blockscout.com, free key at dev.blockscout.com, 5 RPS / 100k credits a day) covers Robinhood Chain and HyperEVM: those two run only when BLOCKSCOUT_API_KEY is set (source blockscout-pro); Monad, BSC and Katana are not on Blockscout. Flare: holders yes, but no keyless archive RPC.",
+  "minTvlUsd": 1000000,
+  "holders": 5,
+  "stepDays": 5,
+  "windowDays": 30,
+  "longDays": 90,
+  "youngMaxHolderPct": 90,
+  "minLogCoveragePct": 25,
+  "chains": {
+    "Ethereum": {
+      "chainId": 1,
+      "blockTimeS": 12,
+      "explorer": "https://eth.blockscout.com",
+      "holders": { "source": "blockscout", "url": "https://eth.blockscout.com" },
+      "rpc": ["https://eth.drpc.org", "https://eth-mainnet.public.blastapi.io", "https://gateway.tenderly.co/public/mainnet"]
+    },
+    "Base": {
+      "chainId": 8453,
+      "blockTimeS": 2,
+      "explorer": "https://base.blockscout.com",
+      "holders": { "source": "blockscout", "url": "https://base.blockscout.com" },
+      "rpc": ["https://base.drpc.org", "https://base-mainnet.public.blastapi.io", "https://mainnet.base.org", "https://base.gateway.tenderly.co"]
+    },
+    "Arbitrum": {
+      "chainId": 42161,
+      "blockTimeS": 0.25,
+      "explorer": "https://arbitrum.blockscout.com",
+      "holders": { "source": "blockscout", "url": "https://arbitrum.blockscout.com" },
+      "rpc": ["https://arbitrum-one.public.blastapi.io", "https://1rpc.io/arb", "https://arb-pokt.nodies.app", "https://arbitrum.gateway.tenderly.co"]
+    },
+    "OP Mainnet": {
+      "chainId": 10,
+      "blockTimeS": 2,
+      "explorer": "https://optimism.blockscout.com",
+      "holders": { "source": "blockscout", "url": "https://optimism.blockscout.com" },
+      "rpc": ["https://mainnet.optimism.io", "https://optimism.gateway.tenderly.co", "https://optimism.drpc.org"]
+    },
+    "Polygon": {
+      "chainId": 137,
+      "blockTimeS": 2,
+      "explorer": "https://polygon.blockscout.com",
+      "holders": { "source": "blockscout", "url": "https://polygon.blockscout.com" },
+      "rpc": ["https://polygon.drpc.org", "https://polygon.gateway.tenderly.co"]
+    },
+    "Plume Mainnet": {
+      "chainId": 98866,
+      "blockTimeS": 2,
+      "explorer": "https://explorer.plume.org",
+      "holders": { "source": "blockscout", "url": "https://explorer.plume.org" },
+      "rpc": ["https://rpc.plume.org"]
+    },
+    "Avalanche": {
+      "chainId": 43114,
+      "blockTimeS": 2,
+      "explorer": "https://snowtrace.io",
+      "holders": { "source": "routescan" },
+      "rpcConcurrency": 1,
+      "rpc": ["https://api.avax.network/ext/bc/C/rpc"]
+    },
+    "Plasma": {
+      "chainId": 9745,
+      "blockTimeS": 1,
+      "explorer": "https://plasmascan.to",
+      "holders": { "source": "routescan" },
+      "rpc": ["https://rpc.plasma.to", "https://plasma.gateway.tenderly.co"]
+    },
+    "Katana": {
+      "chainId": 747474,
+      "blockTimeS": 1,
+      "explorer": "https://explorer.katanarpc.com",
+      "holders": { "source": "logs", "range": 500000, "days": 30 },
+      "rpcConcurrency": 2,
+      "rpc": ["https://rpc.katana.network", "https://katana.gateway.tenderly.co"]
+    },
+    "Robinhood Chain": {
+      "chainId": 4663,
+      "blockTimeS": 0.1,
+      "explorer": "https://robinhoodchain.blockscout.com",
+      "holders": { "source": "blockscout-pro" },
+      "rpc": ["https://robinhood.drpc.org"]
+    },
+    "Hyperliquid L1": {
+      "chainId": 999,
+      "blockTimeS": 1,
+      "explorer": "https://www.hyperscan.com",
+      "holders": { "source": "blockscout-pro" },
+      "rpcConcurrency": 2,
+      "rpc": ["https://hyperliquid.drpc.org"]
+    },
+    "Cronos": {
+      "chainId": 25,
+      "blockTimeS": 0.43,
+      "explorer": "https://explorer.cronos.org",
+      "holders": { "source": "logs", "range": 2000, "days": 2 },
+      "rpc": ["https://evm.cronos.org", "https://cronos.drpc.org"]
+    }
+  }
+}

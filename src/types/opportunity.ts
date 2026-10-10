@@ -10,6 +10,7 @@ import type { BaseHealth, ImpliedHealth } from './market';
  * Units: rates are % per year (8 means 8%); money is plain US dollars.
  */
 import type { TokenRef } from './market';
+import type { RobustRate } from '../lib/opportunity/robust-rate';
 
 export type OpportunityFamily = 'lend' | 'vault' | 'fixed-lend' | 'pt' | 'yt' | 'leverage' | 'lp' | 'borrow' | 'stake';
 
@@ -41,6 +42,11 @@ export interface RateQuote {
   avg7d?: number | null;
   /** …and over the last day. */
   avg1d?: number | null;
+  /**
+   * The rate to rank on from the daily history (jump days out, the window chosen by the
+   * pattern — see `robust-rate.ts`); absent when the source gives no daily history.
+   */
+  robust?: RobustRate | null;
 }
 
 /** An incentive paid on top of the base rate. The key identifies the campaign across sources. */
@@ -262,6 +268,14 @@ export interface Opportunity {
   poolLiquidityUsd?: number | null;
   /** PT/YT: an executable entry quote for one amount (Pendle's router), when one was asked for. */
   quote?: ExecQuote | null;
+  /** PT and its loops: executable quotes for buying this PT, at every amount asked so far (a loop picks its position's size). */
+  ptQuotes?: ExecQuote[] | null;
+  /** PT loop: the PT market the collateral is bought in, for quotes at the position's size. */
+  ptMarket?: { key: string; chainId: number; address: string } | null;
+  /** PT/YT/PT loop: Pendle's AMM fee in log-rate per year (see MarketIdentityFields.ammFeeLn). */
+  ammFeeLn?: number | null;
+  /** PT/YT/PT loop: share of one unit a PT redeems for at maturity (below 1 when the SY fell under the PY index). */
+  ptRedeemFactor?: number | null;
   /** PT/YT/PT loop: is the market's implied APY believable (lib/opportunity/health)? */
   impliedHealth?: ImpliedHealth | null;
   /** The source's field meanings come from a third-party client, not the protocol's own documentation. */
@@ -310,6 +324,8 @@ export type Placement =
   | 'rejected';
 
 export interface Estimate {
+  /** A PT loop that waits for a quote: the position's size to ask for, USD. */
+  quoteUsd?: number;
   key: string;
   capital: number;
   /** Days asked for, and days that actually earn (shorter when the product matures first). */

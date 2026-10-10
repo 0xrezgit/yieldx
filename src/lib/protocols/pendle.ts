@@ -25,7 +25,8 @@ interface PendleListItem {
   underlyingInterestApy?: number;
   underlyingRewardApy?: number;
   /** `yieldRange`: the base-yield range Pendle itself expects for this market (fractions). */
-  extendedInfo?: { yieldRange?: { min?: number; max?: number } } | null;
+  /** `feeRate`: the AMM fee, a log-rate per year. */
+  extendedInfo?: { yieldRange?: { min?: number; max?: number }; feeRate?: number } | null;
   liquidity?: { usd: number } | number;
   underlyingAsset?: PendleToken;
   accountingAsset?: PendleToken;
@@ -33,8 +34,13 @@ interface PendleListItem {
   sy?: PendleToken;
   /** The PT token: an object like the others, or an id string "<chainId>-<address>". */
   pt?: PendleToken | string;
+  /** The YT token: its PY index tells whether a PT still redeems for one unit. */
+  yt?: PendleToken | string;
   dataUpdatedAt?: string;
 }
+
+/** A token's address, from the token object or the "<chainId>-<address>" id string. */
+const addressOf = (t: PendleToken | string | undefined) => (typeof t === 'string' ? t.slice(t.indexOf('-') + 1) : t?.address) || undefined;
 
 // ─── Base-yield history (for the health checks) ────────────────────────────────
 
@@ -75,7 +81,7 @@ function healthOf(m: PendleListItem, chainId: number, base: string, categories: 
     range,
     history: cachedHistory(base, chainId, m.address),
     categories,
-    realized: cachedRealized(chainId, m.sy?.address),
+    realized: cachedRealized(chainId, m.sy?.address, addressOf(m.yt)),
   });
 }
 
@@ -188,6 +194,8 @@ export class PendleAdapter extends BaseAdapter {
       accountingSymbol: m.accountingAsset?.symbol ?? null,
       sourceUpdatedAt: isoOrNull(m.dataUpdatedAt),
       ptToken: ptRef(m.pt),
+      ammFeeLn: typeof m.extendedInfo?.feeRate === 'number' && m.extendedInfo.feeRate >= 0 ? m.extendedInfo.feeRate : null,
+      ptRedeemFactor: cachedRealized(chainId, m.sy?.address, addressOf(m.yt))?.redeemFactor ?? null,
       baseHealth: healthOf(m, chainId, this.base, (m.categoryIds ?? []).map((c) => c.toLowerCase())),
       impliedHealth: assessImplied({
         impliedPct: toPercent(m.impliedApy),

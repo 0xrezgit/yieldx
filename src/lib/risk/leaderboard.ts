@@ -7,6 +7,7 @@ import { loopBorrowPct, PT_LEVERAGE_REASON, ptLenders, ptLoopLeverage } from '..
 import { rateAfterBorrow } from '../opportunity/curve';
 import type { OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
+import { quoteCheck } from '../opportunity/pt-price';
 
 /**
  * Dollar leaderboards kept beside the market analysis («رتبه‌بندی دلاری YT» and
@@ -171,7 +172,8 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
       // for that size gives the rate actually locked (its fee and impact are inside it).
       const size = quoteAmount(i.capital * L);
       const q = i.quotes?.[leaderQuoteKey(m.id, 'pt', size)];
-      const quoted = fits(q, 'pt', size) ? q : null;
+      // A quote far from the market's own rate is a data error, not a price (see pt-price.ts).
+      const quoted = fits(q, 'pt', size) && quoteCheck(q, m.impliedAPY, m.daysToMaturity).ok ? q : null;
       const entryAPY = quoted ? (Math.pow((quoted.units * quoted.unitUsd) / size, 365 / D) - 1) * 100 : m.impliedAPY;
       const r = simulateLoop({ capital: i.capital, daysToMaturity: D, entryAPY, leverage: L, borrowAPY: rate, lltv, feePercent: quoted ? 0 : s.feePercent });
       if (r.healthFactor < 1) {
@@ -233,6 +235,9 @@ export function ytExcluded(markets: OpportunityListing[], s: ScreenSettings): Yt
   return out;
 }
 
+/** How far the implied APY on the sale day is moved, both ways, for the YT's exit range (points). */
+export const YT_EXIT_SHIFT_PP = 3;
+
 /**
  * YT on its best exit day. A suspect base yield is ranked on its conservative value (the
  * published one gives the top of the range); broken data and points-only markets are left
@@ -250,11 +255,12 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
     const multiplier = m.points?.ytMultiplier ?? m.ytMultiplier ?? 1;
     const q = i.quotes?.[leaderQuoteKey(m.id, 'yt', usdQ)];
     // The YT price paid per unit of yield, dollars per dollar of underlying: capital ÷ (YT bought × unit USD).
-    const entryPrice = fits(q, 'yt', i.capital) ? i.capital / (q.units * q.unitUsd) : undefined;
+    const entryPrice = fits(q, 'yt', i.capital) && quoteCheck(q, m.impliedAPY, D).ok ? i.capital / (q.units * q.unitUsd) : undefined;
     const suspect = m.baseHealth?.status === 'suspect';
     const published = m.baseAPY as number;
-    const conservative = suspect ? Math.min(published, m.baseHealth?.conservativePct ?? published) : published;
-    const run = (baseAPY: number) => (h: number, shift = 0) =>
+    // The on-chain base when health measured one (it can be above a published 0), else the lower of the two.
+    const conservative = m.baseHealth?.rankPct ?? (suspect ? Math.min(published, m.baseHealth?.conservativePct ?? published) : published);
+    const run = (baseAPY: number) => (h: number, shift = 0, exitShift = 0) =>
       simulateYt({
         capital: i.capital,
         underlyingPrice: 1,
@@ -262,7 +268,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
         entryAPY: m.impliedAPY,
         baseAPY: baseAPY + shift,
         holdDays: h,
-        exitAPY: m.impliedAPY,
+        exitAPY: Math.max(0, m.impliedAPY + exitShift),
         feePercent: s.feePercent,
         pointsPerDay: 0,
         ytMultiplier: multiplier,
@@ -290,6 +296,10 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
     const at = run(conservative);
     const { best, day: bestDay, freeUntil } = bestOf(at);
     const high = suspect && conservative < published ? bestOf(run(published)).best.cash : null;
+    // A sale before maturity is priced at that day's implied APY, assumed unchanged: the range
+    // shows the same sale with the market's rate `YT_EXIT_SHIFT_PP` lower or higher.
+    const exitRange = bestDay < D ? [at(bestDay, 0, -YT_EXIT_SHIFT_PP).cash, at(bestDay, 0, YT_EXIT_SHIFT_PP).cash] : [];
+    const spread = [best.cash, ...(high !== null ? [high] : []), ...exitRange];
     const loss = -best.cashPercent;
     const doubts = [...(suspect ? (m.baseHealth?.reasons ?? []) : []), ...(m.impliedHealth?.status === 'suspect' ? m.impliedHealth.reasons : [])];
     out.push({
@@ -306,7 +316,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       pointsExposure: best.notional * multiplier,
       perBasePoint: at(bestDay, 1).cash - best.cash,
       ...(entryPrice !== undefined ? { confidence: 'executable' as const } : doubts.length ? { confidence: 'suspect' as const } : {}),
-      ...(high !== null ? { range: { low: Math.min(best.cash, high), high: Math.max(best.cash, high) } } : {}),
+      ...(spread.length > 1 ? { range: { low: Math.min(...spread), high: Math.max(...spread) } } : {}),
       ...(doubts.length ? { doubts } : {}),
       // A YT buy moves the pool by its notional: too large for the mid price without a quote.
       ...(entryPrice === undefined && overPool(m, best.notional) ? { needsQuote: { side: 'yt' as const, usd: usdQ } } : {}),

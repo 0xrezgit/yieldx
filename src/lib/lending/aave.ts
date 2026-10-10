@@ -3,6 +3,7 @@ import type { Opportunity, RewardStream } from '../../types/opportunity';
 import { networkByChainId } from '../registry/networks';
 import { isObject, postGraphql } from '../protocols/base';
 import { kinkedBorrowCurve, kinkedSupplyCurve } from '../opportunity/curve';
+import type { HistoryPoints } from './history';
 
 /**
  * Aave V4 — supplying to a Spoke reserve (liquidity sits in the Hub), from AaveKit,
@@ -223,4 +224,31 @@ export function normalizeAave(list: RawAaveReserve[], fetchedAt: string): Opport
       .map((c) => ({ token: c.assets.deposit[0], maxLtv: c.asCollateral!.maxLtv, yield: c.assetYield ?? null, supplyPct: c.asCollateral!.supplyPct }));
     return { ...o, borrow: { ...o.borrow, collateral } };
   });
+}
+
+// ─── Daily history (robust rate) ─────────────────────────────────────────────
+
+/** Reserves asked per request (one aliased field each); the API allows 10 top-level aliases. */
+const HISTORY_BATCH = 10;
+
+/** Daily supply APY (%) per reserve, without rewards; six months is daily. */
+export async function fetchAaveHistory(list: Opportunity[]): Promise<Map<string, HistoryPoints>> {
+  const out = new Map<string, HistoryPoints>();
+  for (let i = 0; i < list.length; i += HISTORY_BATCH) {
+    const batch = list.slice(i, i + HISTORY_BATCH);
+    const fields = batch.map((o, j) => `r${j}: supplyApyHistory(request: { reserve: ${JSON.stringify(o.market.id)}, window: LAST_SIX_MONTHS, includeRewards: false }) { date avgRate { value } }`).join(' ');
+    const d = await postGraphql(CFG.name, CFG.graphql, `query YieldXHistory { ${fields} }`, {}, (b): b is Record<string, { date?: string; avgRate?: { value?: string | number } }[]> => isObject(b));
+    batch.forEach((o, j) => {
+      const rows = d[`r${j}`];
+      if (!Array.isArray(rows)) return;
+      out.set(
+        o.key,
+        rows.map((r) => {
+          const v = Number(r.avgRate?.value);
+          return { t: Date.parse(r.date ?? ''), v: Number.isFinite(v) ? v * 100 : null };
+        }),
+      );
+    });
+  }
+  return out;
 }

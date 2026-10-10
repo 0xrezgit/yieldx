@@ -52,3 +52,7 @@ To rebuild the digits font after a Vazirmatn update: subset the variable font to
 - Phone / PWA: header (logo, help, install) and the bottom bar with the two sections; pages reserve `.pb-safe`. The header pads `env(safe-area-inset-top)` because the installed app's status bar is translucent.
 - Desktop (≥ 1024px): destinations move into the header as quiet tabs; ranking rows switch to three columns through a container query (`.rank-row`).
 - Touch targets ≥ 44px on coarse pointers (`.tap`). Inputs are 16px so iOS never zooms.
+- Market analysis is split by platform (`lib/market/platforms.ts`): «All» (`/`) and one page per protocol (`/p/<id>`), switched by a sticky strip of logo chips under the header (`PlatformStrip`; it scrolls on phones and wraps on desktop). Capital and horizon are shared by every page.
+- «All» shows one card per platform (`PlatformCards`): logo, what it does, the best net dollars for the capital and horizon (the one figure in large green), its market, and how many rank; cards are sorted by that figure. The verified vaults are one more card. The combined ranking follows the cards.
+- Two strategy sections sit before the platforms in the strip and on «All» (`lib/market/strategies.ts`): **PT** (`/s/pt`, every PT held to maturity across Pendle, Spectra and Exponent) and **Loop PT** (`/s/loop`). A PT loop exists only where a lending market takes that exact PT — by contract address — as collateral (`ptLenders`); the section says so in its header. Strategy pages hide the type filter.
+

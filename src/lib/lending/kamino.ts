@@ -2,6 +2,8 @@ import lending from '../../config/lending.json';
 import { fetchSolanaTokens, type SolanaToken } from '../protocols/jupiter';
 import type { Opportunity, RewardStream } from '../../types/opportunity';
 import { fetchJson, isArrayOf, isObject, mapLimit, withRetry } from '../protocols/base';
+import { HISTORY_DAYS } from '../opportunity/robust-rate';
+import type { HistoryPoints } from './history';
 
 /**
  * Kamino Lend — supplying to Kamino's lending reserves on Solana.
@@ -123,6 +125,7 @@ export async function fetchKamino(fetchedAt: string): Promise<Opportunity[]> {
       withRetry(() => fetchJson<KaminoMetric[]>(CFG.name, `${CFG.api}/kamino-market/${m.lendingMarket}/reserves/metrics`, isArrayOf<KaminoMetric>)),
       withRetry(() => fetchJson<Record<string, KaminoStats>>(CFG.name, `${CFG.api}/reserves/batch/stats?market=${m.lendingMarket}`, isStats)),
     ]);
+    for (const metric of metrics) reserveMarket.set(metric.reserve, m.lendingMarket);
     return metrics.map((metric) => (stats[metric.reserve] ? kaminoReserve({ market: m, metric, stats: stats[metric.reserve] }, fetchedAt) : null));
   });
   const ok = reads.filter((r): r is PromiseFulfilledResult<(Opportunity | null)[]> => r.status === 'fulfilled');
@@ -136,4 +139,31 @@ export async function fetchKamino(fetchedAt: string): Promise<Opportunity[]> {
     const icon = tokens.get(o.assets.deposit[0]?.address ?? '')?.icon;
     return icon ? { ...o, icon } : o;
   });
+}
+
+// ─── Daily history (robust rate) ─────────────────────────────────────────────
+
+/** Each reserve's lending market, for its history route (filled by `fetchKamino`). */
+const reserveMarket = new Map<string, string>();
+
+/** Daily supply interest APY (%) per reserve: one request each, a few at a time. */
+export async function fetchKaminoHistory(list: Opportunity[]): Promise<Map<string, HistoryPoints>> {
+  const out = new Map<string, HistoryPoints>();
+  const start = new Date(Date.now() - HISTORY_DAYS * 86_400_000).toISOString();
+  const end = new Date().toISOString();
+  await mapLimit(list, CFG.concurrency, async (o) => {
+    const reserve = o.market.id;
+    const market = reserveMarket.get(reserve);
+    if (!market) return;
+    const body = await fetchJson<{ history?: { timestamp?: string; metrics?: { supplyInterestAPY?: number | string } }[] }>(
+      CFG.name,
+      `${CFG.api}/kamino-market/${market}/reserves/${reserve}/metrics/history?env=mainnet-beta&start=${start}&end=${end}&frequency=day`,
+      isObject,
+    );
+    out.set(
+      o.key,
+      (body.history ?? []).map((h) => ({ t: Date.parse(h.timestamp ?? ''), v: num(h.metrics?.supplyInterestAPY) === null ? null : (num(h.metrics?.supplyInterestAPY) as number) * 100 })),
+    );
+  });
+  return out;
 }

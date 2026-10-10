@@ -266,6 +266,38 @@ describe('leverage and PT loops', () => {
     expect(exitShort(e, loop.o)).toBe('در سررسید');
   });
 
+  it('a PT pays Pendle’s AMM fee in its rate, and redeems for less when its SY fell under the PY index', () => {
+    const at = (over: Partial<Opportunity>) => run([pt('p', 45, { poolLiquidityUsd: 1e9, ...over })]).rows[0].byHorizon[60];
+    const plain = at({});
+    const fee = at({ ammFeeLn: 0.0022 });
+    const paid = Math.exp(Math.log(1.12) - 0.0022);
+    expect(fee.baseIncome).toBeCloseTo(fee.allocatable * (Math.pow(paid, 45 / 365) - 1), 9);
+    expect(fee.baseIncome).toBeLessThan(plain.baseIncome);
+    expect(fee.assumptions.join()).toContain('کارمزد AMM');
+    // jrRoyAPYUSD: the SY 15 % under the PY index — a PT redeems for 0.85 of a unit.
+    const impaired = at({ ptRedeemFactor: 0.85 });
+    expect(impaired.baseIncome).toBeCloseTo(impaired.allocatable * (Math.pow(1.12, 45 / 365) * 0.85 - 1), 9);
+    expect(impaired.net).toBeLessThan(0);
+  });
+
+  it('a PT loop buys at the PT’s AMM fee, and at an executable quote for the whole position once one is asked', () => {
+    const loopOf = (p: Opportunity) => run([debtMarket('0xpt'), p]).rows.find((r) => r.o.family === 'leverage')!.byHorizon[60];
+    const mid = loopOf(ptWith('0xpt', 45));
+    const withFee = loopOf({ ...ptWith('0xpt', 45), ammFeeLn: 0.003 });
+    expect(withFee.leverage!.yieldPct).toBeCloseTo((Math.exp(Math.log(1.12) - 0.003) - 1) * 100, 9);
+    expect(withFee.unknown.join()).toContain('quote');
+    // A quote at the position's size (consistent with 12 %: PT at 11 % for 45 days).
+    const G = withFee.leverage!.gross;
+    const ptPrice = Math.pow(1.11, -45 / 365);
+    const q = { side: 'pt' as const, usd: G, units: G / ptPrice, unitUsd: 1, priceImpactPct: 0.2, at: AT, source: 'Pendle' as const };
+    const quoted = loopOf({ ...ptWith('0xpt', 45), ammFeeLn: 0.003, ptQuotes: [q] });
+    expect(quoted.leverage!.yieldPct).toBeCloseTo(11, 6);
+    expect(quoted.assumptions.join()).toContain('quote اجرایی');
+    expect(quoted.net!).toBeLessThan(mid.net!);
+    // A quote for another size does not speak for this position.
+    expect(loopOf({ ...ptWith('0xpt', 45), ptQuotes: [{ ...q, usd: G * 2 }] }).leverage!.yieldPct).toBeCloseTo(12, 9);
+  });
+
   it('never picks the protocol maximum leverage', () => {
     const e = run([debtMarket('0xpt', 0.965), ptWith('0xpt', 45)]).rows.find((r) => r.o.family === 'leverage')!.byHorizon[60];
     expect(e.leverage!.leverage).toBeLessThanOrEqual(LEVERAGE_POLICY.maxLeverage);
@@ -411,6 +443,14 @@ describe('YT held to maturity', () => {
   });
   const yt = (over: Partial<MarketListing> = {}, protocol: 'pendle' | 'spectra' = 'pendle') => ytOpportunity(protocol, listing(over), AT, NOW)!;
 
+  it('a points market published at 0 whose SY grows on-chain is ranked on that growth (rankPct), not dropped as points-only', () => {
+    const health = { status: 'suspect' as const, reasons: ['SY grew'], conservativePct: 15.2, rankPct: 15.2, pointsOnly: false };
+    const e = run([yt({ baseAPY: 0, impliedAPY: 10, baseHealth: health })]).rows[0].byHorizon[60];
+    expect(e.placement).not.toBe('needs-model');
+    expect(e.confidence).toBe('suspect');
+    expect(e.assumptions.join()).toContain('۱۵٫۲');
+  });
+
   it('pays the YT price for the yield until maturity; the YT itself ends at zero', () => {
     const h = run([yt()]).rows[0].byHorizon;
     expect(h[30].placement).toBe('needs-model');
@@ -450,12 +490,13 @@ describe('YT held to maturity', () => {
   });
 
   it('uses an executable quote for this amount: the YT actually bought, price impact included', () => {
-    const q = { side: 'yt' as const, usd: 1000, units: 30_000, unitUsd: 1, priceImpactPct: 2.5, at: AT, source: 'Pendle' as const };
+    // A YT price consistent with the market's 10 % (mid 0.01168), 2.5 % worse for the impact.
+    const q = { side: 'yt' as const, usd: 1000, units: 83_000, unitUsd: 1, priceImpactPct: 2.5, at: AT, source: 'Pendle' as const };
     // Too big for the pool on the mid rate, but quoted.
     const o = { ...yt({ liquidity: 1e6 }), quote: q };
     const e = run([o]).rows[0].byHorizon[60];
     const S = 1000 - e.costs.find((c) => c.key === 'gas-entry')!.usd;
-    const income = 30_000 * (S / 1000) * (Math.pow(1.14, 45 / 365) - 1) * 0.95;
+    const income = 83_000 * (S / 1000) * (Math.pow(1.14, 45 / 365) - 1) * 0.95;
     expect(e.baseIncome).toBeCloseTo(income, 6);
     expect(e.net).toBeCloseTo(income - 1000 - e.costs.find((c) => c.key === 'gas-exit')!.usd, 6);
     expect(e.assumptions.join()).toContain('quote');
@@ -463,16 +504,32 @@ describe('YT held to maturity', () => {
     expect(run([{ ...o, quote: { ...q, usd: 5000 } }]).rows[0].byHorizon[60].placement).toBe('needs-model');
   });
 
-  it('picks the Pendle markets that wait for a quote, the most promising first, capped per side', async () => {
-    const { quoteCandidates, quoteId } = await import('../../src/lib/market/quotes');
-    const { MAX_QUOTES_PER_SIDE } = await import('../../src/lib/opportunity/policy');
-    const many = Array.from({ length: MAX_QUOTES_PER_SIDE + 3 }, (_, i) => ({ ...yt({ id: `1-0x${String(i).padStart(40, '0')}`, liquidity: 1e5, baseAPY: 11 + i / 10 }) }));
+  it('a quote far from the market’s own rate is a data error, not a price (ROY-ST-apyUSD: 993 % against 15 %)', () => {
+    // A YT price of 0.033 means a PT rate of ~32 % over 45 days, against the market's 10 %.
+    const bad = { side: 'yt' as const, usd: 1000, units: 30_000, unitUsd: 1, priceImpactPct: 0.1, at: AT, source: 'Pendle' as const };
+    const e = run([{ ...yt({ liquidity: 1e6 }), quote: bad }]).rows[0].byHorizon[60];
+    expect(e.placement).toBe('insufficient');
+    expect(e.reason).toContain('ناسازگار');
+  });
+
+  it('picks the Pendle markets that wait for a quote, the most promising first, within their budget', async () => {
+    const { quoteCandidates, quoteId, QUOTE_BUDGET } = await import('../../src/lib/market/quotes');
+    const many = Array.from({ length: QUOTE_BUDGET.ytWaiting + 3 }, (_, i) => ({ ...yt({ id: `1-0x${String(i).padStart(40, '0')}`, liquidity: 1e5, baseAPY: 11 + i / 10 }) }));
     const a = run(many);
     const want = quoteCandidates(a, 1000, {});
-    expect(want.filter((w) => w.side === 'yt')).toHaveLength(MAX_QUOTES_PER_SIDE);
+    expect(want.filter((w) => w.side === 'yt')).toHaveLength(QUOTE_BUDGET.ytWaiting);
     // Highest base-over-implied spread first; anything already asked is not asked again.
     expect(want[0].market).toBe(many[many.length - 1].market.address);
     expect(quoteCandidates(a, 1000, { [quoteId(many[many.length - 1].key, 1000)]: null }).some((w) => w.market === many[many.length - 1].market.address)).toBe(false);
+  });
+
+  it('the best-ranked PTs get quotes of their own, beside the markets that wait for one', async () => {
+    const { quoteCandidates, QUOTE_BUDGET } = await import('../../src/lib/market/quotes');
+    const waiting = Array.from({ length: 10 }, (_, i) => pt(`pendle:eip155:1:0x${String(i).padStart(40, '0')}:pt`, 45, { poolLiquidityUsd: 1e4, protocol: { id: 'pendle', version: null, name: 'Pendle' }, market: { id: `1-${i}`, address: `0x${String(i).padStart(40, '0')}`, name: 'w' } }));
+    const ranked = Array.from({ length: 3 }, (_, i) => pt(`pendle:eip155:1:0x${String(90 + i).padStart(40, '0')}:pt`, 45, { poolLiquidityUsd: 1e9, protocol: { id: 'pendle', version: null, name: 'Pendle' }, market: { id: `1-r${i}`, address: `0x${String(90 + i).padStart(40, '0')}`, name: 'r' } }));
+    const want = quoteCandidates(run([...waiting, ...ranked]), 1000, {}).filter((w) => w.side === 'pt');
+    expect(want).toHaveLength(QUOTE_BUDGET.ptWaiting + 3);
+    expect(want.filter((w) => ranked.some((r) => r.market.address === w.market))).toHaveLength(3);
   });
 
   it('checks the pool against the notional bought, not the capital', () => {

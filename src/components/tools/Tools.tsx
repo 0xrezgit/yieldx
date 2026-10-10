@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Calculator, Droplets, Gift, HandCoins, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Calculator, Droplets, Gift, HandCoins, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
@@ -18,9 +18,10 @@ import { applyFilters, defaultFilters, FilterBar, type Filters } from '../opport
 import { LpAnalyzer, readLpPrefill, type LpPrefill } from '../opportunities/LpAnalyzer';
 import { BorrowTool } from './BorrowTool';
 import { LpPools } from './LpPools';
+import { VerifiedYields } from './VerifiedYields';
 
-type Tab = 'yt' | 'calc' | 'lp' | 'borrow';
-const TABS: Tab[] = ['yt', 'calc', 'lp', 'borrow'];
+type Tab = 'yt' | 'calc' | 'lp' | 'borrow' | 'verified';
+const TABS: Tab[] = ['yt', 'calc', 'lp', 'borrow', 'verified'];
 
 interface Stored {
   tab: Tab;
@@ -45,7 +46,8 @@ function sane<T extends object>(value: Partial<T> | undefined, fallback: T): T {
 
 /**
  * «ابزارها» (its own section in the navigation): what has no dollar estimate in the ranking
- * (YT, LP) or answers another question (a trade calculator, the cost of a loan).
+ * (YT, LP) or answers another question (a trade calculator, the cost of a loan, yields
+ * verified on-chain).
  */
 export default function Tools() {
   const { markets, loading, failed, stale, feeds, updatedAt, refresh } = useAllMarkets();
@@ -177,6 +179,7 @@ export default function Tools() {
             { id: 'calc', label: <><Calculator size={15} aria-hidden /> ماشین‌حساب</> },
             { id: 'lp', label: <><Droplets size={15} aria-hidden /> LP</> },
             { id: 'borrow', label: <><HandCoins size={15} aria-hidden /> هزینه‌ی وام</> },
+            { id: 'verified', label: <><BadgeCheck size={15} aria-hidden /> تأییدشده</> },
           ]}
         />
       </div>
@@ -205,6 +208,7 @@ export default function Tools() {
         </>
       )}
       {tab === 'borrow' && <BorrowTool />}
+      {tab === 'verified' && <VerifiedYields />}
 
       {tab === 'yt' && (
         <>
@@ -243,7 +247,7 @@ export default function Tools() {
         </>
       )}
       {tab === 'calc' && <CalculatorPanel screen={st.screen} c={st.calc} set={setCalc} markets={markets} onPick={(m) => pick(m)} loadingMarket={loadingMarket} />}
-      {updatedAt === null && !loading && tab !== 'lp' && tab !== 'borrow' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
+      {updatedAt === null && !loading && tab !== 'lp' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
     </main>
   );
 }

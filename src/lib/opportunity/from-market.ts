@@ -48,6 +48,8 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
       at: updated,
     },
     maturity: m.maturity,
+    ammFeeLn: m.ammFeeLn ?? null,
+    ptRedeemFactor: m.ptRedeemFactor ?? null,
     // An AMM has no deposit cap; its depth shows up as price impact instead.
     capacity: { depositRemainingUsd: null, withdrawableNowUsd: null },
     exit: { type: 'secondary', note: 'فروش PT در استخر پیش از سررسید، یا بازخرید در سررسید' },
