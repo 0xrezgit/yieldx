@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useId, useMemo, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Calculator, ChevronDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Calculator, ChevronDown, ExternalLink } from 'lucide-react';
 import { formatNumber } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
 
@@ -35,6 +35,8 @@ interface Props<R> {
   actionIcon?: ReactNode;
   /** Header of the identity column. */
   identityHeader?: string;
+  /** The market's own page: when given it is the main button and the action becomes secondary. */
+  link?: (r: R) => { href: string; label: ReactNode } | null;
 }
 
 /**
@@ -42,7 +44,7 @@ interface Props<R> {
  * header — page scroll only, no inner scroll area — and expandable rows for details.
  * Below 1024px the same rows become summary cards that open on tap.
  */
-export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAction, actionLabel, mobile, caption, defaultSort = null, pageSize = 25, actionIcon, identityHeader = 'دارایی و شبکه' }: Props<R>) {
+export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAction, actionLabel, mobile, caption, defaultSort = null, pageSize = 25, actionIcon, identityHeader = 'دارایی و شبکه', link }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
   const [open, setOpen] = useState<string | null>(null);
   const [shown, setShown] = useState(pageSize);
@@ -114,9 +116,23 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
                   ))}
                   <td className="px-2 xl:px-3 py-3 border-b border-l border-default whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
-                      <button type="button" onClick={() => onAction(r)} className="tap inline-flex items-center gap-1.5 rounded-lg bg-brand text-on-brand px-3 min-h-9 text-sm font-semibold">
-                        {actionIcon ?? <Calculator size={14} aria-hidden />} {actionLabel}
-                      </button>
+                      {(() => {
+                        const l = link?.(r);
+                        return l ? (
+                          <>
+                            <a href={l.href} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1.5 rounded-lg bg-brand text-on-brand px-3 min-h-9 text-sm font-semibold">
+                              <ExternalLink size={14} aria-hidden /> {l.label}
+                            </a>
+                            <button type="button" onClick={() => onAction(r)} aria-label={actionLabel} title={actionLabel} className="tap grid place-items-center size-9 rounded-lg border border-strong text-secondary hover:text-primary hover:bg-elevated">
+                              {actionIcon ?? <Calculator size={15} aria-hidden />}
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" onClick={() => onAction(r)} className="tap inline-flex items-center gap-1.5 rounded-lg bg-brand text-on-brand px-3 min-h-9 text-sm font-semibold">
+                            {actionIcon ?? <Calculator size={14} aria-hidden />} {actionLabel}
+                          </button>
+                        );
+                      })()}
                       <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} aria-controls={detailsId} aria-label="جزئیات" className="tap grid place-items-center size-9 rounded-lg text-secondary hover:text-primary hover:bg-elevated">
                         <ChevronDown size={18} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
                       </button>
@@ -156,9 +172,23 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
               </div>
               {mb.warning && <div className="text-xs text-warning">{mb.warning}</div>}
               <div className="flex gap-2">
-                <button type="button" onClick={() => onAction(r)} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand text-on-brand px-3 min-h-11 text-[15px] font-medium hover:brightness-110">
-                  {actionIcon ?? <Calculator size={15} aria-hidden />} {actionLabel}
-                </button>
+                {(() => {
+                  const l = link?.(r);
+                  return l ? (
+                    <>
+                      <a href={l.href} target="_blank" rel="noopener noreferrer" className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand text-on-brand px-3 min-h-11 text-[15px] font-medium hover:brightness-110">
+                        <ExternalLink size={15} aria-hidden /> {l.label}
+                      </a>
+                      <button type="button" onClick={() => onAction(r)} aria-label={actionLabel} className="tap inline-flex items-center justify-center gap-1 rounded-md border border-strong bg-white/[0.03] px-3 min-h-11 text-[15px] font-medium text-secondary hover:text-primary hover:bg-hover">
+                        {actionIcon ?? <Calculator size={15} aria-hidden />} {actionLabel}
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => onAction(r)} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand text-on-brand px-3 min-h-11 text-[15px] font-medium hover:brightness-110">
+                      {actionIcon ?? <Calculator size={15} aria-hidden />} {actionLabel}
+                    </button>
+                  );
+                })()}
                 <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} className="tap inline-flex items-center justify-center gap-1 rounded-md border border-strong bg-white/[0.03] px-3 min-h-11 text-[15px] font-medium text-secondary hover:text-primary hover:bg-hover">
                   جزئیات <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden />
                 </button>

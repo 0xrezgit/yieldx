@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Calculator, ChevronDown, ExternalLink, Landmark, ListOrdered, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
-import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytExcluded, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytBaseOf, ytExcluded, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import type { ExecQuote, Opportunity } from '../../types/opportunity';
 import { fetchQuote } from '../../lib/market/quotes';
 import { MAX_QUOTES_PER_SIDE } from '../../lib/opportunity/policy';
 import { Confidence } from './Confidence';
-import { ScenarioTable } from './ScenarioTable';
+import { YtPlanView, CHEAP } from './YtPlanView';
+import { pointsCheapness, ytPlan, type Cheapness, type YtPlan } from '../../lib/calculators/yt-plan';
+import { txCost } from '../../lib/opportunity/costs';
+import { networkByName } from '../../lib/registry/networks';
+import { useMerkl } from '../../hooks/useMerkl';
 import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
 import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/opportunity/policy';
 import thresholds from '../../config/thresholds.json';
@@ -35,6 +39,10 @@ const VERDICT: Record<Verdict, { label: string; tone: Tone }> = {
   costly: { label: 'پرهزینه', tone: 'danger' },
 };
 
+/** YT statements of the board's rows and how their points compare (by row id). */
+const PlanContext = createContext<{ plans: Map<string, YtPlan>; cheap: Map<string, { level: Cheapness; rank: number; of: number; basis: 'program' | 'exposure' }> } | null>(null);
+const rowId = (r: LeaderRow) => r.id ?? `${r.m.protocol}-${r.m.id}`;
+
 /** Below this health a loop is shown but never suggested. */
 const MIN_HEALTH = thresholds.opportunities.loopMinHealth;
 
@@ -55,7 +63,7 @@ export function EntryLink({ m, strategy, primary = false }: { m: OpportunityList
   if (primary)
     return (
       <>
-        <a href={link.url} target="_blank" rel="noopener noreferrer" className={`${primaryAction} flex-1`}>
+        <a href={link.url} target="_blank" rel="noopener noreferrer" className={`${primaryAction} flex-1 min-w-[9rem] whitespace-nowrap`}>
           <ExternalLink size={15} aria-hidden /> {label}
         </a>
         {address && <span className="basis-full">{address}</span>}
@@ -92,6 +100,9 @@ const leaderSteps = (row: LeaderRow, strategy: LeaderStrategy) => {
 
 function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; strategy: LeaderStrategy; capital: number }) {
   const { m } = row;
+  const ctx = useContext(PlanContext);
+  const plan = strategy === 'yt' ? ctx?.plans.get(rowId(row)) : undefined;
+  const cheap = strategy === 'yt' && m.hasPoints ? ctx?.cheap.get(rowId(row)) : undefined;
   const v = VERDICT[row.verdict];
   const steps = leaderSteps(row, strategy);
   const [open, setOpen] = useState(false);
@@ -118,7 +129,8 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
           <Stats
             items={[
               { label: 'بازده دوره', value: <Num>{signedPct(row.pnlPercent, 2)}</Num>, tone: row.pnlPercent >= 0 ? 'text-success' : 'text-danger' },
-              { label: 'سالانه', value: row.annualized > 9999 ? <>{'> '}<Num>{formatPercent(9999, 0)}</Num></> : <Num>{signedPct(row.annualized, 1)}</Num> },
+              // A yearly figure from a hold of a few days only magnifies noise (−1% in a day reads −98%).
+              { label: 'سالانه', value: row.days < 7 ? <span className="text-muted">کوتاه</span> : row.annualized > 9999 ? <>{'> '}<Num>{formatPercent(9999, 0)}</Num></> : <Num>{signedPct(row.annualized, 1)}</Num> },
               { label: 'در روز', value: <Num>{money(row.perDay)}</Num> },
             ]}
           />
@@ -128,6 +140,7 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
           <StepStrip steps={steps} />
           <Tags>
             <Pill tone={v.tone}>{v.label}</Pill>
+            {cheap && cheap.level !== 'free' && <Pill tone={CHEAP[cheap.level].tone}>{CHEAP[cheap.level].label}</Pill>}
             {row.freeUntil !== null && (
               <Pill tone="success">
                 بی‌ضرر تا روز <Num>{formatNumber(row.freeUntil, 0)}</Num>
@@ -180,7 +193,7 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
       </div>
       {open && (
         <div className="mt-3 rounded-xl border border-default bg-canvas p-3 sm:p-4 flex flex-col gap-4">
-          {strategy === 'yt' && row.scenarios && <ScenarioTable rows={row.scenarios} capital={capital} days={row.days} points={m.hasPoints} />}
+          {plan && <YtPlanView plan={plan} name={m.name} days={m.daysToMaturity} cheap={cheap ?? null} />}
           <StepList steps={steps} />
         </div>
       )}
@@ -294,6 +307,22 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   }, [markets, s, capital, pointsOnly, strategy, board, quotes]);
   // Only rows with a dollar figure that can be trusted are ranked; the rest wait for (or lack) a quote.
   const rows = useMemo(() => all.filter((r) => !r.needsQuote), [all]);
+  // The YT statement of every row (its own fee, the chain's gas), and how its points compare.
+  const gas = useMerkl().feed?.gas;
+  const planCtx = useMemo(() => {
+    if (strategy !== 'yt') return null;
+    const plans = new Map<string, YtPlan>();
+    for (const r of rows) {
+      const { basePct, capPct } = ytBaseOf(r.m);
+      const plan = ytPlan(
+        { protocol: r.m.protocol, impliedPct: r.m.impliedAPY, basePct, capPct, daysToMaturity: r.m.daysToMaturity, baseLevels: r.m.baseLevels, ammFeeLn: r.m.ammFeeLn, points: r.m.points, hasPoints: r.m.hasPoints, unitUsd: r.m.unitUsd },
+        { capital, assumedFeePct: s.feePercent, entryPrice: r.entryPrice, txUsd: txCost(networkByName(r.m.chain).key, ['swap'], gas ?? []).usd },
+      );
+      if (plan) plans.set(rowId(r), plan);
+    }
+    const cheap = pointsCheapness(rows.filter((r) => r.m.hasPoints && plans.has(rowId(r))).map((r) => ({ id: rowId(r), plan: plans.get(rowId(r))! })));
+    return { plans, cheap };
+  }, [strategy, rows, capital, s.feePercent, gas]);
   const waiting = useMemo(() => all.filter((r) => r.needsQuote), [all]);
   const excluded = useMemo(() => (strategy === 'yt' ? ytExcluded(markets, s) : null), [strategy, markets, s]);
   useEffect(() => {
@@ -328,10 +357,11 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
     return <Empty>داده‌ی بازارهای وام در دسترس نیست.</Empty>;
   }
   return (
+    <PlanContext.Provider value={planCtx}>
     <div className="flex flex-col gap-4">
       <section className="sx-card p-4 flex flex-col gap-3">
         <div className="grid grid-cols-1 sm:grid-cols-[10rem_minmax(0,1fr)_auto] gap-3 items-end">
-          <NumberField label="کارمزد هر معامله" value={fee} onChange={setFee} suffix="%" />
+          <NumberField label="کارمزد فرضی" value={fee} onChange={setFee} suffix="%" help={strategy === 'yt' ? 'فقط برای پروتکلی که کارمزدش معلوم نیست؛ Pendle و Exponent با کارمزد واقعی خودشان حساب می‌شوند.' : undefined} />
           <Segmented<RankBy> value={by} onChange={setBy} label="مرتب‌سازی" size="sm" options={[{ id: 'total', label: 'سود کل دلاری' }, { id: 'perDay', label: 'سود در هر روز' }]} />
           {strategy === 'yt' && (
             <label className="tap flex items-center gap-2.5 text-sm text-secondary min-h-11 cursor-pointer">
@@ -404,6 +434,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       {excluded && excluded.broken.length > 0 && <Excluded title="داده‌ی بازار خراب" note="بازده یا نرخ اعلامی با داده‌ی خود پروتکل نمی‌خواند." list={excluded.broken} strategy={strategy} />}
       {excluded && excluded.pointsOnly.length > 0 && <Excluded title="فقط پوینت" note="بازده فقط پوینت است." list={excluded.pointsOnly.map((m) => ({ m, reasons: [] }))} strategy={strategy} />}
     </div>
+    </PlanContext.Provider>
   );
 }
 

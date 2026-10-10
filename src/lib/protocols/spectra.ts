@@ -14,6 +14,7 @@ interface SpectraToken {
 }
 
 interface SpectraPool {
+  address?: string | null;
   liquidity?: { underlying?: number | null; usd?: number | null } | null;
   impliedApy?: number | null;
   ptPrice?: { underlying?: number | null } | null;
@@ -44,6 +45,20 @@ export function parseSpectraMarketId(marketId: string): { network: string; addre
   const m = /^([a-z]+)-(0x[0-9a-fA-F]{40})$/.exec(marketId.trim());
   if (!m || !(m[1] in NETWORKS)) throw new MarketNotFoundError('Spectra', marketId);
   return { network: m[1], address: m[2].toLowerCase() };
+}
+
+/**
+ * Spectra's app names networks its own way; only those checked by loading a market page there
+ * (2026-10-11) get a market link — the others open the app.
+ */
+const APP_NETWORK: Record<string, string> = { mainnet: 'eth', base: 'base', avalanche: 'avax', flare: 'flare' };
+
+/** The pool's own pages: /fixed-rate/{network}:{pool} (PT) and /trade-yield/{network}:{pool} (YT). */
+export function spectraLinks(network: string, pool: string | null | undefined): { pt: string; yt: string } | null {
+  const net = APP_NETWORK[network];
+  if (!net || !pool || !/^0x[0-9a-fA-F]{40}$/.test(pool)) return null;
+  const key = `${net}:${pool.toLowerCase()}`;
+  return { pt: `https://app.spectra.finance/fixed-rate/${key}`, yt: `https://app.spectra.finance/trade-yield/${key}` };
 }
 
 /** A PT can trade in several pools; the deepest one sets the price. */
@@ -84,6 +99,7 @@ export class SpectraAdapter extends BaseAdapter {
             if (!pool || implied === null) return null;
             return {
               id: `${network}-${m.address.toLowerCase()}`,
+              links: spectraLinks(network, pool.address),
               name: name(m),
               platform: m.ibt.protocol ?? null,
               icon: icon(m),
