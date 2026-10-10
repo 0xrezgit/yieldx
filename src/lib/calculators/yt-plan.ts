@@ -20,6 +20,9 @@ import { BASE_RATE_KIND, simulateYt, ytPriceFromAPY, YT_YIELD_FEE_PCT, type YtTr
 
 export const EXPONENT_FEE_PCT = 0.05;
 
+/** Shortest YT hold considered: a week, or a quarter of the time left — never a next-day sale. */
+export const ytMinHold = (daysToMaturity: number) => Math.max(1, Math.min(Math.round(daysToMaturity), Math.max(7, Math.ceil(daysToMaturity / 4))));
+
 export type FeeSource = 'pendle-amm' | 'exponent-book' | 'quote' | 'assumed';
 
 export interface YtPlanMarket {
@@ -104,6 +107,10 @@ export interface YtPlan {
   exits: ExitLine[];
   /** Last day an exit loses nothing at an unchanged market rate (likely base, fees and gas in); null if none. */
   freeUntil: number | null;
+  /** First day (from the minimum hold) an exit is in profit at an unchanged market rate; null if none before maturity. */
+  firstProfitDay: number | null;
+  /** Shortest hold considered (a week, or a quarter of the term). */
+  minHold: number;
   /** Points: per day and the program used; null when the protocol publishes none (Pendle). */
   pointsPerDay: number | null;
   program: MarketPointsProgram | null;
@@ -119,7 +126,6 @@ export interface YtPlan {
 }
 
 const READINGS: Reading[] = ['low', 'likely', 'high'];
-const EXIT_DAYS = [1, 7, 14, 30, 60];
 
 export function ytPlan(m: YtPlanMarket, i: YtPlanInput): YtPlan | null {
   const D = Math.max(1, Math.round(m.daysToMaturity));
@@ -162,16 +168,23 @@ export function ytPlan(m: YtPlanMarket, i: YtPlanInput): YtPlan | null {
     return { kind, basePct: sc[kind], yieldUsd: t.yieldEarned, yieldFeeUsd: gross - t.yieldEarned, cashUsd: cash, points, costPerMillion: points && points > 0 ? (cash >= 0 ? 0 : (-cash / points) * 1e6) : null };
   });
 
-  const exits: ExitLine[] = [];
+  // Exits from the minimum hold on — a next-day sale is no one's plan.
+  const minHold = ytMinHold(D);
+  const byDay = new Map<number, ExitLine>();
   let freeUntil: number | null = null;
-  for (let h = 1; h < D; h++) {
+  let firstProfitDay: number | null = null;
+  for (let h = minHold; h < D; h++) {
     const t = sim(h, base(h).likely);
     const cash = t.cash - gas.entry - gas.exit;
     if (cash >= 0) freeUntil = h;
-    if (EXIT_DAYS.includes(h)) exits.push({ day: h, cashUsd: cash, breakEvenPct: t.breakEvenExitAPY, points: prog ? t.points : null });
+    if (cash > 0 && firstProfitDay === null) firstProfitDay = h;
+    byDay.set(h, { day: h, cashUsd: cash, breakEvenPct: t.breakEvenExitAPY, points: prog ? t.points : null });
   }
   const likely = maturity[1];
   if (likely.cashUsd >= 0) freeUntil = D;
+  // The days shown: the minimum hold, mid-term, three quarters, and the first profitable and last loss-free days.
+  const shown = [minHold, Math.round(D / 2), Math.round((3 * D) / 4), firstProfitDay, freeUntil !== null && freeUntil < D ? freeUntil : null];
+  const exits = [...new Set(shown.filter((d): d is number => d !== null && d >= minHold && d < D))].sort((a, b) => a - b).map((d) => byDay.get(d)!).filter(Boolean);
   const exposureDollarDays = t0.notional * D;
   const pointsPerDay = prog ? t0.points / D : null;
   return {
@@ -183,6 +196,8 @@ export function ytPlan(m: YtPlanMarket, i: YtPlanInput): YtPlan | null {
     maturity,
     exits,
     freeUntil,
+    firstProfitDay,
+    minHold,
     pointsPerDay,
     program: prog,
     exposureDollarDays,

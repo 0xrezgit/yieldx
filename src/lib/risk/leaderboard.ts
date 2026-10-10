@@ -9,7 +9,8 @@ import type { OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
 import { quoteCheck } from '../opportunity/pt-price';
 import { baseScenarios } from '../opportunity/base-scenarios';
-import { ytFees } from '../calculators/yt-plan';
+import { ytFees, ytMinHold } from '../calculators/yt-plan';
+export { ytMinHold };
 
 /**
  * Dollar leaderboards kept beside the market analysis («رتبه‌بندی دلاری YT» and
@@ -77,6 +78,14 @@ export interface LeaderRow {
   scenarios?: YtScenarioRow[];
   /** YT only: the price an executable quote pays per unit of yield, when the row has one. */
   entryPrice?: number;
+  /** YT only: the exposure bought as a share of the pool's liquidity; null when the liquidity is unknown. */
+  poolShare?: number | null;
+  /**
+   * YT only, by the buyer's goal: the shortest hold considered; the last loss-free exit
+   * (points without a cash loss); and the hold to maturity (points at a cost). Market rate
+   * unchanged, likely base, fees in.
+   */
+  goals?: { minHold: number; free: { day: number; cash: number; notional: number } | null; maturity: { cash: number; notional: number } };
   /** Loop only: false when the PT's dollar peg rests only on its name (see `ptClassOf`). */
   pegVerified?: boolean;
   /** «executable»: entry from a quote for this capital; «suspect»: a doubtful input (see `doubts`). */
@@ -265,6 +274,43 @@ export function ytBaseOf(m: OpportunityListing): { basePct: number; capPct: numb
   return { basePct, capPct: suspect ? basePct : null };
 }
 
+export type YtGoal = 'profit' | 'free' | 'paid';
+
+/**
+ * The YT board by the buyer's goal, at most `n` markets each:
+ * - profit: a dollar profit at its best exit (from the minimum hold on), biggest first;
+ * - free: points markets with a loss-free exit, the most exposure (dollar-days) for the money first;
+ * - paid: points markets held to maturity, cheapest exposure per dollar-day (÷ YT multiplier) first.
+ * Each row is shown on its own goal's exit (day, cash result).
+ */
+export function ytGoalRows(rows: LeaderRow[], goal: YtGoal, by: RankBy = 'total', n = 15): LeaderRow[] {
+  const capitalOf = (r: LeaderRow) => (r.pnlPercent !== 0 ? (r.pnl / r.pnlPercent) * 100 : NaN);
+  const view = (r: LeaderRow, day: number, cash: number): LeaderRow => {
+    const cap = capitalOf(r);
+    return { ...r, days: day, pnl: cash, pnlPercent: Number.isFinite(cap) && cap > 0 ? (cash / cap) * 100 : r.pnlPercent, perDay: cash / day, annualized: Number.isFinite(cap) && cap > 0 ? annualize(cash, cap, day) : r.annualized, verdict: cash >= 0 ? 'free' : r.verdict };
+  };
+  if (goal === 'profit') {
+    const key = (r: LeaderRow) => (by === 'total' ? r.pnl : r.perDay);
+    return rows.filter((r) => r.pnl > 0).sort((a, b) => key(b) - key(a)).slice(0, n);
+  }
+  const points = rows.filter((r) => r.m.hasPoints && r.goals);
+  if (goal === 'free') {
+    return points
+      .filter((r) => r.goals!.free && r.goals!.free.day >= r.goals!.minHold)
+      .map((r) => ({ r: view(r, r.goals!.free!.day, r.goals!.free!.cash), score: r.goals!.free!.notional * r.goals!.free!.day * (r.m.points?.ytMultiplier ?? r.m.ytMultiplier ?? 1) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, n)
+      .map((x) => x.r);
+  }
+  const D = (r: LeaderRow) => Math.max(1, Math.round(r.m.daysToMaturity));
+  const cost = (r: LeaderRow) => Math.max(0, -r.goals!.maturity.cash) / (r.goals!.maturity.notional * D(r) * (r.m.points?.ytMultiplier ?? r.m.ytMultiplier ?? 1));
+  return points
+    .map((r) => ({ r: view(r, D(r), r.goals!.maturity.cash), c: cost(r) }))
+    .sort((a, b) => a.c - b.c || b.r.pnl - a.r.pnl)
+    .slice(0, n)
+    .map((x) => x.r);
+}
+
 /** How far the implied APY on the sale day is moved, both ways, for the YT's exit range (points). */
 export const YT_EXIT_SHIFT_PP = 3;
 
@@ -315,13 +361,15 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
         baseRateKind: BASE_RATE_KIND[m.protocol],
         entryPrice,
       });
+    // Nobody buys a YT to sell it the next day: exits start at the minimum hold.
+    const minHold = ytMinHold(D);
     const bestOf = (at: ReturnType<typeof run>) => {
       // Best exit day at today's implied APY; ties go to the longer hold (more points).
-      let best = at(1);
-      let day = 1;
+      let best = at(minHold);
+      let day = minHold;
       let freeUntil: number | null = null;
-      for (let h = 1; h <= D; h++) {
-        const r = h === 1 ? best : at(h);
+      for (let h = minHold; h <= D; h++) {
+        const r = h === minHold ? best : at(h);
         if (r.cash >= best.cash) {
           best = r;
           day = h;
@@ -357,8 +405,14 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       freeUntil,
       pointsExposure: best.notional * multiplier,
       perBasePoint: at(bestDay, 1).cash - best.cash,
+      goals: {
+        minHold,
+        free: freeUntil !== null ? { day: freeUntil, cash: at(freeUntil).cash, notional: at(freeUntil).notional } : null,
+        maturity: { cash: at(D).cash, notional: at(D).notional },
+      },
       scenarios,
       ...(entryPrice !== undefined ? { entryPrice } : {}),
+      poolShare: m.liquidity && m.liquidity > 0 ? best.notional / m.liquidity : null,
       ...(entryPrice !== undefined ? { confidence: 'executable' as const } : doubts.length ? { confidence: 'suspect' as const } : {}),
       ...(spread.length > 1 ? { range: { low: Math.min(...spread), high: Math.max(...spread) } } : {}),
       ...(doubts.length ? { doubts } : {}),

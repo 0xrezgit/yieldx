@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buckets, leaderLoop, leaderQuoteKey, leaderYt, YT_EXIT_SHIFT_PP, type LeaderRow } from '../../src/lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytGoalRows, ytMinHold, YT_EXIT_SHIFT_PP, type LeaderRow } from '../../src/lib/risk/leaderboard';
 import { simulateLoop } from '../../src/lib/calculators/trade';
 import { defaultScreenSettings, type OpportunityListing } from '../../src/lib/risk/opportunities';
 import type { Opportunity } from '../../src/types/opportunity';
@@ -69,7 +69,9 @@ describe('leaderYt', () => {
   it('picks the day with the best cash result', () => {
     const m = listing({ impliedAPY: 12, baseAPY: 6, daysToMaturity: 60 });
     const [r] = leaderYt([m], s, input, true);
-    for (let h = 1; h <= 60; h++) {
+    // From the minimum hold (a quarter of 60 days) on: a next-day sale is never an exit.
+    expect(r.days).toBeGreaterThanOrEqual(15);
+    for (let h = 15; h <= 60; h++) {
       const cash = simulateYt({
         capital: 10_000, underlyingPrice: 1, daysToMaturity: 60, entryAPY: 12, baseAPY: 6, holdDays: h, exitAPY: 12,
         feePercent: s.feePercent, pointsPerDay: 0, ytMultiplier: 1, pointsBasis: 'usd', valuePerPoint: 0, yieldFeePercent: 5,
@@ -346,12 +348,13 @@ describe('entry links', () => {
     expect(html).toContain('0x0000000000000000000000000000000000000abc');
   });
 
-  it('never suggests a market whose base yield looks like a temporary boost', async () => {
+  it('a market whose base yield looks like a temporary boost is listed with its warning', async () => {
     const { renderToString } = await import('react-dom/server');
     const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
     // A pool deep enough for the mid price: the row is ranked, labelled, and still not suggested.
     const html = renderToString(<LeaderRanking markets={[listing({ name: 'superWETH', impliedAPY: 4, baseAPY: 40, liquidity: 5e9 })]} capital={10_000} strategy="yt" />);
-    expect(html).toContain('با این فرض‌ها هیچ YTی بی‌ضرر نیست');
+    // YT is listed by the buyer's goal (profit first); the doubtful base is labelled on the row.
+    expect(html).toContain('بیشترین سود دلاری');
     expect(html).toContain('بازده پایه احتمالاً موقت');
   });
 
@@ -360,6 +363,39 @@ describe('entry links', () => {
     const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
     const html = renderToString(<LeaderRanking markets={[listing({ name: 'thinYT', impliedAPY: 1, baseAPY: 5, liquidity: 200_000 })]} capital={1000} strategy="yt" />);
     expect(html).toContain('نیازمند قیمت اجرایی');
-    expect(html).toMatch(/بیشترین سود<\/span><span class="[^"]*"><bdi dir="ltr" class="num ">۰<\/bdi>/);
+    expect(html).toMatch(/بیشترین سود دلاری<\/span><span class="[^"]*"><bdi dir="ltr" class="num ">۰<\/bdi>/);
   });
 });
+
+describe('YT by goal', () => {
+  const input = { capital: 10_000 };
+  const s = { ...defaultScreenSettings, minDays: 0, minLiquidity: 0 };
+  const mk = (id: string, impliedAPY: number, baseAPY: number, hasPoints = true) => ({ ...listing({ impliedAPY, baseAPY, daysToMaturity: 90 }), id, hasPoints });
+  const rows = leaderYt([mk('rich', 8, 20), mk('even', 10, 10.6), mk('poor', 15, 8), mk('cash', 8, 18, false)], s, input, false);
+
+  it('profit: only markets in profit, biggest first, at most 15', () => {
+    const r = ytGoalRows(rows, 'profit');
+    expect(r.every((x) => x.pnl > 0)).toBe(true);
+    expect(r.map((x) => x.m.id)).not.toContain('poor');
+    expect(r[0].pnl).toBeGreaterThanOrEqual(r[r.length - 1].pnl);
+    expect(ytGoalRows(Array.from({ length: 20 }, () => rows[0]), 'profit')).toHaveLength(15);
+  });
+
+  it('free points: points markets with a loss-free exit, shown on that exit (no loss); never day 1', () => {
+    const r = ytGoalRows(rows, 'free');
+    expect(r.map((x) => x.m.id)).not.toContain('cash');
+    expect(r.map((x) => x.m.id)).not.toContain('poor');
+    for (const x of r) {
+      expect(x.pnl).toBeGreaterThanOrEqual(0);
+      expect(x.days).toBeGreaterThanOrEqual(ytMinHold(90));
+    }
+  });
+
+  it('paid points: every points market to maturity, cheapest first', () => {
+    const r = ytGoalRows(rows, 'paid');
+    expect(r.map((x) => x.m.id)).toContain('poor');
+    expect(r.every((x) => x.days === 90)).toBe(true);
+    expect(r[r.length - 1].m.id).toBe('poor');
+  });
+});
+

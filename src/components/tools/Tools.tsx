@@ -237,7 +237,7 @@ export default function Tools() {
               فقط بازارهای پوینت‌دار
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {s.ytMode === 'roundtrip' && <NumberField label="روز نگه‌داری" value={s.holdDays} onChange={(v) => Number.isFinite(v) && setS({ holdDays: Math.max(1, v) })} />}
+              {s.ytMode === 'roundtrip' && <NumberField label="روز نگه‌داری" value={s.holdDays} onChange={(v) => Number.isFinite(v) && setS({ holdDays: Math.max(7, v) })} help="دست‌کم ۷ روز؛ فروش فردای خرید هدف هیچ خریدار YT نیست."  />}
               <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />
               <NumberField label="کارمزد فرضی" value={s.feePercent} onChange={(v) => setS({ feePercent: v })} suffix="%" help="فقط برای پروتکلی که کارمزدش معلوم نیست. Pendle (کارمزد AMM روی کل اکسپوژر) و Exponent (حدود ۰٫۰۵٪) با کارمزد واقعی خودشان حساب می‌شوند." />
               <NumberField label="حداقل روز تا سررسید" value={s.minDays} onChange={(v) => setS({ minDays: v })} />
