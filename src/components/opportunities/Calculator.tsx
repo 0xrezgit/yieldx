@@ -16,7 +16,7 @@ import { AssetIdentity } from '../ui/asset-identity';
 import { MarketPicker } from '../forms/MarketPicker';
 import { Bound, Metric, Segmented, signedPct } from './parts';
 
-export type CalcMode = 'yt' | 'pt' | 'loop';
+export type CalcMode = 'yt' | 'pt' | 'loop' | 'lp' | 'mint';
 
 export interface CalcState {
   mode: CalcMode;
@@ -522,7 +522,7 @@ function PtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
 
 // ─── Loop ──────────────────────────────────────────────────────────────────────
 
-function LoopResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolean }) {
+export function LoopResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolean }) {
   if (!(c.capital > 0 && c.days > 0 && c.entryAPY > 0 && c.leverage >= 1 && c.lltv > 0 && c.lltv < 100))
     return <ResultVerdict off={unreliable} kind="info">اهرم باید ≥ ۱ و LLTV بین ۰ و ۱۰۰ باشد.</ResultVerdict>;
   const base = { capital: c.capital, daysToMaturity: c.days, entryAPY: c.entryAPY, borrowAPY: c.borrowAPY, lltv: c.lltv, feePercent: c.fee };

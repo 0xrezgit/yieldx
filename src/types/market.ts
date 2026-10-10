@@ -57,6 +57,10 @@ export interface MarketData extends MarketIdentityFields {
   assetSymbol?: string | null;
   /** What one YT pays the yield of: one asset unit (default) or $1 (Exponent markets quoted in USD). */
   ytUnit?: 'asset' | 'usd';
+  /** USD of one unit of the token paid in (Pendle sUSDfr), when it differs from the accounting asset. */
+  tokenUsd?: number | null;
+  /** The pool behind LP positions: PT share by value, swap-fee and reward APYs (%). Pendle. */
+  lp?: { ptShare: number; swapFeeApyPct: number; rewardApyPct: number } | null;
   ptPrice: number;
   ytPrice: number;
   impliedAPY: number;

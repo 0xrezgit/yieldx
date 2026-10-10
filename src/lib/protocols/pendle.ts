@@ -112,7 +112,26 @@ interface PendleMarket {
   tradingVolume?: { usd: number } | number;
   accountingAsset?: PendleToken;
   underlyingAsset?: PendleToken;
+  sy?: PendleToken;
   dataUpdatedAt?: string;
+  totalPt?: number;
+  totalSy?: number;
+  swapFeeApy?: number;
+  pendleApy?: number;
+  extendedInfo?: { feeRate?: number };
+}
+
+/**
+ * The pool an LP holds: its PT share by value (PT at its price, SY at its rate in the
+ * accounting asset), swap fees and PENDLE incentives. Null when the numbers are missing.
+ */
+function lpOf(m: PendleMarket): MarketData['lp'] {
+  const acc = m.accountingAsset?.price?.usd;
+  const sy = m.sy?.price?.usd;
+  if (!(acc && acc > 0) || !(sy && sy > 0) || !(m.totalPt && m.totalPt > 0) || !(m.totalSy && m.totalSy >= 0)) return null;
+  const pt = m.totalPt * (1 - m.ptDiscount);
+  const syValue = m.totalSy * (sy / acc);
+  return { ptShare: pt / (pt + syValue), swapFeeApyPct: toPercent(m.swapFeeApy ?? 0), rewardApyPct: toPercent(m.pendleApy ?? 0) };
 }
 
 const tokenRef = (t: PendleToken | undefined) => (t ? { symbol: t.symbol ?? null, address: t.address ?? null } : null);
@@ -248,6 +267,9 @@ export class PendleAdapter extends BaseAdapter {
       name: m.proName ?? m.simpleName ?? address,
       underlyingPrice: m.accountingAsset?.price?.usd ?? null,
       assetSymbol: m.accountingAsset?.symbol ?? null,
+      tokenUsd: m.underlyingAsset?.price?.usd ?? null,
+      lp: lpOf(m),
+      ammFeeLn: typeof m.extendedInfo?.feeRate === 'number' && m.extendedInfo.feeRate >= 0 ? m.extendedInfo.feeRate : null,
       ptPrice: 1 - ytPrice,
       ytPrice,
       impliedAPY: toPercent(m.impliedApy),
