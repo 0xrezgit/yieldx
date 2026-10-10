@@ -111,6 +111,12 @@ export const PT_LOOP_POLICY = {
  * still listed as not included.
  */
 export const MAX_POOL_SHARE_WITHOUT_QUOTE = 0.005;
+/**
+ * YT by goal: up to this share of the pool a row is still shown on the fee model (Pendle's
+ * AMM fee included) and labelled an estimate until its quote arrives — Pendle's own quote for
+ * a $1,000 sUSDx YT (~$40k of exposure, ~0.7% of the pool) cost 2.16% against 1.97% modelled.
+ */
+export const MAX_POOL_SHARE_ESTIMATE = 0.05;
 
 /** Rate data older than this (hours) is stale and leaves the active ranking. */
 export const MAX_RATE_AGE_HOURS = 24;

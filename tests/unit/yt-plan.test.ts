@@ -45,9 +45,10 @@ describe('YT statement', () => {
     expect(rich.freeUntil).toBe(92);
     const poor = ytPlan(ONYC, { capital: 1000, assumedFeePct: 0.5, txUsd: 0 })!;
     expect(poor.freeUntil).toBeNull();
-    // A one-day sale costs about the fees, not the long-run loss.
-    const day1 = poor.exits.find((x) => x.day === 1)!;
-    expect(day1.cashUsd).toBeGreaterThan(-5);
+    // Exits start at the minimum hold (a quarter of 92 days), never the next day.
+    expect(poor.minHold).toBe(23);
+    expect(Math.min(...poor.exits.map((x) => x.day))).toBe(23);
+    expect(poor.firstProfitDay).toBeNull();
     expect(poor.maturity[1].cashUsd).toBeLessThan(-100);
   });
 

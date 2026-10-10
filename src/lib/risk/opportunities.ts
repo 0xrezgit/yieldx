@@ -102,7 +102,8 @@ export function screenYt(markets: OpportunityListing[], s: ScreenSettings, point
     if (pointsOnly && !m.hasPoints) continue;
 
     const D = m.daysToMaturity;
-    const holdDays = s.ytMode === 'maturity' ? D : Math.min(s.holdDays, D);
+    // Never a next-day sale: a week at least (older saved settings may hold less).
+    const holdDays = s.ytMode === 'maturity' ? D : Math.min(Math.max(7, s.holdDays), D);
     const multiplier = m.points?.ytMultiplier ?? m.ytMultiplier ?? 1;
     const fees = ytFees({ ...m, impliedPct: m.impliedAPY }, s.feePercent);
     const base = {

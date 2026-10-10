@@ -3,10 +3,10 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, Calculator, ChevronDown, ExternalLink, Landmark, ListOrdered, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
-import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytBaseOf, ytExcluded, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytBaseOf, ytExcluded, ytGoalRows, type YtGoal, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import type { ExecQuote, Opportunity } from '../../types/opportunity';
 import { fetchQuote } from '../../lib/market/quotes';
-import { MAX_QUOTES_PER_SIDE } from '../../lib/opportunity/policy';
+import { MAX_POOL_SHARE_ESTIMATE, MAX_QUOTES_PER_SIDE } from '../../lib/opportunity/policy';
 import { Confidence } from './Confidence';
 import { YtPlanView, CHEAP } from './YtPlanView';
 import { pointsCheapness, ytPlan, type Cheapness, type YtPlan } from '../../lib/calculators/yt-plan';
@@ -42,6 +42,17 @@ const VERDICT: Record<Verdict, { label: string; tone: Tone }> = {
 /** YT statements of the board's rows and how their points compare (by row id). */
 const PlanContext = createContext<{ plans: Map<string, YtPlan>; cheap: Map<string, { level: Cheapness; rank: number; of: number; basis: 'program' | 'exposure' }> } | null>(null);
 const rowId = (r: LeaderRow) => r.id ?? `${r.m.protocol}-${r.m.id}`;
+
+const GOAL_TITLE: Record<YtGoal, string> = {
+  profit: 'بیشترین سود دلاری',
+  free: 'بیشترین پوینت بدون ضرر نقدی',
+  paid: 'ارزان‌ترین پوینت تا سررسید',
+};
+const GOAL_NOTE: Record<YtGoal, string> = {
+  profit: 'فقط بازارهایی که با نرخ بازار ثابت در سود خارج می‌شوند؛ روز خروج روزی است که سود بیشترین است (دست‌کم یک هفته یا یک‌چهارم زمان تا سررسید). ۱۵ بازار.',
+  free: 'بازارهای پوینتی که تا روزی بدون ضرر نقدی می‌شود نگه داشت؛ خروج در آخرین روز بی‌ضرر، و ترتیب با بیشترین اکسپوژر پوینت (دلار-روز × ضریب) به ازای سرمایه. ۱۵ بازار.',
+  paid: 'بازارهای پوینتی نگه‌داشته تا سررسید، ارزان‌ترین هزینه به ازای هر دلار-روز اکسپوژر (÷ ضریب YT) اول. ضرر نقدی همان بهای پوینت است. ۱۵ بازار.',
+};
 
 /** Below this health a loop is shown but never suggested. */
 const MIN_HEALTH = thresholds.opportunities.loopMinHealth;
@@ -147,6 +158,7 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
               </Pill>
             )}
             {row.tooBig && <Pill tone="danger">بزرگ نسبت به نقدینگی</Pill>}
+            {row.needsQuote && <Pill tone="warning">برآورد، بدون قیمت اجرایی</Pill>}
             {strategy === 'loop' && row.health != null && row.health < MIN_HEALTH && <Pill tone="warning">نزدیک لیکوییدشدن</Pill>}
             {strategy === 'yt' && temporaryBase(m) && <Pill tone="warning">بازده پایه احتمالاً موقت</Pill>}
             {!isStable(m) && <Pill>وابسته به قیمت دارایی</Pill>}
@@ -287,6 +299,7 @@ export interface LendingState {
 export function LeaderRanking({ markets, capital, strategy, lending }: { markets: OpportunityListing[]; capital: number; strategy: LeaderStrategy; lending?: LendingState }) {
   const [fee, setFee] = useState(defaultScreenSettings.feePercent);
   const [by, setBy] = useState<RankBy>('total');
+  const [goal, setGoal] = useState<YtGoal>('profit');
   const [pointsOnly, setPointsOnly] = useState(false);
   const [hurdle, setHurdle] = useState(8);
   const s = useMemo(() => ({ ...defaultScreenSettings, feePercent: Number.isFinite(fee) ? Math.max(0, fee) : 0 }), [fee]);
@@ -330,7 +343,9 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
     const asked = new Set(Object.keys(quotes)).size;
     const room = Math.max(0, MAX_QUOTES_PER_SIDE * 2 - asked);
     if (!room) return;
-    const want = waiting
+    // Estimated rows too: their quote replaces the estimate.
+    const want = all
+      .filter((r) => r.needsQuote)
       .filter((r) => r.m.protocol === 'pendle' && /^\d+-0x[0-9a-fA-F]{40}$/.test(r.m.id) && r.needsQuote!.usd >= 100 && !(leaderQuoteKey(r.m.id, r.needsQuote!.side, r.needsQuote!.usd) in quotes))
       .sort((a, b) => b.pnl - a.pnl)
       .slice(0, Math.min(MAX_QUOTES_PER_SIDE, room));
@@ -346,8 +361,10 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       setQuotes((prev) => ({ ...prev, ...Object.fromEntries(got) }));
     }, 600);
     return () => clearTimeout(t);
-  }, [waiting, quotes]);
+  }, [all, quotes]);
   const b = useMemo(() => buckets(rows, by), [rows, by]);
+  // YT by the buyer's goal, 15 markets each (never a next-day sale).
+  const goalRows = useMemo(() => (strategy === 'yt' ? ytGoalRows(rows, goal, by) : []), [strategy, rows, goal, by]);
   const gains = rows.filter((x) => x.pnl >= 0).length;
   const count = (p: string) => rows.filter((r) => r.m.protocol === p).length;
 
@@ -362,7 +379,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       <section className="sx-card p-4 flex flex-col gap-3">
         <div className="grid grid-cols-1 sm:grid-cols-[10rem_minmax(0,1fr)_auto] gap-3 items-end">
           <NumberField label="کارمزد فرضی" value={fee} onChange={setFee} suffix="%" help={strategy === 'yt' ? 'فقط برای پروتکلی که کارمزدش معلوم نیست؛ Pendle و Exponent با کارمزد واقعی خودشان حساب می‌شوند.' : undefined} />
-          <Segmented<RankBy> value={by} onChange={setBy} label="مرتب‌سازی" size="sm" options={[{ id: 'total', label: 'سود کل دلاری' }, { id: 'perDay', label: 'سود در هر روز' }]} />
+          {(strategy !== 'yt' || goal === 'profit') && <Segmented<RankBy> value={by} onChange={setBy} label="مرتب‌سازی" size="sm" options={[{ id: 'total', label: 'سود کل دلاری' }, { id: 'perDay', label: 'سود در هر روز' }]} />}
           {strategy === 'yt' && (
             <label className="tap flex items-center gap-2.5 text-sm text-secondary min-h-11 cursor-pointer">
               <input type="checkbox" checked={pointsOnly} onChange={(e) => setPointsOnly(e.target.checked)} />
@@ -414,13 +431,32 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
           </li>
         </ul>
       </div>
-      <Suggestion rows={rows} strategy={strategy} />
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Bucket title="بیشترین سود" icon={<TrendingUp size={18} aria-hidden />} cls="text-success" rows={b.topProfit} strategy={strategy} capital={capital} />
-        <Bucket title="کمترین سود" icon={<ArrowUpRight size={18} aria-hidden />} cls="text-info" rows={b.leastProfit} strategy={strategy} capital={capital} />
-        <Bucket title="کمترین ضرر" icon={<ArrowDownRight size={18} aria-hidden />} cls="text-warning" rows={b.leastLoss} strategy={strategy} capital={capital} />
-        <Bucket title="بیشترین ضرر" icon={<TrendingDown size={18} aria-hidden />} cls="text-danger" rows={b.topLoss} strategy={strategy} capital={capital} />
-      </div>
+      {strategy === 'yt' ? (
+        <>
+          <Segmented<YtGoal>
+            value={goal}
+            onChange={setGoal}
+            label="هدف خرید YT"
+            options={[
+              { id: 'profit', label: 'سود دلاری' },
+              { id: 'free', label: 'پوینت بی‌ضرر' },
+              { id: 'paid', label: 'پوینت با هزینه' },
+            ]}
+          />
+          <p className="text-xs text-secondary leading-6">{GOAL_NOTE[goal]}</p>
+          <Bucket title={GOAL_TITLE[goal]} icon={goal === 'profit' ? <TrendingUp size={18} aria-hidden /> : <Sparkles size={18} aria-hidden />} cls={goal === 'paid' ? 'text-warning' : 'text-success'} rows={goalRows} strategy={strategy} capital={capital} />
+        </>
+      ) : (
+        <>
+          <Suggestion rows={rows} strategy={strategy} />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <Bucket title="بیشترین سود" icon={<TrendingUp size={18} aria-hidden />} cls="text-success" rows={b.topProfit} strategy={strategy} capital={capital} />
+            <Bucket title="کمترین سود" icon={<ArrowUpRight size={18} aria-hidden />} cls="text-info" rows={b.leastProfit} strategy={strategy} capital={capital} />
+            <Bucket title="کمترین ضرر" icon={<ArrowDownRight size={18} aria-hidden />} cls="text-warning" rows={b.leastLoss} strategy={strategy} capital={capital} />
+            <Bucket title="بیشترین ضرر" icon={<TrendingDown size={18} aria-hidden />} cls="text-danger" rows={b.topLoss} strategy={strategy} capital={capital} />
+          </div>
+        </>
+      )}
       {waiting.length > 0 && (
         <Excluded
           title="نیازمند قیمت اجرایی"
