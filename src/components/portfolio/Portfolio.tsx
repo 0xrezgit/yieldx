@@ -46,7 +46,7 @@ function Select<T extends string>({ label, value, onChange, options }: { label: 
 /** A figure in the hero band's secondary row. */
 function Figure({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
   return (
-    <div className="min-w-0 flex flex-col gap-1 py-3 border-t border-sx-border lg:border-t-0 lg:py-0">
+    <div className="min-w-0 flex flex-col gap-1 py-3 border-t border-sx-border lg:border-t-0 lg:py-0 lg:border-s lg:ps-5 lg:first:border-s-0 lg:first:ps-0">
       <span className="text-xs text-sx-muted">{label}</span>
       <span className="text-base font-normal text-sx-text">{children}</span>
       {hint && <span className="text-xs text-sx-faint">{hint}</span>}
@@ -452,6 +452,7 @@ export default function Portfolio() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="page-title">پرتفوی من</h1>
+          <p className="page-sub">ارزش امروز و سود خریدهایی که ثبت کرده‌اید.</p>
           <span className="text-xs text-sx-faint inline-flex items-center gap-1.5">
             {refreshing ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <span className={`size-1.5 rounded-full ${updatedAt ? 'bg-sx-green' : 'bg-sx-faint'}`} aria-hidden />}
             {updatedAt ? <>به‌روز {formatAgo(updatedAt)}</> : views.length ? 'در حال دریافت قیمت‌ها' : 'بدون پوزیشن'}
@@ -488,7 +489,7 @@ export default function Portfolio() {
         </section>
       ) : (
         <>
-          <section className="sx-hero p-4 md:p-6 flex flex-col gap-4">
+          <section className="spotlight p-5 md:p-7 flex flex-col gap-5" aria-label="خلاصه">
             <div className="flex flex-wrap items-end justify-between gap-5">
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs text-sx-muted">ارزش خالص</span>
@@ -502,7 +503,7 @@ export default function Portfolio() {
                 <Pnl usd={totals.pnlUsd} pct={totals.pnlPct} size="lg" />
               </div>
             </div>
-            <div className="grid grid-cols-3 lg:grid-cols-6 gap-x-5 gap-y-1 border-t border-sx-border pt-4">
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-x-5 gap-y-1 border-t border-sx-border pt-5">
               <Figure label="سرمایه">
                 <Usd x={totals.investedUsd} />
               </Figure>
@@ -600,10 +601,11 @@ export default function Portfolio() {
 
       <MaturedSection views={views} />
 
+      <EarnSection earn={earn} saveEarn={saveEarn} removeEarn={removeEarn} />
+
       <footer className="border-t border-sx-border pt-4">
         <NoWalletNote />
       </footer>
-      <EarnSection earn={earn} saveEarn={saveEarn} removeEarn={removeEarn} />
     </SxPage>
   );
 }

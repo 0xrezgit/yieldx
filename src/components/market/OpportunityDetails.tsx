@@ -13,6 +13,7 @@ import { formatAgo, formatDate, formatNumber, formatPercent, formatUSD } from '.
 import { Num } from '../ui/num';
 import { StepList } from './ActionPlan';
 import { stepsFor } from '../../lib/market/steps';
+import { ScenarioTable } from './ScenarioTable';
 
 export const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : Math.abs(x) >= 1 ? 2 : 4);
 
@@ -93,6 +94,14 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
     <div className="flex flex-col gap-4 text-sm">
       <Horizons row={row} active={days} />
       {e.reason && e.placement !== 'ranked' && <p className="text-secondary">{e.reason}</p>}
+      {e.scenarios && e.scenarios.length > 0 && (
+        <ScenarioTable
+          rows={e.scenarios.map((x) => ({ kind: x.kind, basePct: x.basePct, received: x.received, cash: x.net, notional: x.notional }))}
+          capital={e.capital}
+          days={e.earningDays}
+          points={!!o.yt?.hasPoints}
+        />
+      )}
       <section className="rounded-xl border border-default p-3" aria-labelledby={`steps-${o.key}`}>
         <h3 id={`steps-${o.key}`} className="text-xs text-muted mb-3">
           قدم‌به‌قدم تا سود دلاری

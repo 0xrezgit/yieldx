@@ -1,4 +1,4 @@
-import type { BaseHealth, ImpliedHealth } from './market';
+import type { BaseHealth, BaseLevels, ImpliedHealth } from './market';
 /**
  * The protocol-independent model of an opportunity: anything that turns the
  * user's capital into income over a period — a PT held to maturity, a lending
@@ -291,6 +291,10 @@ export interface Opportunity {
     yieldFeePct: number | null;
     /** Is the published base yield believable (lib/opportunity/health)? */
     health?: BaseHealth | null;
+    /** The base yield's recent levels, for the scenarios. */
+    levels?: BaseLevels | null;
+    /** Set once the scenarios are applied: the sentence that replaces «today's base held». */
+    scenarioNote?: string;
   } | null;
 }
 
@@ -368,6 +372,10 @@ export interface Estimate {
   range?: { low: number; high: number } | null;
   /** Why it is not ranked, in a few words; null when ranked. */
   reason?: string | null;
+  /** YT: USD of yield exposure bought (what points are counted on). */
+  ytNotional?: number;
+  /** Variable base yield: the result under the low / likely / high reading (lib/opportunity/base-scenarios). */
+  scenarios?: { kind: 'low' | 'likely' | 'high'; basePct: number; received: number | null; net: number | null; notional: number | null }[];
 }
 
 export interface LeverageResult {

@@ -184,10 +184,24 @@ describe('vfat LP pools: what is dropped, and why', () => {
   it('a pool without a measured price swing or volatility has no loss estimate, so it is dropped', () => {
     const item = pool();
     item.pool!.assetCorrelation = null;
-    expect(vetPool(item, REF, NOW)).toBe('volatility');
+    // Not in the list: the pool's history decides — until it is in, it is waiting, not rejected.
+    expect(vetPool(item, REF, NOW)).toBe('history');
+    expect(vetPool(item, REF, NOW, null)).toBe('history');
+    expect(vetPool(item, REF, NOW, { history: { points: [], currentRangeRisk: null } })).toBe('volatility');
     const noVol = pool();
     noVol.pool!.assetCorrelation!.relativeRealizedVolatilityAnnualizedPercent = null;
     expect(vetPool(noVol, REF, NOW)).toBe('volatility');
+  });
+
+  it('reads the price moves from the pool history when the list no longer carries them (vfat, 2026-10)', () => {
+    const listed = pool();
+    const risk = listed.pool!.assetCorrelation!;
+    const item = pool();
+    item.pool!.assetCorrelation = { baseTokenAddress: risk.baseTokenAddress };
+    const r = vetPool(item, REF, NOW, { history: { points: [], currentRangeRisk: risk } });
+    expect(typeof r).toBe('object');
+    expect(r).toMatchObject({ volAnnualPct: 40 });
+    expect(r).toEqual(vetPool(listed, REF, NOW));
   });
 
   it('counts every dropped pool, keeps one row per id', () => {

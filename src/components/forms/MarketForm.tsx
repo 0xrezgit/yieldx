@@ -229,7 +229,7 @@ function MarketTrigger({ p, loading, count, impliedAPY, onOpen }: { p: ScenarioP
   if (!p.marketId) {
     return (
       <button type="button" onClick={onOpen} aria-haspopup="dialog" className="w-full flex items-center gap-3 rounded-lg border border-dashed border-accent/70 hover:bg-accent/8 px-4 min-h-16 transition-colors">
-        <span className="grid place-items-center size-10 rounded-full bg-brand text-white shrink-0">{loading ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Search size={18} aria-hidden />}</span>
+        <span className="grid place-items-center size-10 rounded-full bg-brand text-on-brand shrink-0">{loading ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Search size={18} aria-hidden />}</span>
         <span className="text-right min-w-0">
           <span className="block font-semibold text-primary">انتخاب بازار</span>
           <span className="block text-sm text-secondary">{loading ? 'در حال دریافت بازارها…' : <><Num>{formatNumber(count, 0)}</Num> بازار فعال</>}</span>

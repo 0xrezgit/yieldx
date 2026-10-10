@@ -99,7 +99,7 @@ export function ytOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     exit: { type: 'maturity', note: 'در سررسید YT صفر می‌شود و بازده جمع‌شده دریافت می‌شود؛ فروش زودتر در استخر ممکن است.' },
     ptToken: null,
     url: listingLink(protocol, m, 'yt').url,
-    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints, yieldFeePct: YT_YIELD_FEE_PCT[protocol] ?? null, health: m.baseHealth ?? null },
+    yt: { impliedPct: m.impliedAPY, hasPoints: m.hasPoints, yieldFeePct: YT_YIELD_FEE_PCT[protocol] ?? null, health: m.baseHealth ?? null, levels: m.baseLevels ?? null },
   };
 }
 

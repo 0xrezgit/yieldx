@@ -2,6 +2,7 @@ import thresholds from '../../config/thresholds.json';
 import type { MarketListing } from '../../types/market';
 import type { ProtocolId } from '../../types/protocol';
 import { ptPriceFromAPY } from '../calculators/implied-apy';
+import { baseScenarios } from '../opportunity/base-scenarios';
 import { BASE_RATE_KIND, simulateLoop, simulateYt, ytEntryLimits, ytPriceFromAPY, YT_YIELD_FEE_PCT } from '../calculators/trade';
 import { formatNumber, formatUSDCompact } from '../utils/formatting';
 
@@ -106,7 +107,8 @@ export function screenYt(markets: OpportunityListing[], s: ScreenSettings, point
       capital: 1000,
       underlyingPrice: 1,
       daysToMaturity: D,
-      baseAPY: m.baseAPY,
+      // Today's base fades into the market's own level over the hold (lib/opportunity/base-scenarios).
+      baseAPY: baseScenarios(m.baseAPY, m.baseLevels, holdDays).likely,
       holdDays,
       feePercent: s.feePercent,
       pointsPerDay: 0,

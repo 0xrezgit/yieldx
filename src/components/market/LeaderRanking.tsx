@@ -8,6 +8,7 @@ import type { ExecQuote, Opportunity } from '../../types/opportunity';
 import { fetchQuote } from '../../lib/market/quotes';
 import { MAX_QUOTES_PER_SIDE } from '../../lib/opportunity/policy';
 import { Confidence } from './Confidence';
+import { ScenarioTable } from './ScenarioTable';
 import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/opportunities';
 import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/opportunity/policy';
 import thresholds from '../../config/thresholds.json';
@@ -89,7 +90,7 @@ const leaderSteps = (row: LeaderRow, strategy: LeaderStrategy) => {
   });
 };
 
-function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: LeaderStrategy }) {
+function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; strategy: LeaderStrategy; capital: number }) {
   const { m } = row;
   const v = VERDICT[row.verdict];
   const steps = leaderSteps(row, strategy);
@@ -155,7 +156,7 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
               row.lender && { label: 'LLTV', value: <Num>{formatPercent(row.lender.lltvPct, 1)}</Num> },
               row.leverage != null && { label: 'اهرم', value: <Num>{`${formatNumber(row.leverage, 1)}×`}</Num>, tone: row.leverage < PT_LOOP_POLICY.maxLeverage ? 'text-warning' : undefined },
               strategy === 'loop' && row.health != null && { label: 'سلامت', value: <Num>{formatNumber(row.health, 2)}</Num>, tone: row.health < MIN_HEALTH ? 'text-warning' : undefined },
-              range && { label: 'بازه', value: <><Num>{money(range.low)}</Num> تا <Num>{money(range.high)}</Num></>, wide: true },
+              range && { label: strategy === 'yt' ? 'بدبینانه تا خوش‌بینانه' : 'بازه', value: <><Num>{money(range.low)}</Num> تا <Num>{money(range.high)}</Num></>, wide: true },
             ]}
           />
           {row.leverageReason && <p className="text-xs text-muted leading-6">اهرم کمتر: {row.leverageReason}</p>}
@@ -172,13 +173,14 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
             <Calculator size={15} aria-hidden />
           </Link>
           <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className={secondaryAction}>
-            <ListOrdered size={15} aria-hidden /> قدم‌به‌قدم
+            <ListOrdered size={15} aria-hidden /> {strategy === 'yt' ? 'شبیه‌سازی و قدم‌ها' : 'قدم‌به‌قدم'}
             <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
           </button>
         </div>
       </div>
       {open && (
-        <div className="mt-3 rounded-xl border border-default bg-canvas p-3 sm:p-4">
+        <div className="mt-3 rounded-xl border border-default bg-canvas p-3 sm:p-4 flex flex-col gap-4">
+          {strategy === 'yt' && row.scenarios && <ScenarioTable rows={row.scenarios} capital={capital} days={row.days} points={m.hasPoints} />}
           <StepList steps={steps} />
         </div>
       )}
@@ -186,7 +188,7 @@ function Row({ row, rank, strategy }: { row: LeaderRow; rank: number; strategy: 
   );
 }
 
-function Bucket({ title, icon, cls, rows, strategy }: { title: string; icon: ReactNode; cls: string; rows: LeaderRow[]; strategy: LeaderStrategy }) {
+function Bucket({ title, icon, cls, rows, strategy, capital }: { title: string; icon: ReactNode; cls: string; rows: LeaderRow[]; strategy: LeaderStrategy; capital: number }) {
   return (
     <section className="sx-card px-3 pt-3 sm:px-4 sm:pt-4 flex flex-col min-w-0">
       <h2 className={`flex items-center justify-between gap-2 font-semibold pb-1 ${cls}`}>
@@ -201,7 +203,7 @@ function Bucket({ title, icon, cls, rows, strategy }: { title: string; icon: Rea
         <ol className="rank-list flex flex-col divide-y divide-default">
           {rows.map((row, i) => (
             <li key={row.id ?? `${row.m.protocol}-${row.m.id}`}>
-              <Row row={row} rank={i + 1} strategy={strategy} />
+              <Row row={row} rank={i + 1} strategy={strategy} capital={capital} />
             </li>
           ))}
         </ol>
@@ -384,10 +386,10 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       </div>
       <Suggestion rows={rows} strategy={strategy} />
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Bucket title="بیشترین سود" icon={<TrendingUp size={18} aria-hidden />} cls="text-success" rows={b.topProfit} strategy={strategy} />
-        <Bucket title="کمترین سود" icon={<ArrowUpRight size={18} aria-hidden />} cls="text-info" rows={b.leastProfit} strategy={strategy} />
-        <Bucket title="کمترین ضرر" icon={<ArrowDownRight size={18} aria-hidden />} cls="text-warning" rows={b.leastLoss} strategy={strategy} />
-        <Bucket title="بیشترین ضرر" icon={<TrendingDown size={18} aria-hidden />} cls="text-danger" rows={b.topLoss} strategy={strategy} />
+        <Bucket title="بیشترین سود" icon={<TrendingUp size={18} aria-hidden />} cls="text-success" rows={b.topProfit} strategy={strategy} capital={capital} />
+        <Bucket title="کمترین سود" icon={<ArrowUpRight size={18} aria-hidden />} cls="text-info" rows={b.leastProfit} strategy={strategy} capital={capital} />
+        <Bucket title="کمترین ضرر" icon={<ArrowDownRight size={18} aria-hidden />} cls="text-warning" rows={b.leastLoss} strategy={strategy} capital={capital} />
+        <Bucket title="بیشترین ضرر" icon={<TrendingDown size={18} aria-hidden />} cls="text-danger" rows={b.topLoss} strategy={strategy} capital={capital} />
       </div>
       {waiting.length > 0 && (
         <Excluded

@@ -17,6 +17,7 @@ export default {
         canvas: v('bg'),
         surface: v('surface'),
         elevated: v('raised'),
+        raised: v('raised'),
         hover: v('hover'),
         // Borders
         default: v('border'),
@@ -29,6 +30,7 @@ export default {
         // Interaction
         accent: v('accent'),
         brand: v('brand'),
+        'on-brand': v('on-brand'),
         brand2: v('brand'),
         // Status
         success: v('success'),

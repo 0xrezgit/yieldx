@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Database, ExternalLink, Loader2, RefreshCw, Search } from 'lucide-react';
+import { ChoiceCards, type Choice } from '../ui/choice-cards';
+import { ChevronDown, Database, ExternalLink, Gift, Layers, Loader2, RefreshCw, Repeat, Search, Trophy } from 'lucide-react';
 import { useMarketAnalysis } from '../../hooks/useMarketAnalysis';
 import { FAMILY_FILTERS, selectHorizon, type Evaluated, type FamilyFilter } from '../../lib/market/analysis';
 import { badgesOf, exitShort, FAMILY_LABEL } from '../../lib/market/labels';
@@ -19,13 +20,8 @@ import { Empty, Pill, Segmented } from '../opportunities/parts';
 import { OpportunityDetails, usd } from './OpportunityDetails';
 import { Coverage } from './Coverage';
 import { LeaderRanking } from './LeaderRanking';
-import { StepStrip } from './ActionPlan';
-import { primaryAction, Rank, secondaryAction, Stats, Tags } from './RowParts';
+import { ghostAction, primaryAction, Rank, secondaryAction, Tags } from './RowParts';
 import { Confidence } from './Confidence';
-import { stepsFor } from '../../lib/market/steps';
-import { platformById, platformOf, type PlatformId } from '../../lib/market/platforms';
-import { strategyById, type StrategyId } from '../../lib/market/strategies';
-import { PlatformCards, PlatformHeader, PlatformStrip, scopeTo, StrategyHeader, summarize, summarizeStrategies } from './Platforms';
 
 type View = 'all' | 'yt' | 'loop';
 
@@ -36,11 +32,23 @@ interface Stored {
   view: View;
 }
 
-/** Only the capital the user typed is kept — never a sample value presented as theirs. */
-function restore(): Stored {
+/** Results show at once: until the user types a capital, the field holds this (editable) amount. */
+const START_CAPITAL = 1000;
+
+const isView = (v: unknown): v is View => v === 'all' || v === 'yt' || v === 'loop';
+
+/** Saved settings, then the address (`?view=yt|loop`, `?q=`) — links from the learn section land on a view or a search. */
+function restore(): Stored & { query: string } {
   const s = readLocal<Partial<Stored>>(STORAGE_KEYS.market, {});
-  const capital = typeof s.capital === 'number' && Number.isFinite(s.capital) && s.capital > 0 ? s.capital : null;
-  return { capital, horizon: isHorizon(s.horizon) ? s.horizon : DEFAULT_HORIZON, view: s.view === 'yt' || s.view === 'loop' ? s.view : 'all' };
+  const params = new URLSearchParams(window.location.search);
+  const capital = typeof s.capital === 'number' && Number.isFinite(s.capital) && s.capital > 0 ? s.capital : START_CAPITAL;
+  const linked = params.get('view');
+  return {
+    capital,
+    horizon: isHorizon(s.horizon) ? s.horizon : DEFAULT_HORIZON,
+    view: isView(linked) ? linked : isView(s.view) ? s.view : 'all',
+    query: params.get('q') ?? '',
+  };
 }
 
 function Identity({ row }: { row: Evaluated }) {
@@ -73,68 +81,63 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
   const tags = badgesOf(e, row.o);
   // Serious Merkl risk flags (memecoin, hack history, access rules) come first, in red.
   const danger = [...new Set(row.merkl.flatMap((m) => flags(m).filter((f) => f.tone === 'danger').map((f) => f.label)))].slice(0, 1);
-  const steps = stepsFor(row.o, e);
   const loss = e.net !== null && e.net < 0;
   return (
-    <li className="py-4">
-      <div className="rank-row no-facts">
-        <button type="button" onClick={onToggle} aria-expanded={open} className="a-id flex items-start gap-2.5 min-w-0 text-right rounded-lg">
-          <span className="mt-1.5">
-            <Rank n={rank} />
-          </span>
+    <li className="py-3">
+      <div className="line-row">
+        <button type="button" onClick={onToggle} aria-expanded={open} className="l-id flex items-center gap-2.5 min-w-0 text-right rounded-lg">
+          <Rank n={rank} />
           <span className="min-w-0 flex-1">
             <Identity row={row} />
           </span>
         </button>
-        <div className="a-pnl flex flex-col items-end gap-1">
-          <span className={`text-xl font-bold leading-tight ${loss ? 'text-danger' : 'text-success'}`}>{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
-          <Confidence confidence={e.confidence} why={e.confidence === 'suspect' ? e.assumptions.slice(0, 1) : undefined} />
+        <div className="l-stats flex items-center gap-3 text-xs text-secondary min-w-0">
+          <span className="flex flex-col leading-tight">
+            <span className="text-muted">بازده دوره</span>
+            <span className={`text-sm font-semibold ${loss ? 'text-danger' : 'text-primary'}`}>{e.netPct === null ? '—' : <Num>{formatPercent(e.netPct, 2)}</Num>}</span>
+          </span>
+          <span className="flex flex-col leading-tight min-w-0">
+            <span className="text-muted">خروج</span>
+            <span className="text-sm text-primary truncate">{exitShort(e, row.o)}</span>
+          </span>
         </div>
-
-        <div className="a-stats flex flex-col gap-1.5">
-          <Stats
-            items={[
-              { label: 'بازده دوره', value: e.netPct === null ? '—' : <Num>{formatPercent(e.netPct, 2)}</Num>, tone: loss ? 'text-danger' : 'text-success' },
-              { label: 'خروج', value: exitShort(e, row.o) },
-              { label: 'افق', value: <><Num>{formatNumber(days, 0)}</Num> روز</> },
-            ]}
-          />
-          {e.range && Math.abs(e.range.high - e.range.low) >= 0.5 && (
-            <p className="text-xs text-muted">
-              بازه <Num>{usd(e.range.low)}</Num> تا <Num>{usd(e.range.high)}</Num>
-            </p>
+        <div className="l-pnl flex flex-col items-end gap-0.5">
+          <span className={`text-lg font-semibold leading-tight ${loss ? 'text-danger' : 'text-success'}`}>{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
+          {e.range && Math.abs(e.range.high - e.range.low) >= 0.5 ? (
+            <span className="text-[11px] text-muted">
+              بدبینانه <Num>{usd(e.range.low)}</Num>
+            </span>
+          ) : (
+            <Confidence confidence={e.confidence} why={e.confidence === 'suspect' ? e.assumptions.slice(0, 1) : undefined} />
           )}
         </div>
-
-        <div className="a-path flex flex-col gap-2.5 min-w-0">
-          <StepStrip steps={steps} />
-          {(danger.length > 0 || tags.length > 0) && (
+        <div className="l-act flex items-center gap-1.5">
+          {row.o.url && (
+            <a href={row.o.url} target="_blank" rel="noopener noreferrer" className={`${ghostAction} grow`} aria-label={`ورود به بازار در ${row.o.protocol.name}`}>
+              <ExternalLink size={14} aria-hidden /> ورود
+            </a>
+          )}
+          <button type="button" onClick={onToggle} aria-expanded={open} className={`${ghostAction} ${row.o.url ? '' : 'grow'}`}>
+            جزئیات
+            <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+          </button>
+        </div>
+        {(danger.length > 0 || tags.length > 0) && (
+          <div className="l-tags">
             <Tags>
               {danger.map((t) => (
                 <Pill key={t} tone="danger">
                   {t}
                 </Pill>
               ))}
-              {tags.map((t) => (
+              {tags.slice(0, 2).map((t) => (
                 <Pill key={t} tone="warning">
                   {t}
                 </Pill>
               ))}
             </Tags>
-          )}
-        </div>
-
-        <div className="a-act flex items-center gap-2">
-          {row.o.url && (
-            <a href={row.o.url} target="_blank" rel="noopener noreferrer" className={`${primaryAction} flex-1`}>
-              <ExternalLink size={15} aria-hidden /> {isAppRoot(row.o.url) ? <>اپ <bdi dir="ltr">{row.o.protocol.name}</bdi></> : 'ورود به بازار'}
-            </a>
-          )}
-          <button type="button" onClick={onToggle} aria-expanded={open} className={`${secondaryAction} ${row.o.url ? '' : 'flex-1'}`}>
-            جزئیات
-            <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {open && (
@@ -146,21 +149,75 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
   );
 }
 
+const VIEWS: Choice<View>[] = [
+  { id: 'all', icon: Layers, title: 'همه‌ی فرصت‌ها', text: 'وام‌دهی، خزانه، PT و YT — به ترتیب سود خالص دلاری' },
+  { id: 'yt', icon: Gift, title: <>دلاری <bdi dir="ltr">YT</bdi></>, text: 'خرید YT و فروش در بهترین روز، با سه سناریوی بازده' },
+  { id: 'loop', icon: Repeat, title: <>لوپ <bdi dir="ltr">PT</bdi></>, text: 'PT با اهرم روی بازار وام واقعی، تا سررسید' },
+];
+
+/** The one answer most visits come for: the best net dollars for this capital and horizon. */
+function BestPick({ row, days, capital, modelVersion }: { row: Evaluated; days: HorizonDays; capital: number; modelVersion: string }) {
+  const [open, setOpen] = useState(false);
+  const e = row.byHorizon[days];
+  if (e.net === null) return null;
+  return (
+    <section className="spotlight p-4 sm:p-6 flex flex-col gap-4" aria-label="بهترین فرصت">
+      <div className="flex items-center gap-2 text-sm text-accent font-medium">
+        <Trophy size={16} aria-hidden /> بهترین سود دلاری برای <Num>{usd(capital)}</Num> در <Num>{formatNumber(days, 0)}</Num> روز
+      </div>
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <Identity row={row} />
+        <div className="flex flex-col sm:items-end">
+          <span className={`hero-num font-semibold ${e.net >= 0 ? 'text-success' : 'text-danger'}`}>
+            <Num>{usd(e.net)}</Num>
+          </span>
+          <span className="text-sm text-secondary">
+            {e.netPct !== null && <><Num>{formatPercent(e.netPct, 2)}</Num> در دوره · </>}
+            {exitShort(e, row.o)}
+          </span>
+          {e.range && Math.abs(e.range.high - e.range.low) >= 0.5 && (
+            <span className="text-xs text-muted">
+              بدبینانه <Num>{usd(e.range.low)}</Num> · خوش‌بینانه <Num>{usd(e.range.high)}</Num>
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {row.o.url && (
+          <a href={row.o.url} target="_blank" rel="noopener noreferrer" className={`${primaryAction} grow sm:grow-0`}>
+            <ExternalLink size={15} aria-hidden /> {isAppRoot(row.o.url) ? <>اپ <bdi dir="ltr">{row.o.protocol.name}</bdi></> : 'ورود به بازار'}
+          </a>
+        )}
+        <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className={secondaryAction}>
+          جزئیات و شبیه‌سازی
+          <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+        </button>
+      </div>
+      {open && (
+        <div className="rounded-xl border border-default bg-canvas p-3 sm:p-4">
+          <OpportunityDetails row={row} days={days} modelVersion={modelVersion} />
+        </div>
+      )}
+    </section>
+  );
+}
+
 /**
- * «تحلیل بازار»: the capital, four horizons, one ranking of at most sixty opportunities by
- * estimated net dollars. Without `platform`: every platform, with a card each; with it:
- * that platform's own page (same capital and horizon, shared across pages).
+ * «تحلیل بازار»: capital and horizon, three rankings (every opportunity, YT in dollars,
+ * PT loops) as cards, the best pick on top and the ranked list under it. Not split by
+ * platform: each row carries its protocol's logo and the link into it.
  */
-export default function MarketAnalysis({ platform: platformId = null, strategy: strategyId = null }: { platform?: PlatformId | null; strategy?: StrategyId | null }) {
-  const platform = platformId ? platformById(platformId) : null;
-  const strategy = strategyId ? strategyById(strategyId) : null;
-  const section = platform ?? strategy;
+export default function MarketAnalysis() {
   const [st, setSt] = useState<Stored | null>(null);
   const [filter, setFilter] = useState<FamilyFilter>('all');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [open, setOpen] = useState<string | null>(null);
-  useEffect(() => setSt(restore()), []);
+  useEffect(() => {
+    const { query: q, ...saved } = restore();
+    setSt(saved);
+    setQuery(q);
+  }, []);
   useEffect(() => {
     if (st) writeLocal(STORAGE_KEYS.market, st);
   }, [st]);
@@ -168,12 +225,8 @@ export default function MarketAnalysis({ platform: platformId = null, strategy: 
   const capital = st?.capital ?? 0;
   const days = st?.horizon ?? DEFAULT_HORIZON;
   const m = useMarketAnalysis(capital);
-  const scoped = useMemo(() => scopeTo(m.analysis, platform ? (r) => platformOf(r.o) === platform.id : strategy ? (r) => strategy.test(r.o) : null), [m.analysis, platform, strategy]);
-  const view = useMemo(() => (scoped ? selectHorizon(scoped, days, filter, normalizeSearch(query)) : null), [scoped, days, filter, query]);
-  const summaries = useMemo(() => summarize(m.analysis, days), [m.analysis, days]);
-  const strategies = useMemo(() => summarizeStrategies(m.analysis, days), [m.analysis, days]);
-  // Section pages rank every opportunity of the section; the separate YT and PT-loop boards live on «All».
-  const mode: View = section ? 'all' : (st?.view ?? 'all');
+  const view = useMemo(() => (m.analysis ? selectHorizon(m.analysis, days, filter, normalizeSearch(query)) : null), [m.analysis, days, filter, query]);
+  const mode: View = st?.view ?? 'all';
   // A new capital, horizon or domain starts from the first page.
   useEffect(() => setPage(0), [capital, days, filter, query]);
 
@@ -186,123 +239,110 @@ export default function MarketAnalysis({ platform: platformId = null, strategy: 
   }
 
   const top = view?.ranking.top ?? [];
-  const pages = Math.max(1, Math.ceil(top.length / PAGE_SIZE));
-  const shown = top.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const best = !view?.narrowed && top.length ? m.analysis!.rowByKey.get(top[0].key) : undefined;
+  const list = best ? top.slice(1) : top;
+  const offset = best ? 1 : 0;
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  const shown = list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-5 lg:py-8 flex flex-col gap-4">
+    <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-5 lg:py-8 flex flex-col gap-4 lg:gap-5">
       <header className="flex items-start justify-between gap-3">
-        {platform ? (
-          <PlatformHeader platform={platform} summary={summaries.get(platform.id)} days={days} />
-        ) : strategy ? (
-          <StrategyHeader strategy={strategy} summary={strategies.get(strategy.id)} days={days} />
-        ) : (
-          <div className="flex flex-col">
-            <h1 className="page-title">تحلیل بازار</h1>
-            <p className="page-sub">فرصت‌ها در همه‌ی پلتفرم‌ها، به ترتیب سود خالص دلاری</p>
-          </div>
-        )}
-        <button type="button" onClick={m.refresh} disabled={m.refreshing} className="tap shrink-0 inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-raised disabled:opacity-60" aria-label="به‌روزرسانی داده‌ها">
+        <div className="flex flex-col">
+          <h1 className="page-title">تحلیل بازار</h1>
+          <p className="page-sub">سرمایه و مدت را بدهید؛ بازارها به ترتیب سود خالص دلاری می‌آیند.</p>
+        </div>
+        <button type="button" onClick={m.refresh} disabled={m.refreshing} className="tap shrink-0 inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-elevated disabled:opacity-60" aria-label="به‌روزرسانی داده‌ها">
           <RefreshCw size={14} className={m.refreshing ? 'animate-spin' : ''} aria-hidden />
           {m.updatedAt ? formatAgo(m.updatedAt) : 'به‌روزرسانی'}
         </button>
       </header>
 
-      <PlatformStrip summaries={summaries} strategies={strategies} />
-
-      {!section && (
-        <Segmented<View>
-          value={st.view}
-          onChange={(view) => setSt({ ...st, view })}
-          label="رتبه‌بندی"
-          options={[
-            { id: 'all', label: 'همه‌ی فرصت‌ها' },
-            { id: 'yt', label: <>دلاری <bdi dir="ltr">YT</bdi></> },
-            { id: 'loop', label: <>لوپ <bdi dir="ltr">PT</bdi></> },
-          ]}
-        />
-      )}
-
-      <section className="sx-card p-4 flex flex-col gap-3" aria-label="سرمایه و افق">
-        <NumberField label="سرمایه‌ی اولیه" value={st.capital ?? NaN} onChange={(v) => setSt({ ...st, capital: Number.isFinite(v) && v > 0 ? v : null })} suffix="دلار" placeholder="مثلاً ۱۰۰۰" />
-        {mode === 'all' && (
-          <Segmented<`${HorizonDays}`>
-            value={`${days}`}
-            onChange={(v) => setSt({ ...st, horizon: Number(v) as HorizonDays })}
-            label="افق"
-            options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))}
-          />
+      <section className="sx-card p-4 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 md:items-end" aria-label="سرمایه و مدت">
+        <NumberField label="سرمایه" value={st.capital ?? NaN} onChange={(v) => setSt({ ...st, capital: Number.isFinite(v) && v > 0 ? v : null })} suffix="دلار" placeholder="مثلاً ۱۰۰۰" />
+        {mode === 'all' ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm text-secondary">مدت نگه‌داری</span>
+            <Segmented<`${HorizonDays}`>
+              value={`${days}`}
+              onChange={(v) => setSt({ ...st, horizon: Number(v) as HorizonDays })}
+              label="مدت نگه‌داری"
+              options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-muted md:pb-3">{mode === 'yt' ? 'مدت را خود رتبه‌بندی انتخاب می‌کند: بهترین روز فروش هر YT.' : 'هر لوپ تا سررسید همان PT نگه داشته می‌شود.'}</p>
         )}
       </section>
 
-      {mode !== 'all' && (m.loading && !m.markets.length ? <div className="h-40 rounded-lg bg-surface border border-default animate-pulse" aria-busy="true" /> : <LeaderRanking key={mode} markets={m.markets} capital={capital} strategy={mode as Exclude<View, 'all'>} lending={m.lending} />)}
+      <ChoiceCards value={mode} onChange={(v) => setSt({ ...st, view: v })} options={VIEWS} label="رتبه‌بندی" />
+
+      {mode !== 'all' && (m.loading && !m.markets.length ? <div className="h-40 rounded-xl bg-surface border border-default animate-pulse" aria-busy="true" /> : <LeaderRanking key={mode} markets={m.markets} capital={capital} strategy={mode as Exclude<View, 'all'>} lending={m.lending} />)}
       {mode === 'all' && (
         <>
-      {!section && capital > 0 && m.analysis && <PlatformCards summaries={summaries} strategies={strategies} capital={capital} days={days} />}
-
-      <p className="text-xs text-secondary">سود هر ردیف جداست و جمع‌پذیر نیست.</p>
-
-      <div className="flex flex-col sm:flex-row gap-2">
-        <label className="relative flex-1">
-          <span className="sr-only">جست‌وجو</span>
-          <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی نماد، پروتکل یا شبکه" className="w-full pr-9 pl-3 text-sm" />
-        </label>
-        {!strategy && (
-          <div className="min-w-0 sm:w-auto">
-            <Segmented<FamilyFilter> value={filter} onChange={setFilter} label="نوع" size="sm" options={FAMILY_FILTERS} />
-          </div>
-        )}
-      </div>
-
-      {!(capital > 0) ? (
-        <Empty>سرمایه‌ی اولیه را وارد کنید.</Empty>
-      ) : m.loading || (!m.analysis && !m.failed) ? (
-        <div className="flex flex-col gap-2" aria-busy="true">
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="h-20 rounded-lg bg-surface border border-default animate-pulse" />
-          ))}
-        </div>
-      ) : m.failed ? (
-        <Empty>منبعی پاسخ نداد.</Empty>
-      ) : !top.length ? (
-        <Empty>برای این سرمایه و افق فرصت سودده‌ای پیدا نشد.</Empty>
-      ) : (
-        <section aria-label="رتبه‌بندی" aria-busy={m.pending} className={`sx-card px-3 pt-3 sm:px-4 sm:pt-4 pb-1 transition-opacity ${m.pending ? 'opacity-60' : ''}`}>
-          <h2 className="flex items-start justify-between gap-3 pb-1">
-            <span className="flex flex-col gap-0.5">
-              <span className="font-semibold text-primary">
-                {platform ? <>رتبه‌بندی <bdi dir="ltr">{platform.name}</bdi></> : strategy ? <>رتبه‌بندی {strategy.name}</> : 'رتبه‌بندی همه‌ی پلتفرم‌ها'} · سود خالص <Num>{formatNumber(days, 0)}</Num> روزه
-              </span>
-              <span className="text-xs text-secondary">
-                <Num>{formatNumber(top.length, 0)}</Num> فرصت برتر {view?.narrowed ? 'در همین دامنه' : 'بین بازارهای بررسی‌شده'} · حداکثر <Num>{formatNumber(TOP_LIMIT, 0)}</Num>
-              </span>
-            </span>
-          </h2>
-          <ol className="rank-list flex flex-col divide-y divide-default">
-            {shown.map((e, i) => {
-              const row = m.analysis!.rowByKey.get(e.key);
-              return row ? <RankingRow key={e.key} row={row} rank={page * PAGE_SIZE + i + 1} days={days} open={open === e.key} onToggle={() => setOpen(open === e.key ? null : e.key)} modelVersion={m.analysis!.modelVersion} /> : null;
-            })}
-          </ol>
-          {pages > 1 && (
-            <nav className="flex items-center justify-center gap-1 pt-3" aria-label="صفحه‌ها">
-              {Array.from({ length: pages }, (_, p) => (
-                <button key={p} type="button" onClick={() => setPage(p)} aria-current={p === page ? 'page' : undefined} className={`tap min-w-10 min-h-10 rounded-md text-sm font-medium ${p === page ? 'bg-hover text-primary' : 'text-muted hover:text-primary hover:bg-raised'}`}>
-                  <Num>{formatNumber(p + 1, 0)}</Num>
-                </button>
+          {!(capital > 0) ? (
+            <Empty>سرمایه را وارد کنید.</Empty>
+          ) : m.loading || (!m.analysis && !m.failed) ? (
+            <div className="flex flex-col gap-2" aria-busy="true">
+              <div className="h-44 rounded-2xl bg-surface border border-default animate-pulse" />
+              {Array.from({ length: 4 }, (_, i) => (
+                <div key={i} className="h-20 rounded-xl bg-surface border border-default animate-pulse" />
               ))}
-            </nav>
-          )}
-        </section>
-      )}
+            </div>
+          ) : m.failed ? (
+            <Empty>منبعی پاسخ نداد.</Empty>
+          ) : (
+            <>
+              {best && <BestPick key={best.o.key} row={best} days={days} capital={capital} modelVersion={m.analysis!.modelVersion} />}
 
-      <Collapsible title="پوشش داده‌ها" icon={<Database size={18} aria-hidden />}>
-        <Coverage sources={m.sources} counts={view?.counts ?? null} total={view?.total ?? 0} />
-      </Collapsible>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <label className="relative flex-1">
+                  <span className="sr-only">جست‌وجو</span>
+                  <Search size={15} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="جست‌وجوی نماد، پروتکل یا شبکه" className="w-full pr-9 pl-3 text-sm" />
+                </label>
+                <div className="min-w-0 sm:w-auto">
+                  <Segmented<FamilyFilter> value={filter} onChange={setFilter} label="نوع" size="sm" options={FAMILY_FILTERS} />
+                </div>
+              </div>
+
+              {!top.length ? (
+                <Empty>برای این سرمایه و مدت فرصت سودده‌ای پیدا نشد.</Empty>
+              ) : (
+                list.length > 0 && (
+                  <section aria-label="رتبه‌بندی" aria-busy={m.pending} className={`sx-card px-3 pt-3 sm:px-5 sm:pt-4 pb-1 transition-opacity ${m.pending ? 'opacity-60' : ''}`}>
+                    <h2 className="flex items-baseline justify-between gap-3 pb-1">
+                      <span className="font-semibold text-primary">{best ? 'فرصت‌های بعدی' : 'نتیجه‌ی جست‌وجو'}</span>
+                      <span className="text-xs text-muted">
+                        <Num>{formatNumber(top.length, 0)}</Num> فرصت · سود هر ردیف جداست و جمع‌پذیر نیست
+                      </span>
+                    </h2>
+                    <ol className="rank-list flex flex-col divide-y divide-default">
+                      {shown.map((e, i) => {
+                        const row = m.analysis!.rowByKey.get(e.key);
+                        return row ? <RankingRow key={e.key} row={row} rank={offset + page * PAGE_SIZE + i + 1} days={days} open={open === e.key} onToggle={() => setOpen(open === e.key ? null : e.key)} modelVersion={m.analysis!.modelVersion} /> : null;
+                      })}
+                    </ol>
+                    {pages > 1 && (
+                      <nav className="flex items-center justify-center gap-1 pt-3" aria-label="صفحه‌ها">
+                        {Array.from({ length: pages }, (_, p) => (
+                          <button key={p} type="button" onClick={() => setPage(p)} aria-current={p === page ? 'page' : undefined} className={`tap min-w-10 min-h-10 rounded-md text-sm font-medium ${p === page ? 'bg-hover text-primary' : 'text-muted hover:text-primary hover:bg-elevated'}`}>
+                            <Num>{formatNumber(p + 1, 0)}</Num>
+                          </button>
+                        ))}
+                      </nav>
+                    )}
+                  </section>
+                )
+              )}
+            </>
+          )}
+
+          <Collapsible title="پوشش داده‌ها" icon={<Database size={18} aria-hidden />}>
+            <Coverage sources={m.sources} counts={view?.counts ?? null} total={view?.total ?? 0} />
+          </Collapsible>
         </>
       )}
-
     </main>
   );
 }

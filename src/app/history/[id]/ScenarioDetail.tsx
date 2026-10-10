@@ -56,7 +56,7 @@ export default function ScenarioDetail({ id }: { id: string }) {
           <h1 className="page-title truncate">{s.name}</h1>
           <p className="text-sm text-info">سناریوی فرضی — معامله‌ی واقعی نیست · آخرین تغییر {formatDate(s.updatedAt)} · با تاریخ امروز دوباره تحلیل شده</p>
         </div>
-        <Link href={`/dashboard?scenario=${encodeURIComponent(s.id)}`} className="tap flex items-center gap-1.5 rounded-lg px-4 min-h-11 text-white bg-brand font-semibold shrink-0">
+        <Link href={`/dashboard?scenario=${encodeURIComponent(s.id)}`} className="tap flex items-center gap-1.5 rounded-lg px-4 min-h-11 text-on-brand bg-brand font-semibold shrink-0">
           <Pencil size={15} aria-hidden /> ویرایش در تحلیل بازار
         </Link>
       </div>

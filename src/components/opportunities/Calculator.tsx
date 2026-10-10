@@ -26,6 +26,8 @@ export interface CalcState {
   icon: string | null;
   capital: number;
   underlyingPrice: number;
+  /** What one YT pays the yield of (the market's own unit), for the YT count shown. */
+  ytUnit: 'asset' | 'usd';
   days: number;
   entryAPY: number;
   baseAPY: number;
@@ -51,6 +53,7 @@ export const defaultCalc: CalcState = {
   icon: null,
   capital: 10_000,
   underlyingPrice: 1,
+  ytUnit: 'asset',
   days: 120,
   entryAPY: 10,
   baseAPY: 8,
@@ -434,7 +437,8 @@ function YtResult({ c, unreliable = false }: { c: CalcState; unreliable?: boolea
       <Details
         rows={[
           ['قیمت YT در ورود', <Num key="p">{formatNumber(t.entryPrice, 5)}</Num>],
-          ['تعداد YT', <Num key="u">{formatNumber(t.units, 2)}</Num>],
+          // On a USD-quoted market one YT is the yield of $1, so the count is the dollar exposure.
+          ['تعداد YT', <Num key="u">{formatNumber(c.ytUnit === 'usd' ? t.notional : t.units, 2)}</Num>],
           ['اکسپوژر (دلار)', <><Num>{formatUSD(t.notional, 0)}</Num> · <Num>{formatNumber(t.leverage, 1)}×</Num></>],
           ['بازده دریافتی', <Num key="y">{formatUSD(t.yieldEarned, 0)}</Num>],
           ['قیمت YT در خروج', <Num key="e">{formatNumber(t.exitPrice, 5)}</Num>],

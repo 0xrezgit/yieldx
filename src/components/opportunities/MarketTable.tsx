@@ -114,7 +114,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
                   ))}
                   <td className="px-2 xl:px-3 py-3 border-b border-l border-default whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
-                      <button type="button" onClick={() => onAction(r)} className="tap inline-flex items-center gap-1.5 rounded-lg bg-brand text-white px-3 min-h-9 text-sm font-semibold">
+                      <button type="button" onClick={() => onAction(r)} className="tap inline-flex items-center gap-1.5 rounded-lg bg-brand text-on-brand px-3 min-h-9 text-sm font-semibold">
                         {actionIcon ?? <Calculator size={14} aria-hidden />} {actionLabel}
                       </button>
                       <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} aria-controls={detailsId} aria-label="جزئیات" className="tap grid place-items-center size-9 rounded-lg text-secondary hover:text-primary hover:bg-elevated">
@@ -156,7 +156,7 @@ export function MarketTable<R>({ rows, rowKey, identity, columns, details, onAct
               </div>
               {mb.warning && <div className="text-xs text-warning">{mb.warning}</div>}
               <div className="flex gap-2">
-                <button type="button" onClick={() => onAction(r)} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand text-white px-3 min-h-11 text-[15px] font-medium hover:brightness-110">
+                <button type="button" onClick={() => onAction(r)} className="tap flex-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-brand text-on-brand px-3 min-h-11 text-[15px] font-medium hover:brightness-110">
                   {actionIcon ?? <Calculator size={15} aria-hidden />} {actionLabel}
                 </button>
                 <button type="button" onClick={() => toggle(k)} aria-expanded={isOpen} className="tap inline-flex items-center justify-center gap-1 rounded-md border border-strong bg-white/[0.03] px-3 min-h-11 text-[15px] font-medium text-secondary hover:text-primary hover:bg-hover">

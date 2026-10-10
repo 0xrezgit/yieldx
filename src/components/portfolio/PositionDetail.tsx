@@ -643,6 +643,35 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
   );
 }
 
+/**
+ * Where the result came from, in three parts that add up to it: fees paid on top of the
+ * amounts, income already received, and the change in the tokens' value (the rest).
+ */
+function PnlBreakdown({ v }: { v: PositionView['v'] }) {
+  const fees = -v.ledger.fees.separate;
+  const income = v.ledger.incomeYieldUsd + v.ledger.incomeRewardUsd;
+  const market = v.pnlUsd - fees - income;
+  const parts = [
+    { label: 'تغییر ارزش توکن', usd: market, show: true },
+    { label: 'کارمزدهای جداگانه', usd: fees, show: Math.abs(fees) >= 0.005 },
+    { label: 'درآمد دریافت‌شده', usd: income, show: Math.abs(income) >= 0.005 },
+  ].filter((x) => x.show);
+  if (parts.length < 2) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs text-sx-muted">سود و زیان از کجا آمده</span>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {parts.map((x) => (
+          <div key={x.label} className="rounded-lg border border-sx-border bg-sx-bg/60 px-3 py-2 flex items-baseline justify-between gap-2">
+            <span className="text-xs text-sx-muted">{x.label}</span>
+            <Pnl usd={x.usd} size="sm" word={false} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PositionDetail({ id }: { id: string }) {
   const router = useRouter();
   const { positions, views, airdrops, saveAirdrop, removeAirdrop, save, remove, refresh, refreshing, updatedAt } = usePortfolioView();
@@ -677,7 +706,7 @@ export default function PositionDetail({ id }: { id: string }) {
         <ArrowRight size={14} /> پرتفوی من
       </Link>
 
-      <section className="sx-hero p-6 md:p-8 flex flex-col gap-7">
+      <section className="spotlight p-6 md:p-8 flex flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <MarketIdentity p={p} size={52} />
           <div className="flex items-center gap-2">
@@ -705,6 +734,7 @@ export default function PositionDetail({ id }: { id: string }) {
             </span>
           </div>
         </div>
+        <PnlBreakdown v={v} />
         <p className="text-xs text-sx-faint flex flex-wrap items-center gap-1.5 border-t border-sx-border pt-4">
           <span className={`size-1.5 rounded-full ${x.q?.error ? 'bg-sx-orange' : updatedAt ? 'bg-sx-green' : 'bg-sx-faint'}`} aria-hidden />
           {updatedAt ? (
