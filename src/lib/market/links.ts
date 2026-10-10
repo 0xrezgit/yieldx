@@ -10,7 +10,9 @@ import { networkByName } from '../registry/networks';
  * - Morpho:  https://app.morpho.org/{chain}/vault/{address}, …/{chain}/market/{marketId}
  * Chain names are each app's own: Pendle's `nameId` and Morpho's `chainIdentifier` from
  * the chain tables in their app bundles (read 2026-10-01), cross-checked against Merkl.
- * Spectra and Exponent publish no market URL format we could verify: their links open the
+ * Exponent: https://app.exponent.finance/en/market/{farm|fixed}/{name}-{DDMONYY} and Spectra:
+ * https://app.spectra.finance/{fixed-rate|trade-yield}/{network}:{pool} — built by their adapters
+ * (formats read from and checked on each app, 2026-10-11). Otherwise their links open the
  * app, and `exact` is false so the page can show the market address to search for.
  */
 
@@ -40,7 +42,10 @@ export function pendleLink(chainId: number, market: string, view: 'pt' | 'yt'): 
 }
 
 /** Where to buy this market's PT or YT. */
-export function listingLink(protocol: ProtocolId, m: Pick<MarketListing, 'id' | 'chain'>, view: 'pt' | 'yt'): EntryLink {
+export function listingLink(protocol: ProtocolId, m: Pick<MarketListing, 'id' | 'chain'> & { links?: MarketListing['links'] }, view: 'pt' | 'yt'): EntryLink {
+  // Built by the adapter from a format checked on the protocol's own app (Exponent, Spectra).
+  const own = m.links?.[view];
+  if (own) return { url: own, exact: true };
   if (protocol === 'pendle') {
     const r = /^(?:(\d+)-)?(0x[0-9a-fA-F]{40})$/.exec(m.id);
     const chainId = r?.[1] ? Number(r[1]) : (networkByName(m.chain).chainId ?? 1);

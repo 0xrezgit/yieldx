@@ -16,6 +16,7 @@ import { YtBoard } from '../opportunities/YtBoard';
 import { CalculatorPanel, defaultCalc, type CalcMode, type CalcState } from '../opportunities/Calculator';
 import { applyFilters, defaultFilters, FilterBar, type Filters } from '../opportunities/filters';
 import { LpAnalyzer, readLpPrefill, type LpPrefill } from '../opportunities/LpAnalyzer';
+import { ytFees } from '../../lib/calculators/yt-plan';
 import { BorrowTool } from './BorrowTool';
 import { LpPools } from './LpPools';
 import { VerifiedYields } from './VerifiedYields';
@@ -123,6 +124,8 @@ export default function Tools() {
               // Unknown base APY → 0 (the calculator warns), never the previous market's value.
               baseAPY: m.baseAPY === null || !Number.isFinite(m.baseAPY) ? 0 : round(m.baseAPY),
               holdDays: Math.min(s.calc.holdDays, m.daysToMaturity),
+              // YT: the protocol's own fee on this market (Pendle's AMM fee, Exponent's book), not a flat guess.
+              ...((mode ?? s.calc.mode) === 'yt' && ytFees({ ...m, impliedPct: m.impliedAPY }, s.calc.fee).source !== 'assumed' ? { fee: round(ytFees({ ...m, impliedPct: m.impliedAPY }, s.calc.fee).entryPct) } : {}),
               // Points program: this market's, or none — never carried from the previous market.
               ...(m.points ? { pointsPerDay: m.points.pointsPerDay, pointsBasis: m.points.basis, ytMultiplier: m.points.ytMultiplier } : { pointsPerDay: 0, ytMultiplier: 1 }),
               ...extra,
@@ -233,7 +236,7 @@ export default function Tools() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {s.ytMode === 'roundtrip' && <NumberField label="روز نگه‌داری" value={s.holdDays} onChange={(v) => Number.isFinite(v) && setS({ holdDays: Math.max(1, v) })} />}
               <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />
-              <NumberField label="کارمزد هر معامله" value={s.feePercent} onChange={(v) => setS({ feePercent: v })} suffix="%" help="کارمزد و لغزش قیمت هر خرید یا فروش، به درصد." />
+              <NumberField label="کارمزد فرضی" value={s.feePercent} onChange={(v) => setS({ feePercent: v })} suffix="%" help="فقط برای پروتکلی که کارمزدش معلوم نیست. Pendle (کارمزد AMM روی کل اکسپوژر) و Exponent (حدود ۰٫۰۵٪) با کارمزد واقعی خودشان حساب می‌شوند." />
               <NumberField label="حداقل روز تا سررسید" value={s.minDays} onChange={(v) => setS({ minDays: v })} />
             </div>
           </Collapsible>

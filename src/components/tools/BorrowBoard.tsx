@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleSlash } from 'lucide-react';
+import { CircleSlash, ExternalLink } from 'lucide-react';
 import type { BorrowRow } from '../../lib/opportunity/borrow';
 import { networkByKey } from '../../lib/registry/networks';
 import { formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
@@ -44,6 +44,11 @@ function Row({ r, rank }: { r: BorrowRow; rank?: number }) {
           <span className="text-xs text-secondary">
             {r.ratePct === null ? '—' : <Num>{formatPercent(r.ratePct, 2)}</Num>} سالانه · <Num>{formatNumber(r.days, 0)}</Num> روز
           </span>
+          {r.o.url && (
+            <a href={r.o.url} target="_blank" rel="noopener noreferrer" className="tap mt-1 inline-flex items-center gap-1 rounded-md border border-default px-2.5 min-h-9 text-xs font-medium text-secondary hover:text-primary hover:border-strong hover:bg-elevated">
+              <ExternalLink size={13} aria-hidden /> ورود
+            </a>
+          )}
         </div>
       </div>
       {(r.blocked || r.notes.length > 0) && <p className="text-xs text-muted leading-6">{r.blocked ?? r.notes.join(' ')}</p>}

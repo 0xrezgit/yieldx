@@ -56,6 +56,8 @@ export interface YtTradeInput {
   /** Market implied APY when selling, %. Ignored at maturity. */
   exitAPY: number;
   feePercent: number;
+  /** Fee on the sale before maturity, % (Pendle's AMM fee differs by side and time left). Default `feePercent`. */
+  exitFeePercent?: number;
   pointsPerDay: number;
   ytMultiplier: number;
   pointsBasis: PointsBasis;
@@ -100,6 +102,7 @@ export function simulateYt(i: YtTradeInput): YtTrade {
   const D = Math.max(1, i.daysToMaturity);
   const h = Math.min(Math.max(0, i.holdDays), D);
   const fee = i.feePercent / 100;
+  const feeOut = (i.exitFeePercent ?? i.feePercent) / 100;
   const toMaturity = h >= D;
 
   const quoted = i.entryPrice !== undefined && i.entryPrice > 0;
@@ -108,7 +111,7 @@ export function simulateYt(i: YtTradeInput): YtTrade {
   const notional = units * i.underlyingPrice;
   const yieldEarned = notional * baseGrowth(i.baseAPY, h, i.baseRateKind) * (1 - (i.yieldFeePercent ?? 0) / 100);
   const exitPrice = toMaturity ? 0 : ytPriceFromAPY(i.exitAPY, D - h);
-  const saleValue = notional * exitPrice * (1 - fee);
+  const saleValue = notional * exitPrice * (1 - feeOut);
   const cash = yieldEarned + saleValue - i.capital;
 
   const points = pointsEarned(pointsExposure(units, notional, i.pointsBasis), i.pointsPerDay, i.ytMultiplier, h);
@@ -117,7 +120,7 @@ export function simulateYt(i: YtTradeInput): YtTrade {
   let breakEvenExitAPY: number;
   if (toMaturity) breakEvenExitAPY = cash >= 0 ? -Infinity : Infinity;
   else {
-    const needed = (i.capital - yieldEarned) / (notional * (1 - fee)); // YT exit price that returns the capital
+    const needed = (i.capital - yieldEarned) / (notional * (1 - feeOut)); // YT exit price that returns the capital
     breakEvenExitAPY = needed <= 0 ? -Infinity : needed >= 1 ? Infinity : apyFromPT(1 - needed, D - h);
   }
 

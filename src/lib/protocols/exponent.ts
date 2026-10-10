@@ -53,6 +53,21 @@ const program = (pb: NonNullable<ExponentMarket['pointsBoost']>): MarketPointsPr
 
 const fraction = (x: number | undefined) => (typeof x === 'number' && Number.isFinite(x) ? toPercent(x) : null);
 
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+/**
+ * The market's own pages: /en/market/{farm|fixed}/{name}-{DDMONYY}, the name lower-cased with
+ * «+» as «plus» (hyloSOL+ → hylosolplus) and the maturity day in UTC. Checked on all 18 active
+ * markets of 2026-10-11 by loading each page (a wrong name or date shows a 404).
+ */
+export function exponentLinks(m: Pick<ExponentMarket, 'tokenName' | 'maturityDateUnixTs'>): { pt: string; yt: string } | null {
+  const name = (m.tokenName ?? '').toLowerCase().replace(/\+/g, 'plus').replace(/[^a-z0-9]/g, '');
+  const d = new Date(m.maturityDateUnixTs * 1000);
+  if (!name || Number.isNaN(d.getTime())) return null;
+  const slug = `${name}-${String(d.getUTCDate()).padStart(2, '0')}${MONTHS[d.getUTCMonth()]}${String(d.getUTCFullYear() % 100).padStart(2, '0')}`;
+  return { pt: `https://app.exponent.finance/en/market/fixed/${slug}`, yt: `https://app.exponent.finance/en/market/farm/${slug}` };
+}
+
 /** The base yield's 7- and 30-day levels, as Exponent publishes them. */
 const levels = (m: ExponentMarket) => {
   const d7 = fraction(m.underlyingApy7Epoch);
@@ -95,6 +110,8 @@ export class ExponentAdapter extends BaseAdapter {
         impliedAPY: toPercent(m.impliedApy),
         baseAPY: plausibleAPY(toPercent(m.underlyingApy)),
         baseLevels: levels(m),
+        unitUsd: token?.usdPrice ?? null,
+        links: exponentLinks(m),
         liquidity: marketSizeUsd(m, token),
         hasPoints: !!pb,
         ytMultiplier: pb?.yt_multiplier ?? null,

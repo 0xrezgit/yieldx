@@ -13,6 +13,17 @@ import { AssetIdentity } from '../ui/asset-identity';
 import { InlineHelp } from '../ui/inline-help';
 import { Bound, CompactMeta, DataCell, Empty, Legend, LiquidityCell, MarketHead, MaturityCell, Metric, Pill, ProtocolCell, RangeBar, signedPct } from './parts';
 import { MarketTable } from './MarketTable';
+import protocols from '../../config/protocols.json';
+import { listingLink } from '../../lib/market/links';
+import { pointsCheapness, ytPlan, type Cheapness, type YtPlan } from '../../lib/calculators/yt-plan';
+import { ytBaseOf } from '../../lib/risk/leaderboard';
+import { txCost } from '../../lib/opportunity/costs';
+import { networkByName } from '../../lib/registry/networks';
+import { useMerkl } from '../../hooks/useMerkl';
+import { CHEAP, YtPlanView } from '../market/YtPlanView';
+
+/** The YT statement shown in each market's details: the same $1,000 for every market. */
+const PLAN_CAPITAL = 1000;
 
 const ZONE: Record<YtZone, { label: string; tone: 'success' | 'warning' | 'danger' }> = {
   free: { label: 'پوینت رایگان', tone: 'success' },
@@ -61,6 +72,22 @@ export function YtBoard({
   pointsOnly?: boolean;
 }) {
   const rows = useMemo(() => screenYt(markets, s, pointsOnly), [markets, s, pointsOnly]);
+  // Each market's YT statement for $1,000 (its own fee, its chain's gas) and how its points compare.
+  const gas = useMerkl().feed?.gas;
+  const { plans, cheap } = useMemo(() => {
+    const plans = new Map<string, YtPlan>();
+    for (const r of rows) {
+      if (r.m.baseAPY === null) continue;
+      const { basePct, capPct } = ytBaseOf(r.m);
+      const plan = ytPlan(
+        { protocol: r.m.protocol, impliedPct: r.m.impliedAPY, basePct, capPct, daysToMaturity: r.m.daysToMaturity, baseLevels: r.m.baseLevels, ammFeeLn: r.m.ammFeeLn, points: r.m.points, hasPoints: r.m.hasPoints, unitUsd: r.m.unitUsd },
+        { capital: PLAN_CAPITAL, assumedFeePct: s.feePercent, txUsd: txCost(networkByName(r.m.chain).key, ['swap'], gas ?? []).usd },
+      );
+      if (plan) plans.set(`${r.m.protocol}:${r.m.id}`, plan);
+    }
+    const cheap = pointsCheapness(rows.filter((r) => r.m.hasPoints && plans.has(`${r.m.protocol}:${r.m.id}`)).map((r) => ({ id: `${r.m.protocol}:${r.m.id}`, plan: plans.get(`${r.m.protocol}:${r.m.id}`)! })));
+    return { plans, cheap };
+  }, [rows, s.feePercent, gas]);
   const free = rows.filter((r) => r.zone === 'free').length;
   const horizon = s.ytMode === 'maturity' ? 'تا سررسید' : `${formatNumber(s.holdDays, 0)} روز`;
 
@@ -98,6 +125,10 @@ export function YtBoard({
           identity={(r) => <Identity m={r.m} feed={feeds[r.m.protocol]} />}
           actionLabel="محاسبه"
           onAction={(r) => onCalc(r.m)}
+          link={(r) => {
+            const l = listingLink(r.m.protocol, r.m, 'yt');
+            return { href: l.url, label: l.exact ? 'ورود' : <>اپ <bdi dir="ltr">{protocols[r.m.protocol].name}</bdi></> };
+          }}
           columns={[
             { id: 'protocol', header: 'پروتکل', cell: (r) => <ProtocolCell m={r.m} />, className: 'hidden xl:table-cell' },
             { id: 'maturity', header: 'سررسید', cell: (r) => <MaturityCell m={r.m} />, sort: (r) => r.m.daysToMaturity },
@@ -122,6 +153,10 @@ export function YtBoard({
                 <span className="flex flex-col items-start gap-1 whitespace-nowrap">
                   <Num className={r.cashPercent >= 0 ? 'text-success' : r.zone === 'budget' ? 'text-warning' : 'text-danger'}>{signedPct(r.cashPercent)}</Num>
                   <Pill tone={ZONE[r.zone].tone}>{ZONE[r.zone].label}</Pill>
+                  {(() => {
+                    const c = cheap.get(`${r.m.protocol}:${r.m.id}`);
+                    return c && c.level !== 'free' ? <Pill tone={CHEAP[c.level].tone}>{CHEAP[c.level].label}</Pill> : null;
+                  })()}
                 </span>
               ),
             },
@@ -148,14 +183,14 @@ export function YtBoard({
             sub: <>{ZONE[r.zone].label} · نقدی، {horizon}</>,
             warning: temporaryBase(r.m) ? 'بازده پایه احتمالاً موقت است (خیلی بالاتر از نرخ بازار).' : undefined,
           })}
-          details={(r) => <YtDetails r={r} s={s} />}
+          details={(r) => <YtDetails r={r} s={s} plan={plans.get(`${r.m.protocol}:${r.m.id}`)} cheap={cheap.get(`${r.m.protocol}:${r.m.id}`)} />}
         />
       )}
     </div>
   );
 }
 
-function YtDetails({ r, s }: { r: YtOpportunity; s: ScreenSettings }) {
+function YtDetails({ r, s, plan, cheap }: { r: YtOpportunity; s: ScreenSettings; plan?: YtPlan; cheap?: { level: Cheapness; rank: number; of: number; basis: 'program' | 'exposure' } }) {
   const { m } = r;
   const finiteLimits = [r.freeLimit, r.budgetLimit].filter((x): x is number => x !== null && Number.isFinite(x));
   const max = Math.max(m.impliedAPY, ...finiteLimits, m.baseAPY ?? 0) * 1.25 || 10;
@@ -164,6 +199,11 @@ function YtDetails({ r, s }: { r: YtOpportunity; s: ScreenSettings }) {
   return (
     <div className="flex flex-col gap-4">
       <MarketHead m={m} />
+      {plan && (
+        <div className="rounded-xl border border-default bg-surface p-3 sm:p-4">
+          <YtPlanView plan={plan} name={m.name} days={m.daysToMaturity} cheap={cheap ?? null} />
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Metric label="قیمت YT" hint="بر حسب دارایی پایه">
           <Num>{formatNumber(r.ytPrice, 4)}</Num>

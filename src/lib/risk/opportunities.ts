@@ -3,6 +3,7 @@ import type { MarketListing } from '../../types/market';
 import type { ProtocolId } from '../../types/protocol';
 import { ptPriceFromAPY } from '../calculators/implied-apy';
 import { baseScenarios } from '../opportunity/base-scenarios';
+import { ytFees } from '../calculators/yt-plan';
 import { BASE_RATE_KIND, simulateLoop, simulateYt, ytEntryLimits, ytPriceFromAPY, YT_YIELD_FEE_PCT } from '../calculators/trade';
 import { formatNumber, formatUSDCompact } from '../utils/formatting';
 
@@ -103,6 +104,7 @@ export function screenYt(markets: OpportunityListing[], s: ScreenSettings, point
     const D = m.daysToMaturity;
     const holdDays = s.ytMode === 'maturity' ? D : Math.min(s.holdDays, D);
     const multiplier = m.points?.ytMultiplier ?? m.ytMultiplier ?? 1;
+    const fees = ytFees({ ...m, impliedPct: m.impliedAPY }, s.feePercent);
     const base = {
       capital: 1000,
       underlyingPrice: 1,
@@ -110,7 +112,8 @@ export function screenYt(markets: OpportunityListing[], s: ScreenSettings, point
       // Today's base fades into the market's own level over the hold (lib/opportunity/base-scenarios).
       baseAPY: baseScenarios(m.baseAPY, m.baseLevels, holdDays).likely,
       holdDays,
-      feePercent: s.feePercent,
+      feePercent: fees.entryPct,
+      exitFeePercent: fees.exitPct(m.impliedAPY, D - Math.min(holdDays, D)),
       pointsPerDay: 0,
       ytMultiplier: multiplier,
       pointsBasis: 'usd' as const,

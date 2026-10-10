@@ -9,6 +9,7 @@ import type { OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
 import { quoteCheck } from '../opportunity/pt-price';
 import { baseScenarios } from '../opportunity/base-scenarios';
+import { ytFees } from '../calculators/yt-plan';
 
 /**
  * Dollar leaderboards kept beside the market analysis («رتبه‌بندی دلاری YT» and
@@ -74,6 +75,8 @@ export interface LeaderRow {
   leverageReason?: string;
   /** YT only: the same sale under the low / likely / high base yield (lib/opportunity/base-scenarios). */
   scenarios?: YtScenarioRow[];
+  /** YT only: the price an executable quote pays per unit of yield, when the row has one. */
+  entryPrice?: number;
   /** Loop only: false when the PT's dollar peg rests only on its name (see `ptClassOf`). */
   pegVerified?: boolean;
   /** «executable»: entry from a quote for this capital; «suspect»: a doubtful input (see `doubts`). */
@@ -250,6 +253,18 @@ export function ytExcluded(markets: OpportunityListing[], s: ScreenSettings): Yt
   return out;
 }
 
+/**
+ * The base a YT is ranked on: the on-chain one when base health measured it, else for a
+ * suspect market the lower of the published figure and the conservative one; `capPct` keeps
+ * the market's history under it (see base-scenarios).
+ */
+export function ytBaseOf(m: OpportunityListing): { basePct: number; capPct: number | null } {
+  const published = m.baseAPY as number;
+  const suspect = m.baseHealth?.status === 'suspect';
+  const basePct = m.baseHealth?.rankPct ?? (suspect ? Math.min(published, m.baseHealth?.conservativePct ?? published) : published);
+  return { basePct, capPct: suspect ? basePct : null };
+}
+
 /** How far the implied APY on the sale day is moved, both ways, for the YT's exit range (points). */
 export const YT_EXIT_SHIFT_PP = 3;
 
@@ -278,6 +293,9 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
     // The base yield is never held at today's figure: the likely reading fades it into the
     // market's own level over the hold (lib/opportunity/base-scenarios), and that is ranked.
     const scen = (h: number) => baseScenarios(conservative, m.baseLevels, h, suspect ? conservative : null);
+    // Each protocol's own fee (Pendle's AMM fee is on the whole yield exposure: ~2% of the capital
+    // on a $1,000 YT buy, checked against its quote); the setting only where none is known.
+    const fees = ytFees({ ...m, impliedPct: m.impliedAPY }, s.feePercent);
     const run = (baseFor: (h: number) => number) => (h: number, shift = 0, exitShift = 0) =>
       simulateYt({
         capital: i.capital,
@@ -287,7 +305,8 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
         baseAPY: baseFor(h) + shift,
         holdDays: h,
         exitAPY: Math.max(0, m.impliedAPY + exitShift),
-        feePercent: s.feePercent,
+        feePercent: fees.entryPct,
+        exitFeePercent: fees.exitPct(Math.max(0, m.impliedAPY + exitShift), D - Math.min(h, D)),
         pointsPerDay: 0,
         ytMultiplier: multiplier,
         pointsBasis: 'usd',
@@ -339,6 +358,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       pointsExposure: best.notional * multiplier,
       perBasePoint: at(bestDay, 1).cash - best.cash,
       scenarios,
+      ...(entryPrice !== undefined ? { entryPrice } : {}),
       ...(entryPrice !== undefined ? { confidence: 'executable' as const } : doubts.length ? { confidence: 'suspect' as const } : {}),
       ...(spread.length > 1 ? { range: { low: Math.min(...spread), high: Math.max(...spread) } } : {}),
       ...(doubts.length ? { doubts } : {}),

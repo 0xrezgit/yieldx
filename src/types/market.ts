@@ -106,6 +106,10 @@ export interface MarketSummary extends MarketIdentityFields {
   baseHealth?: BaseHealth | null;
   /** The base yield's own recent levels, for the scenarios (lib/opportunity/base-scenarios). */
   baseLevels?: BaseLevels | null;
+  /** USD price of one unit of the market's asset, when the list gives it (unit-based points). */
+  unitUsd?: number | null;
+  /** The market's own pages for buying its PT and YT, when the adapter can build them (verified formats). */
+  links?: { pt?: string | null; yt?: string | null } | null;
   /** Is the market's implied APY believable (consistent with the PT price, recently traded)? */
   impliedHealth?: ImpliedHealth | null;
 }
