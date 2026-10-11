@@ -49,7 +49,7 @@ describe('step-by-step guide', () => {
     const s = stepsFor(o({ family: 'leverage', maturity: inDays(70), loop }), e({ earningDays: 70, leverage: lev }));
     expect(kinds(s)).toEqual(['buy', 'collateral', 'loop', 'watch', 'repay']);
     expect(s[0].href).toBe('https://app.pendle.finance/x');
-    expect(s[2].title).toContain('۲٫۵×');
+    expect(s[2].title).toContain('۲،۵×');
   });
 
   it('Merkl rewards: claim on Merkl, then sell any reward that is not already dollars', () => {

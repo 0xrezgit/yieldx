@@ -67,7 +67,7 @@ interface NumberFieldProps {
 
 /**
  * PersianNumericInput. Accepts Persian, Arabic and Latin digits and the usual separators;
- * keeps partial text while typing («۰٫», «−») and reports only valid numbers upward.
+ * keeps partial text while typing («۰،», «−») and reports only valid numbers upward.
  * Digits are shown in Persian 1:1 (same length), and the caret is restored after
  * each keystroke so it never jumps. Grouping («۱۰٬۰۰۰») is added only on blur.
  * The displayed text is never the source of calculations — `value` is.
@@ -133,7 +133,7 @@ export function NumberField({ label, value, onChange, suffix, help, hint, error,
   );
 }
 
-/** Full-precision display with Persian grouping: 10000.125 → «۱۰٬۰۰۰٫۱۲۵» (round-trips through the parser). */
+/** Full-precision display with Persian grouping: 10000.125 → «۱۰٬۰۰۰،۱۲۵» (round-trips through the parser). */
 function groupFa(n: number): string {
   const [int, frac] = String(Math.abs(n)).split('.');
   if (/e/i.test(int)) return toPersianDigits(String(n));

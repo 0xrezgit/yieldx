@@ -115,7 +115,7 @@ export function ExitPlanCard({ p, a, set }: { p: ScenarioParams; a: Analysis; se
         </div>
       )}
 
-      <p className="text-xs text-muted">با فرض ثابت ماندن نرخ بازار و ۰٫۵٪ هزینه‌ی فروش. قیمت YT بر حسب {p.dataMeta?.accountingSymbol ? <bdi dir="ltr">{p.dataMeta.accountingSymbol}</bdi> : 'دارایی پایه'} است؛ نتیجه‌ها به دلار آمریکا.</p>
+      <p className="text-xs text-muted">با فرض ثابت ماندن نرخ بازار و ۰،۵٪ هزینه‌ی فروش. قیمت YT بر حسب {p.dataMeta?.accountingSymbol ? <bdi dir="ltr">{p.dataMeta.accountingSymbol}</bdi> : 'دارایی پایه'} است؛ نتیجه‌ها به دلار آمریکا.</p>
     </Card>
   );
 }

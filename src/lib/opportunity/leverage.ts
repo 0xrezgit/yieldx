@@ -334,7 +334,7 @@ export function leverageEstimate(
 
   assumptions.push(
     pt
-      ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ۳× یا ۲٫۵×، سلامت دست‌کم ${formatNumber(PT_LOOP_POLICY.minHealth, 2)} و تحمل جهش ${formatNumber(PT_LOOP_POLICY.rateBufferPp, 0)} واحد درصدی نرخ PT.`
+      ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ۳× یا ۲،۵×، سلامت دست‌کم ${formatNumber(PT_LOOP_POLICY.minHealth, 2)} و تحمل جهش ${formatNumber(PT_LOOP_POLICY.rateBufferPp, 0)} واحد درصدی نرخ PT.`
       : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(lev.maxLeverage, 0)}×.`,
     `بازده وثیقه ${formatPercent(y, 2)} (${l.collateral.yield.source}) و نرخ وام ${formatPercent(r, 2)} برای کل دوره ثابت فرض شدند.`,
     `لیکوییدشدن اگر ارزش ${l.collateral.token.symbol} نسبت به ${l.debt.token.symbol} حدود ${formatPercent(liquidationDrop * 100, 1)} کم شود.`,

@@ -3,13 +3,16 @@ import { DOLLAR } from '../../lib/utils/formatting';
 
 /** Persian/Arabic letters (not digits or number punctuation). */
 const WORDS = /[\u0621-\u063A\u0641-\u064A\u067E\u0686\u0698\u06A9\u06AF\u06CC\u06C0]/;
-/** A signed number run with its own symbols: «−۱۲٬۳۴۵٫۶۷», «+۳٫۲۵٪», «۲×». */
-const NUMBER = /([−+-]?[۰-۹0-9][۰-۹0-9٬٫,.]*[٪%×]?)/g;
+/**
+ * A signed number run with its own symbols: «−۱۲٬۳۴۵،۶۷», «+۳،۲۵٪», «۲×». A separator
+ * belongs to the number only between digits, so the comma in «۵٪، …» stays in the text.
+ */
+const NUMBER = /([−+-]?[۰-۹0-9]+(?:[٬٫،,.][۰-۹0-9]+)*[٪%×]?)/g;
 const ISOLATES = /[\u2066-\u2069]/g;
 
 /**
  * Isolates formatted numbers (LTR) inside RTL text so signs and symbols stay put.
- * Text that also contains Persian words («۱۲٫۵ میلیون دلار», «بیش از ۱٬۰۰۰٪») stays
+ * Text that also contains Persian words («۱۲،۵ میلیون دلار», «بیش از ۱٬۰۰۰٪») stays
  * RTL and only its numeric runs are isolated — so words never swap places. A trailing
  * «دلار» is set a little smaller, after the number.
  */
