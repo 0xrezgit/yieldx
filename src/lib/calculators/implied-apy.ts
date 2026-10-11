@@ -52,7 +52,7 @@ export function calculateImpliedMetrics(ptPrice: number, daysToMaturity: number,
 }
 
 export function interpretGap(gap: number, gapPercent: number): string {
-  if (!Number.isFinite(gap)) return 'داده‌ی ورودی نامعتبر است';
+  if (!Number.isFinite(gap)) return 'قیمت PT، روزهای مانده یا بازده پایه کامل نیست؛ هر سه را وارد کنید تا فاصله حساب شود';
   if (gap <= 0) return 'قیمت منصفانه یا سودآور برای خریدار YT';
   if (gapPercent < thresholds.gap.warningPercent) return 'سوخت جزئی — قابل قبول برای پوینت';
   if (gapPercent < thresholds.gap.dangerPercent) return 'سوخت متوسط — نیاز به ارزش‌گذاری پوینت';

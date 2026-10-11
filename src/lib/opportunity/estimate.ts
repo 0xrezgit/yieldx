@@ -91,7 +91,7 @@ export function rewardIncome(
     }
     const left = (new Date(r.endsAt).getTime() - now) / DAY_MS;
     if (!Number.isFinite(left)) {
-      unknown.push(`تاریخ پایان ${rewardName(r)} نامعتبر است؛ لحاظ نشد.`);
+      unknown.push(`تاریخ پایان ${rewardName(r)} خوانده نشد؛ این پاداش در سود حساب نشد.`);
       continue;
     }
     const d = Math.max(0, Math.min(days, left));
@@ -194,7 +194,7 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   // reinvestment); one after it would need an exit price at the horizon, which is not modelled.
   let earningDays = days;
   const m = maturityState(o.maturity, now);
-  if (m.state === 'invalid') return stop('insufficient', 'تاریخ سررسید نامعتبر است.');
+  if (m.state === 'invalid') return stop('insufficient', 'منبع داده تاریخ سررسید این بازار را درست نداده؛ بدون آن سود تا سررسید حساب نمی‌شود. صفحه را دوباره بارگذاری کنید.');
   if (m.state === 'matured') return stop('inactive', 'سررسید گذشته است.');
   if (m.state === 'active' && m.days !== null) {
     if (m.days > days) return stop('needs-model', `سررسید ${formatNumber(Math.ceil(m.days), 0)} روز دیگر؛ خروج پیش از آن مدل ندارد.`);

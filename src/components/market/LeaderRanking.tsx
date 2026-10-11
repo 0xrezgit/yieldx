@@ -67,8 +67,8 @@ export function EntryLink({ m, strategy, primary = false }: { m: OpportunityList
   const link = listingLink(m.protocol, m, strategy === 'yt' ? 'yt' : 'pt');
   const label = link.exact ? 'ورود به بازار' : <>اپ <bdi dir="ltr">{protocols[m.protocol].name}</bdi></>;
   const address = !link.exact && (
-    <span className="text-xs text-muted min-w-0 break-all">
-      نشانی بازار: <bdi dir="ltr" className="latin select-all">{marketAddress(m)}</bdi>
+    <span className="text-xs text-muted min-w-0">
+      نشانی بازار: <bdi dir="ltr" className="latin select-all break-all">{marketAddress(m)}</bdi>
     </span>
   );
   if (primary)

@@ -76,7 +76,7 @@ describe('calculator data checks (NVDAc case)', () => {
     expect(html).toContain('غیرعادی');
     expect(html).toContain('نقدینگی کل این بازار');
     expect(html).toContain('در رتبه‌بندی و فهرست فرصت‌ها نیست');
-    expect(html).toContain('از API نیامده');
+    expect(html).toContain('منبع داده بازده پایه را نداده');
     // No green «points are free» conclusion from garbage inputs.
     expect(html).toContain('قابل اتکا نیستند');
     expect(html).not.toContain('رایگان‌اند');

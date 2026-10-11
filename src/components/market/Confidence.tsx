@@ -16,12 +16,12 @@ export function Confidence({ confidence, range, why }: { confidence?: 'executabl
   const title = why?.length ? why.join(' ') : undefined;
   return (
     <span className="inline-flex flex-col items-end gap-0.5">
-      <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${tone}`} title={title}>
+      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${tone}`} title={title}>
         {label}
         {title && <span className="sr-only">: {title}</span>}
       </span>
       {range && Math.abs(range.high - range.low) >= 0.5 && (
-        <span className="text-[11px] text-muted">
+        <span className="text-xs text-muted">
           بازه <Num>{money(range.low)}</Num> تا <Num>{money(range.high)}</Num>
         </span>
       )}

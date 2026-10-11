@@ -58,9 +58,9 @@ export function rankingExclusions(m: OpportunityListing, s: ScreenSettings): str
   const out: string[] = [];
   if (m.expired) out.push('سررسید شده است');
   else if (m.daysToMaturity < s.minDays) out.push(`کمتر از ${formatNumber(s.minDays, 0)} روز تا سررسید مانده`);
-  if (!(m.impliedAPY > 0)) out.push('نرخ بازار (Implied) صفر یا نامعتبر است');
+  if (!(m.impliedAPY > 0)) out.push('منبع داده نرخ بازار (Implied) را نداده یا صفر داده است');
   if (m.liquidity !== null && m.liquidity < s.minLiquidity) out.push(`نقدینگی ${formatUSDCompact(m.liquidity)} کمتر از حداقل ${formatUSDCompact(s.minLiquidity)} است`);
-  if (m.baseAPY === null || !Number.isFinite(m.baseAPY)) out.push('بازده پایه از API نیامده یا نامعتبر است (برای YT لازم است)');
+  if (m.baseAPY === null || !Number.isFinite(m.baseAPY)) out.push('منبع داده بازده پایه را نداده؛ بدون آن سود YT حساب نمی‌شود');
   return out;
 }
 

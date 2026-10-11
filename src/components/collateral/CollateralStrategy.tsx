@@ -47,7 +47,7 @@ function Leg({ label, o, line }: { label: string; o: Pair['deploy']['o'] | Fundi
     <div className="flex items-center gap-2.5 min-w-0">
       <LogoWithNetwork icon={o.icon} name={symbol} chain={net.name} size={32} />
       <div className="min-w-0 flex flex-col leading-tight">
-        <span className="text-[11px] text-muted">{label}</span>
+        <span className="text-xs text-muted">{label}</span>
         <span className="text-sm text-primary truncate">
           <bdi dir="ltr">{o.protocol.name}</bdi> · {net.nameFa}
         </span>
@@ -174,7 +174,7 @@ function PairRow({ p, s, rank, open, onToggle }: { p: Pair; s: Stored; rank: num
     <li className="py-3">
       <div className="line-row">
         <button type="button" onClick={onToggle} aria-expanded={open} className="l-id flex items-center gap-2.5 min-w-0 text-right">
-          <span className="grid place-items-center size-6 shrink-0 rounded-full bg-hover text-[11px] font-semibold text-muted num">{formatNumber(rank, 0)}</span>
+          <span className="grid place-items-center size-6 shrink-0 rounded-full bg-hover text-xs font-semibold text-muted num">{formatNumber(rank, 0)}</span>
           <LogoWithNetwork icon={p.deploy.o.icon} name={symbol} chain={networkByKey(p.deploy.o.chain).name} size={32} />
           <span className="min-w-0 flex flex-col leading-tight">
             <span className="text-sm font-semibold text-primary truncate">
@@ -197,7 +197,7 @@ function PairRow({ p, s, rank, open, onToggle }: { p: Pair; s: Stored; rank: num
         </div>
         <div className="l-pnl flex flex-col items-end gap-0.5">
           <span className={`text-lg font-semibold leading-tight ${tone(p.net)}`}><Num>{usd(p.net)}</Num></span>
-          <span className="text-[11px] text-muted">بدبینانه <Num>{usd(p.low)}</Num></span>
+          <span className="text-xs text-muted">بدبینانه <Num>{usd(p.low)}</Num></span>
         </div>
         <div className="l-act flex items-center gap-1.5">
           <button type="button" onClick={onToggle} aria-expanded={open} className={`${ghostAction} grow`}>
@@ -225,7 +225,9 @@ function FundingTable({ list }: { list: Funding[] }) {
         <thead className="text-xs text-muted">
           <tr className="border-b border-default">
             <th className="py-2 px-2 text-right font-medium">بازار وام</th>
-            <th className="py-2 px-2 text-right font-medium">نرخ امروز / محتمل / بدبینانه</th>
+            <th className="py-2 px-2 text-right font-medium">نرخ امروز</th>
+            <th className="py-2 px-2 text-right font-medium">نرخ محتمل</th>
+            <th className="py-2 px-2 text-right font-medium">نرخ بدبینانه</th>
             <th className="py-2 px-2 text-right font-medium">بهره‌ی دوره</th>
             <th className="py-2 px-2 text-right font-medium">لیکویید با افت</th>
             <th className="py-2 px-2" />
@@ -238,9 +240,9 @@ function FundingTable({ list }: { list: Funding[] }) {
                 <bdi dir="ltr">{f.o.protocol.name}</bdi> · {networkByKey(f.o.chain).nameFa} · <bdi dir="ltr">{f.collateral}</bdi>
                 {f.rate.rising && <span className="text-warning text-xs"> · در حال بالا رفتن</span>}
               </td>
-              <td className="py-2 px-2 whitespace-nowrap">
-                <Num>{formatPercent(f.rate.today, 2)}</Num> / <Num>{formatPercent(f.rate.likely, 2)}</Num> / <Num>{formatPercent(f.rate.high, 2)}</Num>
-              </td>
+              <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.rate.today, 2)}</Num></td>
+              <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.rate.likely, 2)}</Num></td>
+              <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.rate.high, 2)}</Num></td>
               <td className="py-2 px-2 text-danger whitespace-nowrap"><Num>{usd(-f.cost.likely)}</Num></td>
               <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.liquidationDrop * 100, 0)}</Num></td>
               <td className="py-2 px-2 text-left">
@@ -309,7 +311,6 @@ export default function CollateralStrategy() {
       <header className="flex items-start justify-between gap-3">
         <div className="flex flex-col">
           <h1 className="page-title">وام با وثیقه</h1>
-          <p className="page-sub max-w-2xl">دارایی‌تان (مثلاً BTC) را نگه دارید، با وثیقه‌اش دلار وام بگیرید و آن دلار را در بهترین فرصت بگذارید. جدا از رتبه‌بندی تحلیل بازار.</p>
         </div>
         <button type="button" onClick={m.refresh} disabled={m.refreshing} className="tap shrink-0 inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-elevated disabled:opacity-60" aria-label="به‌روزرسانی داده‌ها">
           <RefreshCw size={14} className={m.refreshing ? 'animate-spin' : ''} aria-hidden />
@@ -416,7 +417,7 @@ export default function CollateralStrategy() {
           <li>
             نرخ وام متغیر است: «محتمل» یعنی نرخ امروز، و برای بازار پر Morpho رشد خودکار آن در <Num>{formatNumber(COLLATERAL_POLICY.likelyDays, 0)}</Num> روز؛ «بدبینانه» <Num>{formatNumber(COLLATERAL_POLICY.highDays, 0)}</Num> روز.
           </li>
-          <li>لوپ‌های PT با همان سیاست اهرم اپ (۳× یا ۲٫۵×) حساب شده‌اند، نه اهرم حداکثری.</li>
+          <li>لوپ‌های PT با همان سیاست اهرم اپ (۳× یا ۲،۵×) حساب شده‌اند، نه اهرم حداکثری.</li>
           <li className="flex gap-1.5 list-none -mr-5">
             <Info size={14} className="shrink-0 mt-1.5 text-accent" aria-hidden /> هزینه‌ی پل فرضی شماست (پیش‌فرض <Num>{formatNumber(COLLATERAL_POLICY.defaultBridgeUsd, 0)}</Num> دلار رفت‌وبرگشت)؛ فقط وقتی دو بخش روی دو شبکه‌اند کم می‌شود.
           </li>

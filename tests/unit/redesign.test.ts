@@ -28,10 +28,10 @@ const PDI = '⁩';
 
 describe('Persian number display', () => {
   it('matches the reference examples', () => {
-    expect(formatUSD(12345.67)).toBe(`${LRI}۱۲٬۳۴۵٫۶۷${PDI} دلار`);
-    expect(formatUSD(-123.45)).toBe(`${LRI}−۱۲۳٫۴۵${PDI} دلار`);
-    expect(formatPercent(3.25, 2, true)).toBe('+۳٫۲۵٪');
-    expect(formatToken(0.00003456, 'ETH')).toBe(`${LRI}۰٫۰۰۰۰۳۴۵۶${PDI} ${LRI}ETH${PDI}`);
+    expect(formatUSD(12345.67)).toBe(`${LRI}۱۲٬۳۴۵،۶۷${PDI} دلار`);
+    expect(formatUSD(-123.45)).toBe(`${LRI}−۱۲۳،۴۵${PDI} دلار`);
+    expect(formatPercent(3.25, 2, true)).toBe('+۳،۲۵٪');
+    expect(formatToken(0.00003456, 'ETH')).toBe(`${LRI}۰،۰۰۰۰۳۴۵۶${PDI} ${LRI}ETH${PDI}`);
   });
 
   it('never shows a negative zero', () => {
@@ -43,9 +43,14 @@ describe('Persian number display', () => {
   });
 
   it('shows a small non-zero quantity instead of a misleading ۰', () => {
-    expect(formatNumber(0.0004, 2)).toBe('۰٫۰۰۰۴');
-    expect(formatNumber(-0.0004, 2)).toBe('−۰٫۰۰۰۴');
+    expect(formatNumber(0.0004, 2)).toBe('۰،۰۰۰۴');
+    expect(formatNumber(-0.0004, 2)).toBe('−۰،۰۰۰۴');
     expect(formatNumber(1e-15)).toMatch(/^</);
+  });
+
+  it('writes the decimal with the Persian comma, never «٫» (which reads as a slash)', () => {
+    expect(formatUSD(123.45)).toBe(`${LRI}۱۲۳،۴۵${PDI} دلار`);
+    for (const s of [formatUSD(9876543.21), formatPercent(-12.5), formatNumber(0.000123), formatToken(1.5, 'ETH')]) expect(s).not.toMatch(/[٫/]/);
   });
 
   it('uses only Persian digits', () => {
@@ -54,15 +59,17 @@ describe('Persian number display', () => {
 
   it('caps astronomically high trigger rates', () => {
     expect(formatRateCapped(218_802.7)).toBe('بیش از ۱٬۰۰۰٪');
-    expect(formatRateCapped(12.34)).toBe('۱۲٫۳٪');
+    expect(formatRateCapped(12.34)).toBe('۱۲،۳٪');
     expect(formatRateCapped(Infinity)).toBe('دور از دسترس');
   });
 });
 
 describe('number input parsing', () => {
   it.each<[string, number]>([
-    ['۱۲٬۳۴۵٫۶۷', 12345.67],
+    ['۱۲٬۳۴۵،۶۷', 12345.67],
     ['١٢٣٫٤٥', 123.45],
+    ['۱۲۳،۴۵', 123.45],
+    ['۰،۵', 0.5],
     ['12345.67', 12345.67],
     ['1,234.5', 1234.5],
     ['1,234', 1234],
@@ -71,7 +78,7 @@ describe('number input parsing', () => {
     ['−۵', -5],
     ['-0.00003456', -0.00003456],
     ['  ۱۰ ۰۰۰ ', 10000],
-    ['⁦−۱۲۳٫۴۵⁩', -123.45],
+    ['⁦−۱۲۳،۴۵⁩', -123.45],
     ['.5', 0.5],
   ])('%s → %d', (input, expected) => {
     expect(parseLocaleNumber(input)).toBeCloseTo(expected, 12);
@@ -86,7 +93,7 @@ describe('number input parsing', () => {
   });
 
   it('keeps partial input while typing', () => {
-    for (const s of ['', '-', '−', '۰٫', '0.', '12.', '٫']) expect(isPartialNumber(s)).toBe(true);
+    for (const s of ['', '-', '−', '۰٫', '۰،', '0.', '12.', '٫', '،']) expect(isPartialNumber(s)).toBe(true);
     for (const s of ['12a', 'x']) expect(isPartialNumber(s)).toBe(false);
   });
 });
@@ -279,8 +286,8 @@ describe('opportunity filters and search', () => {
 describe('bidi: words never inside an LTR number run', () => {
   it('isolates only the number of a compact amount', async () => {
     const { formatUSDCompact, formatCompact } = await import('../../src/lib/utils/formatting');
-    expect(formatUSDCompact(371_500)).toBe(`${LRI}۳۷۱٫۵${PDI} هزار دلار`);
-    expect(formatUSDCompact(-11_300_000)).toBe(`${LRI}−۱۱٫۳${PDI} میلیون دلار`);
+    expect(formatUSDCompact(371_500)).toBe(`${LRI}۳۷۱،۵${PDI} هزار دلار`);
+    expect(formatUSDCompact(-11_300_000)).toBe(`${LRI}−۱۱،۳${PDI} میلیون دلار`);
     expect(formatCompact(950)).toBe(`${LRI}۹۵۰${PDI}`);
   });
 
@@ -290,7 +297,7 @@ describe('bidi: words never inside an LTR number run', () => {
     const { Num } = await import('../../src/components/ui/num');
     const { formatUSDCompact } = await import('../../src/lib/utils/formatting');
     const html = renderToString(createElement(Num, null, formatUSDCompact(371_500)));
-    expect(html).toMatch(/<bdi dir="ltr">۳۷۱٫۵<\/bdi> هزار/);
+    expect(html).toMatch(/<bdi dir="ltr">۳۷۱،۵<\/bdi> هزار/);
     expect(html).not.toMatch(/<bdi dir="ltr">[^<]*هزار/);
     const capped = renderToString(createElement(Num, null, 'بیش از ۱٬۰۰۰٪'));
     expect(capped).toMatch(/بیش از <bdi dir="ltr">۱٬۰۰۰٪<\/bdi>/);

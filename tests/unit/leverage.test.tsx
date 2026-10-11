@@ -242,7 +242,7 @@ describe('render', () => {
     const row = a.rows.find((r) => r.o.family === 'leverage')!;
     const q = borrowQuotes([market()], 1000, 30, 'usd', NOW);
     const html = renderToString(<OpportunityDetails row={row} days={30} modelVersion="t" />) + renderToString(<BorrowBoard rows={q.rows} blocked={q.blocked} amount={1000} days={30} />);
-    for (const t of ['آورده در لوپ', 'وثیقه / بدهی', 'هزینه‌ی بدهی', 'افت تا لیکوییدشدن', 'هزینه‌ی بهره‌ی وام']) expect(html).toContain(t);
+    for (const t of ['آورده در لوپ', 'وثیقه', 'بدهی', 'هزینه‌ی بدهی', 'افت تا لیکوییدشدن', 'هزینه‌ی بهره‌ی وام']) expect(html).toContain(t);
     expect(html).not.toContain('NaN');
     assertPersianMoney(html.replace(/title="[^"]*"/g, '').replace(/href="[^"]*"/g, '').replace(/<bdi dir="ltr"[^>]*>[^<]*<\/bdi>/g, ''));
   });

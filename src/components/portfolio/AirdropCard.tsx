@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Gift, Link2, Plus, Trash2, Undo2 } from 'lucide-react';
 import type { AirdropProgram } from '../../types/airdrop';
 import type { Position } from '../../types/position';
@@ -11,10 +11,10 @@ import { tokensForChain } from '../../lib/portfolio/tokens';
 import { NETWORKS, networkByName } from '../../lib/registry/networks';
 import { formatCompact, formatDate, formatDateTime, formatNumber, formatPercent, formatToken } from '../../lib/utils/formatting';
 import { useCoinPrice } from '../../hooks/useCoinPrice';
-import { NumberField, SelectField, TextField } from '../ui/field';
+import { DATE_FORMAT_ERROR, DateField, DateTimeInputs, NumberField, SelectField, TextField } from '../ui/field';
 import { InlineHelp } from '../ui/inline-help';
 import { Num } from '../ui/num';
-import { fromLocalInput, toLocalInput } from './EventForm';
+import { useConfirm } from '../ui/confirm';
 import { TokenSelect, useTokenPrice } from './TokenSelect';
 import { btn, Chip, Panel, Pnl, Usd } from './parts';
 
@@ -300,12 +300,14 @@ function FormShell({ title, children, onCancel, onSubmit, error }: { title: stri
 }
 
 function DateTime({ label, value, onChange }: { label: string; value: string; onChange: (iso: string) => void }) {
+  const id = useId();
+  const [bad, setBad] = useState(false);
   return (
-    <label className="flex flex-col gap-1.5 text-sm min-w-0">
-      {label}
-      <input type="datetime-local" dir="ltr" value={toLocalInput(value)} max={toLocalInput(new Date().toISOString())} onChange={(e) => onChange(fromLocalInput(e.target.value))} className="w-full px-3 text-base" />
-      {value && <span className="text-xs text-sx-faint">{formatDateTime(value)}</span>}
-    </label>
+    <div className="flex flex-col gap-1.5 text-sm min-w-0">
+      <label htmlFor={id}>{label}</label>
+      <DateTimeInputs id={id} value={value} onChange={onChange} invalid={bad} onBadDate={setBad} />
+      {bad ? <span className="text-xs text-sx-red">{DATE_FORMAT_ERROR}</span> : value && <span className="text-xs text-sx-faint">{formatDateTime(value)}</span>}
+    </div>
   );
 }
 
@@ -407,7 +409,7 @@ function ClaimForm({ program, chain, onSave, onCancel }: { program: AirdropProgr
       {locked && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <NumberField label="مقدار قفل‌شده" value={lockedAmount} onChange={setLockedAmount} />
-          <TextField label="تاریخ آزاد شدن" type="date" value={unlockAt.slice(0, 10)} onChange={(d) => setUnlockAt(d ? `${d}T00:00:00.000Z` : '')} />
+          <DateField label="تاریخ آزاد شدن" value={unlockAt.slice(0, 10)} onChange={(d) => setUnlockAt(d ? `${d}T00:00:00.000Z` : '')} />
         </div>
       )}
       {networkByName(net).llama === null && <p className="text-xs text-sx-faint">برای این شبکه قیمت خودکار در دسترس نیست؛ قیمت را دستی وارد کنید.</p>}
@@ -481,13 +483,15 @@ function SharesForm({ program, views, onSave, onCancel }: { program: AirdropProg
 /** Recorded claims and sales, newest first, each removable. */
 function History({ program, onSave, onUnlink }: { program: AirdropProgram; onSave: (a: AirdropProgram) => void; onUnlink: () => void }) {
   const sym = program.token?.symbol ?? 'توکن';
+  const [confirmDialog, confirm] = useConfirm();
   const rows = [
-    ...(program.finalPoints ? [{ id: 'points', at: program.finalPoints.at, text: <>پوینت نهایی <Num>{formatCompact(program.finalPoints.amount)}</Num></>, del: () => onSave({ ...program, finalPoints: null }) }] : []),
-    ...program.claims.map((c) => ({ id: c.id, at: c.at, text: <>دریافت <Num>{formatToken(c.amount, sym, 2)}</Num>{c.usdRate !== null && <> · <Usd x={c.amount * c.usdRate} /></>}</>, del: () => onSave({ ...program, claims: program.claims.filter((y) => y.id !== c.id) }) })),
-    ...program.sales.map((s) => ({ id: s.id, at: s.at, text: <>فروش <Num>{formatToken(s.amount, sym, 2)}</Num> → <Num>{formatToken(s.received.amount, s.received.token, 2)}</Num></>, del: () => onSave({ ...program, sales: program.sales.filter((y) => y.id !== s.id) }) })),
+    ...(program.finalPoints ? [{ id: 'points', what: 'پوینت نهایی ثبت‌شده', at: program.finalPoints.at, text: <>پوینت نهایی <Num>{formatCompact(program.finalPoints.amount)}</Num></>, del: () => onSave({ ...program, finalPoints: null }) }] : []),
+    ...program.claims.map((c) => ({ id: c.id, what: 'این دریافت', at: c.at, text: <>دریافت <Num>{formatToken(c.amount, sym, 2)}</Num>{c.usdRate !== null && <> · <Usd x={c.amount * c.usdRate} /></>}</>, del: () => onSave({ ...program, claims: program.claims.filter((y) => y.id !== c.id) }) })),
+    ...program.sales.map((s) => ({ id: s.id, what: 'این فروش', at: s.at, text: <>فروش <Num>{formatToken(s.amount, sym, 2)}</Num> → <Num>{formatToken(s.received.amount, s.received.token, 2)}</Num></>, del: () => onSave({ ...program, sales: program.sales.filter((y) => y.id !== s.id) }) })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   return (
     <details className="group">
+      {confirmDialog}
       <summary className="tap flex items-center gap-2 text-sm text-sx-muted min-h-10">
         <Link2 size={14} aria-hidden /> سوابق ایردراپ{rows.length > 0 && <> (<Num>{formatNumber(rows.length, 0)}</Num>)</>}
       </summary>
@@ -497,13 +501,18 @@ function History({ program, onSave, onUnlink }: { program: AirdropProgram; onSav
             <span className="min-w-0">
               {r.text} <span className="text-xs text-sx-faint">· {formatDateTime(r.at)}</span>
             </span>
-            <button type="button" aria-label="حذف" className="tap grid place-items-center size-10 rounded-md text-sx-faint hover:text-sx-red" onClick={() => window.confirm('این مورد حذف شود؟') && r.del()}>
+            <button
+              type="button"
+              aria-label={`حذف ${r.what}`}
+              className="tap grid place-items-center size-10 rounded-md text-sx-faint hover:text-sx-red"
+              onClick={async () => (await confirm({ title: `${r.what} حذف شود؟`, body: 'سود و زیان ایردراپ از نو حساب می‌شود.', confirmLabel: 'حذف' })) && r.del()}
+            >
               <Trash2 size={15} aria-hidden />
             </button>
           </li>
         ))}
         <li className="py-2">
-          <button type="button" className="tap text-xs text-sx-faint hover:text-sx-red underline underline-offset-4" onClick={() => window.confirm('این پوزیشن از برنامه‌ی پوینت جدا شود؟') && onUnlink()}>
+          <button type="button" className="tap text-xs text-sx-faint hover:text-sx-red underline underline-offset-4" onClick={async () => (await confirm({ title: 'این پوزیشن از برنامه‌ی پوینت جدا شود؟', body: 'سهم این پوزیشن از ایردراپ دیگر در سود آن حساب نمی‌شود.', confirmLabel: 'جدا کردن', danger: false })) && onUnlink()}>
             جدا کردن این پوزیشن از برنامه
           </button>
         </li>

@@ -13,7 +13,7 @@ const tone = (x: number) => (x >= 0 ? 'text-success' : 'text-danger');
 const LABEL = { low: 'بدبینانه', likely: 'محتمل', high: 'خوش‌بینانه' } as const;
 const FEE_SOURCE: Record<YtPlan['feeSource'], string> = {
   'pendle-amm': 'کارمزد AMM پندل (روی کل اکسپوژر)',
-  'exponent-book': 'دفتر سفارش Exponent (حدود ۰٫۰۵٪)',
+  'exponent-book': 'دفتر سفارش Exponent (حدود ۰،۰۵٪)',
   quote: 'از قیمت اجرایی همین مبلغ',
   assumed: 'فرضی (کارمزد این پروتکل معلوم نیست)',
 };
@@ -62,7 +62,7 @@ export function YtPlanView({ plan, name, days, cheap }: { plan: YtPlan; name: st
           { k: 'نتیجه‌ی نقدی تا سررسید', v: <Num>{usd(likely.cashUsd)}</Num>, t: tone(likely.cashUsd) },
         ].map((x) => (
           <div key={x.k} className="rounded-lg border border-default bg-surface px-3 py-2">
-            <div className="text-[11px] text-muted leading-snug">{x.k}</div>
+            <div className="text-xs text-muted leading-snug">{x.k}</div>
             <div className={`text-base font-semibold ${x.t}`}>{x.v}</div>
           </div>
         ))}
@@ -71,7 +71,7 @@ export function YtPlanView({ plan, name, days, cheap }: { plan: YtPlan; name: st
       <Section icon={<Flame size={15} aria-hidden />} title={`نگه‌داری تا سررسید (${formatNumber(days, 0)} روز)`}>
         <div className="overflow-x-auto rounded-lg border border-default">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-canvas text-[11px] sm:text-xs text-muted">
+            <thead className="bg-canvas text-xs sm:text-xs text-muted">
               <tr>
                 <th className={`${cell} font-medium`}>حالت</th>
                 <th className={`${cell} font-medium`}>بازده پایه</th>
@@ -90,7 +90,7 @@ export function YtPlanView({ plan, name, days, cheap }: { plan: YtPlan; name: st
                   <td className={`${cell} font-medium ${tone(r.cashUsd)}`}>
                     <span className="flex flex-col leading-tight">
                       <Num>{usd(r.cashUsd)}</Num>
-                      <span className="text-[11px] opacity-80"><Num>{signedPct((r.cashUsd / plan.capital) * 100, 1)}</Num></span>
+                      <span className="text-xs opacity-80"><Num>{signedPct((r.cashUsd / plan.capital) * 100, 1)}</Num></span>
                     </span>
                   </td>
                   {prog && <td className={cell}>{r.points === null ? '—' : <Num>{formatCompact(r.points)}</Num>}</td>}
@@ -114,7 +114,7 @@ export function YtPlanView({ plan, name, days, cheap }: { plan: YtPlan; name: st
         {plan.exits.length > 0 && (
           <div className="overflow-x-auto rounded-lg border border-default">
             <table className="w-full text-xs sm:text-sm">
-              <thead className="bg-canvas text-[11px] sm:text-xs text-muted">
+              <thead className="bg-canvas text-xs sm:text-xs text-muted">
                 <tr>
                   <th className={`${cell} font-medium`}>فروش در روز</th>
                   <th className={`${cell} font-medium whitespace-normal`}>نتیجه با نرخ بازار ثابت</th>

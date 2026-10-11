@@ -14,7 +14,7 @@ export const ghostAction = 'tap inline-flex items-center justify-center gap-1 ro
 
 /** Rank before the logo: the first three stand out. */
 export function Rank({ n }: { n: number }) {
-  return <span className={`grid place-items-center size-6 shrink-0 rounded-full text-[11px] font-semibold num ${n <= 3 ? 'bg-accent/15 text-accent' : 'bg-hover text-muted'}`}>{formatNumber(n, 0)}</span>;
+  return <span className={`grid place-items-center size-6 shrink-0 rounded-full text-xs font-semibold num ${n <= 3 ? 'bg-accent/15 text-accent' : 'bg-hover text-muted'}`}>{formatNumber(n, 0)}</span>;
 }
 
 /** Up to three headline figures in equal tiles. */
@@ -23,7 +23,7 @@ export function Stats({ items }: { items: { label: string; value: ReactNode; ton
     <dl className="grid grid-flow-col auto-cols-fr gap-px overflow-hidden rounded-lg border border-default bg-default">
       {items.map((s) => (
         <div key={s.label} className="flex flex-col gap-0.5 bg-canvas px-2.5 py-2 min-w-0">
-          <dt className="text-[11px] text-muted truncate">{s.label}</dt>
+          <dt className="text-xs text-muted truncate">{s.label}</dt>
           <dd className={`text-sm font-semibold leading-tight truncate ${s.tone ?? 'text-primary'}`}>{s.value}</dd>
         </div>
       ))}

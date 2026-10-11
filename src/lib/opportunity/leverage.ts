@@ -236,7 +236,7 @@ export function leverageEstimate(
   // A collateral with a maturity (PT): the loop closes at maturity — PT redeems, the debt is repaid.
   let days = input.days;
   const m = maturityState(o.maturity, now);
-  if (m.state === 'invalid') return stop('insufficient', 'تاریخ سررسید نامعتبر است.');
+  if (m.state === 'invalid') return stop('insufficient', 'منبع داده تاریخ سررسید این بازار را درست نداده؛ بدون آن سود تا سررسید حساب نمی‌شود. صفحه را دوباره بارگذاری کنید.');
   if (m.state === 'matured') return stop('inactive', 'سررسید گذشته است.');
   if (m.state === 'active' && m.days !== null) {
     if (m.days > input.days) return stop('needs-model', `سررسید ${formatNumber(Math.ceil(m.days), 0)} روز دیگر؛ بستن لوپ پیش از آن مدل ندارد.`);
@@ -334,7 +334,7 @@ export function leverageEstimate(
 
   assumptions.push(
     pt
-      ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ۳× یا ۲٫۵×، سلامت دست‌کم ${formatNumber(PT_LOOP_POLICY.minHealth, 2)} و تحمل جهش ${formatNumber(PT_LOOP_POLICY.rateBufferPp, 0)} واحد درصدی نرخ PT.`
+      ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ۳× یا ۲،۵×، سلامت دست‌کم ${formatNumber(PT_LOOP_POLICY.minHealth, 2)} و تحمل جهش ${formatNumber(PT_LOOP_POLICY.rateBufferPp, 0)} واحد درصدی نرخ PT.`
       : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(lev.maxLeverage, 0)}×.`,
     `بازده وثیقه ${formatPercent(y, 2)} (${l.collateral.yield.source}) و نرخ وام ${formatPercent(r, 2)} برای کل دوره ثابت فرض شدند.`,
     `لیکوییدشدن اگر ارزش ${l.collateral.token.symbol} نسبت به ${l.debt.token.symbol} حدود ${formatPercent(liquidationDrop * 100, 1)} کم شود.`,

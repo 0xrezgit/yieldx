@@ -372,11 +372,6 @@ details > summary::-webkit-details-marker {
   }
 }
 /* Small grey line under a page title. */
-.page-sub {
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  color: var(--c-muted);
-}
 /* The one headline number of a page. */
 .hero-num {
   font-size: 1.75rem;

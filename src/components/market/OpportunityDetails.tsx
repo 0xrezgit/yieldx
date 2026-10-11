@@ -133,11 +133,17 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
               <Line label="اهرم">
                 <Num>{formatNumber(x.leverage, 2)}×</Num> <span className="text-xs text-muted">(<bdi dir="ltr">{x.policy}</bdi>)</span>
               </Line>
-              <Line label="وثیقه / بدهی">
-                <Num>{usd(x.gross)}</Num> / <Num>{usd(x.debt)}</Num>
+              <Line label="وثیقه">
+                <Num>{usd(x.gross)}</Num>
               </Line>
-              <Line label="بازده وثیقه / نرخ وام">
-                <Num>{formatPercent(x.yieldPct, 2)}</Num> / <Num>{formatPercent(x.borrowPct, 2)}</Num>
+              <Line label="بدهی">
+                <Num>{usd(x.debt)}</Num>
+              </Line>
+              <Line label="بازده وثیقه">
+                <Num>{formatPercent(x.yieldPct, 2)}</Num>
+              </Line>
+              <Line label="نرخ وام">
+                <Num>{formatPercent(x.borrowPct, 2)}</Num>
               </Line>
               <Line label={x.health.metric === 'hf' ? 'ضریب سلامت' : 'LTV از LLTV'}>{x.health.metric === 'hf' ? <Num>{formatNumber(x.health.value, 2)}</Num> : <><Num>{formatPercent(x.ltv * 100, 1)}</Num> از <Num>{formatPercent(x.maxLtv * 100, 1)}</Num></>}</Line>
               <Line label="افت تا لیکوییدشدن" tone={x.liquidationDrop < 0.05 ? 'danger' : undefined}>
