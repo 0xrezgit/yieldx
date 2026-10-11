@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeCheck, Calculator, Droplets, Gift, HandCoins, Loader2, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Calculator, Droplets, HandCoins, Loader2, RefreshCw } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
@@ -9,26 +9,22 @@ import { fetchMarket } from '../../lib/data/market-data';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
 import { defaultScreenSettings, type OpportunityListing, type ScreenSettings } from '../../lib/risk/opportunities';
 import { Collapsible } from '../ui/card';
-import { NumberField } from '../ui/field';
 import { ChoiceCards, type Choice } from '../ui/choice-cards';
-import { Segmented } from '../opportunities/parts';
-import { YtBoard } from '../opportunities/YtBoard';
 import { defaultCalc, type CalcMode, type CalcState } from '../opportunities/Calculator';
 import { PendleCalculator } from '../opportunities/PendleCalculator';
 import { useMerkl } from '../../hooks/useMerkl';
-import { applyFilters, defaultFilters, FilterBar, type Filters } from '../opportunities/filters';
+import { defaultFilters, type Filters } from '../opportunities/filters';
 import { LpAnalyzer, readLpPrefill, type LpPrefill } from '../opportunities/LpAnalyzer';
 import { ytFees } from '../../lib/calculators/yt-plan';
 import { BorrowTool } from './BorrowTool';
 import { LpPools } from './LpPools';
 import { VerifiedYields } from './VerifiedYields';
 
-type Tab = 'yt' | 'calc' | 'lp' | 'borrow' | 'verified';
-const TABS: Tab[] = ['yt', 'calc', 'lp', 'borrow', 'verified'];
+type Tab = 'calc' | 'lp' | 'borrow' | 'verified';
+const TABS: Tab[] = ['calc', 'lp', 'borrow', 'verified'];
 
 const TOOL_CHOICES: Choice<Tab>[] = [
   { id: 'calc', icon: Calculator, title: 'ماشین‌حساب', text: 'یک معامله‌ی YT، PT یا لوپ را با عددهای خودتان' },
-  { id: 'yt', icon: Gift, title: <>پوینت با <bdi dir="ltr">YT</bdi></>, text: 'پوینت را کجا ارزان‌تر بخرید و تا چه قیمتی' },
   { id: 'lp', icon: Droplets, title: <>استخر <bdi dir="ltr">LP</bdi></>, text: 'کارمزد واقعی هر استخر و زیان ناپایدار' },
   { id: 'borrow', icon: HandCoins, title: 'هزینه‌ی وام', text: 'ارزان‌ترین وام برای وثیقه‌ی شما' },
   { id: 'verified', icon: BadgeCheck, title: 'تأییدشده', text: 'خزانه‌هایی که بازدهشان روی زنجیره چک شد' },
@@ -90,11 +86,24 @@ export default function Tools() {
     const saved = readLocal<Partial<Stored>>(STORAGE_KEYS.opportunities, {});
     const params = new URLSearchParams(window.location.search);
     const linked = params.get('tab');
+    // The YT board that was here is «YT: سود و پوینت» in the market analysis now.
+    if (linked === 'yt') {
+      window.location.replace('/?view=yt');
+      return;
+    }
     if (linked === 'lp') setLpPrefill(readLpPrefill(params));
+    // A link from the market analysis opens the calculator on its market (?protocol=&market=&mode=).
+    const proto = params.get('protocol');
+    const market = params.get('market');
+    const mode = params.get('mode');
+    const fromLink: Partial<CalcState> =
+      linked === 'calc' && proto && market && proto in protocols
+        ? { protocol: proto as ProtocolId, marketId: market, marketName: params.get('name') ?? '', icon: null, ...(mode === 'pt' || mode === 'yt' || mode === 'lp' ? { mode } : {}) }
+        : {};
     setSt({
       tab: TABS.includes(linked as Tab) ? (linked as Tab) : TABS.includes(saved.tab as Tab) ? (saved.tab as Tab) : initial.tab,
       screen: sane(saved.screen, initial.screen),
-      calc: sane(saved.calc, initial.calc),
+      calc: { ...sane(saved.calc, initial.calc), ...fromLink },
       filters: { ...defaultFilters, ...saved.filters },
       ytPointsOnly: saved.ytPointsOnly ?? true,
     });
@@ -160,7 +169,6 @@ export default function Tools() {
     }
   }, []);
 
-  const filtered = useMemo(() => (st ? applyFilters(markets, st.filters) : []), [markets, st]);
 
   if (!st) {
     return (
@@ -171,8 +179,6 @@ export default function Tools() {
   }
 
   const { tab, screen: s } = st;
-  const setS = (p: Partial<ScreenSettings>) => patch({ screen: sane({ ...s, ...p }, s) });
-  const active = markets.filter((m) => !m.expired).length;
   const ids = (Object.keys(protocols) as ProtocolId[]).filter((id) => protocols[id].liveData);
 
   return (
@@ -218,42 +224,6 @@ export default function Tools() {
       {tab === 'borrow' && <BorrowTool />}
       {tab === 'verified' && <VerifiedYields />}
 
-      {tab === 'yt' && (
-        <>
-          <FilterBar markets={markets.filter((m) => !m.expired)} f={st.filters} setF={(filters) => patch({ filters })} minLiquidity={s.minLiquidity} setMinLiquidity={(minLiquidity) => setS({ minLiquidity })} shown={filtered.filter((m) => !m.expired).length} total={active} />
-          <Collapsible title="فرض‌های محاسبه" icon={<SlidersHorizontal size={18} aria-hidden />}>
-            <Segmented
-              value={s.ytMode}
-              onChange={(ytMode) => setS({ ytMode })}
-              label="افق YT"
-              size="sm"
-              options={[
-                { id: 'roundtrip', label: 'خرید و فروش بعد از چند روز' },
-                { id: 'maturity', label: 'نگه‌داری تا سررسید' },
-              ]}
-            />
-            <label className="flex items-center gap-2 text-sm text-secondary min-h-11">
-              <input type="checkbox" checked={st.ytPointsOnly} onChange={(e) => patch({ ytPointsOnly: e.target.checked })} />
-              فقط بازارهای پوینت‌دار
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {s.ytMode === 'roundtrip' && <NumberField label="روز نگه‌داری" value={s.holdDays} onChange={(v) => Number.isFinite(v) && setS({ holdDays: Math.max(7, v) })} help="دست‌کم ۷ روز؛ فروش فردای خرید هدف هیچ خریدار YT نیست."  />}
-              <NumberField label="سقف ضرر" value={s.lossBudget} onChange={(v) => setS({ lossBudget: v })} suffix="%" />
-              <NumberField label="کارمزد فرضی" value={s.feePercent} onChange={(v) => setS({ feePercent: v })} suffix="%" help="فقط برای پروتکلی که کارمزدش معلوم نیست. Pendle (کارمزد AMM روی کل اکسپوژر) و Exponent (حدود ۰٫۰۵٪) با کارمزد واقعی خودشان حساب می‌شوند." />
-              <NumberField label="حداقل روز تا سررسید" value={s.minDays} onChange={(v) => setS({ minDays: v })} />
-            </div>
-          </Collapsible>
-          {loading ? (
-            <div className="flex flex-col gap-2" aria-busy="true">
-              {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="h-16 rounded-lg bg-surface border border-default animate-pulse" />
-              ))}
-            </div>
-          ) : (
-            <YtBoard markets={filtered} s={s} feeds={feeds} pointsOnly={st.ytPointsOnly} onCalc={(m) => pick(m, 'yt')} />
-          )}
-        </>
-      )}
       {tab === 'calc' && <PendleCalculator c={st.calc} set={setCalc} markets={markets.filter((m) => !m.expired)} onPick={(m) => pick(m)} gas={gas ?? []} />}
       {updatedAt === null && !loading && tab !== 'lp' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
     </main>

@@ -11,7 +11,11 @@ interface ExponentMarket {
   platformName?: string;
   underlyingAsset?: { mint: string; ticker?: string };
   /** The unit PT redeems into and YT pays yield in; «USD» on dollar-quoted markets (ONyc). */
-  quoteAsset?: { ticker?: string };
+  quoteAsset?: { ticker?: string; mint?: string };
+  /** Pool liquidity and the order book's executable depth, in quote units × 10^decimals. */
+  liquidity?: number;
+  orderbookExecutableDepth?: number;
+  decimals?: number;
   categories?: string[];
   ptPriceInAsset: number;
   ytPriceInAsset: number;
@@ -78,6 +82,20 @@ const levels = (m: ExponentMarket) => {
 const marketSizeUnits = (m: ExponentMarket) =>
   Number.isFinite(m.totalMarketSize) ? (m.totalMarketSize as number) : null;
 
+/**
+ * What can actually be traded, USD: the pool's liquidity plus the order book's executable
+ * depth, in the quote asset (USD, SOL, the token …) — the «Market Liquidity» Exponent shows
+ * (ONyc: 2.99M + 11.93M ≈ $14.6M on its page). Null when the quote asset has no price.
+ */
+function tradableUsd(m: ExponentMarket, prices: Map<string, SolanaToken>): number | null {
+  const d = Math.pow(10, m.decimals ?? 9);
+  const units = ((m.liquidity ?? 0) + (m.orderbookExecutableDepth ?? 0)) / d;
+  if (!(units >= 0)) return null;
+  if (m.quoteAsset?.ticker === 'USD') return units;
+  const px = m.quoteAsset?.mint ? prices.get(m.quoteAsset.mint)?.usdPrice : undefined;
+  return px ? units * px : null;
+}
+
 /** Market size in USD from the unit size and Jupiter's price. */
 function marketSizeUsd(m: ExponentMarket, token: SolanaToken | undefined): number | null {
   const units = marketSizeUnits(m);
@@ -96,7 +114,7 @@ export class ExponentAdapter extends BaseAdapter {
 
   async listMarkets(): Promise<MarketSummary[]> {
     const markets = (await this.all()).filter((m) => m.marketStatus === 'active');
-    const tokens = await fetchSolanaTokens(markets.map((m) => m.underlyingAsset?.mint ?? ''));
+    const tokens = await fetchSolanaTokens([...markets.map((m) => m.underlyingAsset?.mint ?? ''), ...markets.map((m) => m.quoteAsset?.mint ?? '')].filter(Boolean));
     return markets.map((m) => {
       const token = tokens.get(m.underlyingAsset?.mint ?? '');
       const pb = activeProgram(m);
@@ -112,7 +130,8 @@ export class ExponentAdapter extends BaseAdapter {
         baseLevels: levels(m),
         unitUsd: token?.usdPrice ?? null,
         links: exponentLinks(m),
-        liquidity: marketSizeUsd(m, token),
+        // What a trade can actually meet (pool + order book), not the market's total size.
+        liquidity: tradableUsd(m, tokens) ?? marketSizeUsd(m, token),
         hasPoints: !!pb,
         ytMultiplier: pb?.yt_multiplier ?? null,
         points: pb ? program(pb) : null,

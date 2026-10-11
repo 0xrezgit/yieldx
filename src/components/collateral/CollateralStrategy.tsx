@@ -36,7 +36,7 @@ function alsoIn(p: Pair): string[] {
   const o = p.deploy.o;
   const out = ['تحلیل بازار'];
   if (o.family === 'leverage' && o.maturity) out.push('لوپ PT');
-  if (o.family === 'yt') out.push('دلاری YT');
+  if (o.family === 'yt') out.push('YT: سود و پوینت');
   return out;
 }
 

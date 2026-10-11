@@ -8,9 +8,6 @@ import { DEFAULT_ALERT_RULES } from '../../src/hooks/useAlerts';
 import { defaultScenario, type ScenarioParams } from '../../src/types/scenario';
 import { fieldMessages } from '../../src/components/forms/messages';
 import { ShellContext, type MobileTab } from '../../src/components/layout/AppShell';
-import { MobileDashboard } from '../../src/components/dashboard/MobileDashboard';
-import { WebDashboard } from '../../src/components/dashboard/WebDashboard';
-import type { ReadyDashboard } from '../../src/components/dashboard/useDashboard';
 import { BottomNav } from '../../src/components/layout/BottomNav';
 import { AppHeader } from '../../src/components/layout/AppHeader';
 
@@ -36,38 +33,6 @@ const cases: Record<string, Partial<ScenarioParams>> = {
   usdBasis: { pointsBasis: 'usd', underlyingPrice: 2500, maxExitLoss: 0 },
 };
 
-function dashboard(over: Partial<ScenarioParams>, started = true): ReadyDashboard {
-  const p = { ...defaultScenario(), ...(started ? { marketId: 'test-market', marketName: 'sUSDe', chain: 'Ethereum', dataMeta: LIVE_META } : {}), ...over };
-  const analysis = analyzeScenario(p);
-  const insights = buildInsights(p, analysis);
-  const noop = () => {};
-  const alerts = { mode: 'local' as const, rules: DEFAULT_ALERT_RULES, add: async () => {}, update: async () => {}, remove: async () => {} };
-  return {
-    p,
-    setP: noop,
-    set: noop,
-    analysis,
-    insights,
-    verdict: buildVerdict(analysis, insights),
-    triggered: evaluateAlerts(DEFAULT_ALERT_RULES, analysis),
-    msg: fieldMessages(analysis.validation),
-    alerts,
-    storageMode: 'local',
-    save: { name: '', setName: noop, run: async () => {}, state: 'idle', isUpdate: false },
-    reset: noop,
-    setProtocol: noop,
-    pickMarket: noop,
-    refresh: noop,
-    startManual: noop,
-    md: { live: true, markets: [], listState: 'ready', listStale: false, updatedAt: Date.now(), state: 'ready', error: null, last: null, load: async () => null },
-    carry: false,
-    setCarry: noop,
-    focus: 'auto',
-    setFocus: noop,
-    fromScenario: false,
-  } as unknown as ReadyDashboard;
-}
-
 function shell(tab: MobileTab) {
   return { tab, setTab: () => {}, alertCount: 3, setAlertCount: () => {}, install: () => {} };
 }
@@ -83,45 +48,7 @@ function assertClean(html: string) {
 
 
 /** Server-renders both layouts for several scenarios to catch runtime errors. */
-describe('dashboard layouts render', () => {
-  for (const [name, over] of Object.entries(cases)) {
-    it(`web layout — "${name}"`, () => {
-      const html = renderToString(
-        <ShellContext.Provider value={shell('market')}>
-          <WebDashboard d={dashboard(over)} />
-        </ShellContext.Provider>,
-      );
-      expect(html).toContain('نتیجه‌ی نقدی تخمینی تا سررسید');
-      expect(html).toContain('درباره‌ی این بازار');
-      assertClean(html);
-    });
-
-    for (const tab of ['market', 'result', 'alerts'] as const) {
-      it(`mobile layout, ${tab} tab — "${name}"`, () => {
-        const html = renderToString(
-          <ShellContext.Provider value={shell(tab)}>
-            <MobileDashboard d={dashboard(over)} />
-          </ShellContext.Provider>,
-        );
-        assertClean(html);
-      });
-    }
-  }
-
-  it('shows a start state, not a sample result, before a market is chosen', () => {
-    for (const Layout of [WebDashboard, MobileDashboard]) {
-      const html = renderToString(
-        <ShellContext.Provider value={shell('result')}>
-          <Layout d={dashboard({}, false)} />
-        </ShellContext.Provider>,
-      );
-      expect(html).toContain('یک بازار انتخاب کنید');
-      expect(html).not.toContain('نتیجه‌ی نقدی تخمینی تا سررسید');
-      expect(html).not.toContain('پیشنهاد:');
-      assertClean(html);
-    }
-  });
-
+describe('app chrome', () => {
   it('renders the app chrome: five sections, «تحلیل بازار» active on its calculator /dashboard', () => {
     const html = renderToString(
       <ShellContext.Provider value={shell('result')}>

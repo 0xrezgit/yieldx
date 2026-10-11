@@ -17,8 +17,7 @@ import {
 } from '../../src/lib/utils/formatting';
 import { NETWORKS, networkByChainId, networkByName } from '../../src/lib/registry/networks';
 import { PROTOCOLS, tokenKeyFor } from '../../src/lib/registry/identity';
-import { clearListCache, clearMarket, fetchMarketsShared, markManual, mergeMarketData } from '../../src/lib/data/market-data';
-import { applyIfCurrent } from '../../src/components/dashboard/useDashboard';
+import { applyIfCurrent, clearListCache, clearMarket, fetchMarketsShared, markManual, mergeMarketData } from '../../src/lib/data/market-data';
 import { applyFilters, defaultFilters } from '../../src/components/opportunities/filters';
 import { defaultScenario, type ScenarioParams } from '../../src/types/scenario';
 import type { MarketData } from '../../src/types/market';

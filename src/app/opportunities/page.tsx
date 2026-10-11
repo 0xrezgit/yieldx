@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-const TOOL_TABS = new Set(['yt', 'calc', 'lp']);
+const TOOL_TABS = new Set(['calc', 'lp']);
 
 /**
  * Old address of «فرصت‌ها». Links to a specialist tab (LP analysis from a saved link,
@@ -10,6 +10,8 @@ const TOOL_TABS = new Set(['yt', 'calc', 'lp']);
 export default async function OpportunitiesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const params = await searchParams;
   const tab = typeof params.tab === 'string' ? params.tab : '';
+  // The YT board of the tools became «YT: سود و پوینت» in the market analysis.
+  if (tab === 'yt') redirect('/?view=yt');
   if (TOOL_TABS.has(tab)) {
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (typeof v === 'string') q.set(k, v);

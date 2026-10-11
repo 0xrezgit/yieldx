@@ -151,7 +151,7 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
 
 const VIEWS: Choice<View>[] = [
   { id: 'all', icon: Layers, title: 'همه‌ی فرصت‌ها', text: 'وام‌دهی، خزانه، PT و YT — به ترتیب سود خالص دلاری' },
-  { id: 'yt', icon: Gift, title: <>دلاری <bdi dir="ltr">YT</bdi></>, text: 'خرید YT و فروش در بهترین روز، با سه سناریوی بازده' },
+  { id: 'yt', icon: Gift, title: <><bdi dir="ltr">YT</bdi>: سود و پوینت</>, text: 'سود دلاری، پوینت بی‌ضرر یا پوینت با هزینه' },
   { id: 'loop', icon: Repeat, title: <>لوپ <bdi dir="ltr">PT</bdi></>, text: 'PT با اهرم روی بازار وام واقعی، تا سررسید' },
 ];
 
@@ -271,7 +271,7 @@ export default function MarketAnalysis() {
             />
           </div>
         ) : (
-          <p className="text-sm text-muted md:pb-3">{mode === 'yt' ? 'مدت را خود رتبه‌بندی انتخاب می‌کند: بهترین روز فروش هر YT.' : 'هر لوپ تا سررسید همان PT نگه داشته می‌شود.'}</p>
+          <p className="text-sm text-muted md:pb-3">{mode === 'yt' ? 'روز خروج هر YT را هدف شما تعیین می‌کند؛ دست‌کم یک هفته.' : 'هر لوپ تا سررسید همان PT نگه داشته می‌شود.'}</p>
         )}
       </section>
 

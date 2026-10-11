@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { assertPersianMoney } from '../helpers/text';
-import { YtBoard } from '../../src/components/opportunities/YtBoard';
 import { CalculatorPanel, defaultCalc, type CalcState } from '../../src/components/opportunities/Calculator';
 import { defaultScreenSettings, type OpportunityListing } from '../../src/lib/risk/opportunities';
 
@@ -34,14 +33,6 @@ const markets = [
 const noop = () => {};
 
 describe('opportunities render', () => {
-  it('the YT board lists markets with limits and zones', () => {
-    const yt = renderToString(<YtBoard markets={markets} s={defaultScreenSettings} onCalc={noop} />);
-    expect(yt).toContain('پوینت رایگان');
-    expect(yt).toContain('Onyx');
-    expect(yt).toContain('فصل');
-    expect(yt).toContain('موقت');
-  });
-
   it.each<Partial<CalcState>>([
     { mode: 'yt' },
     { mode: 'yt', holdDays: 500, valuePerMillion: 50 },
