@@ -198,9 +198,9 @@ function Details({
         <div>
           <div className="flex justify-between text-xs text-muted mb-1.5">
             <span>سلامت موقعیت</span>
-            <Num>
-              {formatPercent(l.aggregateLTV, 0)} / {formatPercent(p.liquidationThreshold, 0)}
-            </Num>
+            <span>
+              <Num>{formatPercent(l.aggregateLTV, 0)}</Num> از <Num>{formatPercent(p.liquidationThreshold, 0)}</Num>
+            </span>
           </div>
           <div className="relative h-2 rounded-full bg-linear-to-l from-success via-warning to-danger">
             <i className="absolute -top-1 h-4 w-1 rounded bg-white shadow" style={{ right: `${fill}%` }} />

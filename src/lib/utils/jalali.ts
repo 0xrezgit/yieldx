@@ -1,11 +1,10 @@
 /**
- * Solar Hijri (Jalali) ↔ Gregorian, for typing dates the way they are shown («۱۴۰۵/۰۷/۲۱»).
+ * Solar Hijri (Jalali) ↔ Gregorian, for entering dates the way they are shown («۲۱ مهر ۱۴۰۵»).
  * Display still goes through Intl (formatDate); this is only the input side.
  *
  * The arithmetic is Borkowski's algorithm (as in jalaali-js), exact for 1–3177 AP; the
  * values the app stores stay Gregorian «yyyy-mm-dd».
  */
-import { toLatinDigits, toPersianDigits } from './formatting';
 
 const BREAKS = [-61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394, 2456, 3178];
 
@@ -90,33 +89,27 @@ export function toGregorian(jy: number, jm: number, jd: number): { gy: number; g
 }
 
 const pad = (n: number, w = 2) => String(n).padStart(w, '0');
-const MIN_JY = 1300;
-const MAX_JY = 1500;
+export const MIN_JY = 1300;
+export const MAX_JY = 1500;
 
-/** «2026-10-13» → «۱۴۰۵/۰۷/۲۱» (empty for anything that is not a date). */
-export function isoToJalaliInput(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return '';
-  const { jy, jm, jd } = toJalali(Number(m[1]), Number(m[2]), Number(m[3]));
-  return toPersianDigits(`${jy}/${pad(jm)}/${pad(jd)}`);
+export const JALALI_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'] as const;
+
+export interface JalaliParts {
+  jy: number;
+  jm: number;
+  jd: number;
 }
 
-/**
- * Typed date → Gregorian «yyyy-mm-dd», or null. Accepts Persian, Arabic or Latin digits,
- * separated by «/», «-», «.» or spaces, year first: «۱۴۰۵/۷/۲۱», «1405-07-21». A year
- * from 1900 on is read as Gregorian («2026/10/13»), so a pasted date also works.
- */
-export function parseJalaliInput(input: string): string | null {
-  const m = /^(\d{4})\s*[/\-.\s]\s*(\d{1,2})\s*[/\-.\s]\s*(\d{1,2})$/.exec(toLatinDigits(input).replace(/٫|،/g, '/').trim());
-  if (!m) return null;
-  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  if (mo < 1 || mo > 12 || d < 1) return null;
-  if (y >= 1900) {
-    const t = new Date(Date.UTC(y, mo - 1, d));
-    return t.getUTCMonth() === mo - 1 ? `${y}-${pad(mo)}-${pad(d)}` : null;
-  }
-  if (y < MIN_JY || y > MAX_JY || d > jalaliMonthLength(y, mo)) return null;
-  const { gy, gm, gd } = toGregorian(y, mo, d);
+/** «2026-10-13» (or an ISO instant at that date) → { jy: 1405, jm: 7, jd: 21 }; null for anything else. */
+export function isoToJalali(iso: string): JalaliParts | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? toJalali(Number(m[1]), Number(m[2]), Number(m[3])) : null;
+}
+
+/** Jalali day → Gregorian «yyyy-mm-dd», or null when that day does not exist (۳۰ اسفند ۱۴۰۴). */
+export function jalaliToIso({ jy, jm, jd }: JalaliParts): string | null {
+  if (![jy, jm, jd].every(Number.isInteger) || jy < MIN_JY || jy > MAX_JY || jm < 1 || jm > 12 || jd < 1 || jd > jalaliMonthLength(jy, jm)) return null;
+  const { gy, gm, gd } = toGregorian(jy, jm, jd);
   return `${gy}-${pad(gm)}-${pad(gd)}`;
 }
 

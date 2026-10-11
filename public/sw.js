@@ -5,8 +5,10 @@
  * - Build assets (/_next/static), the local font and logos: cache first — they are content-hashed or static.
  * - /api/*: never cached; market data must be live. Offline, the UI labels what it shows as saved data, never as live.
  */
-const VERSION = 'yieldx-v3';
-const PAGES = ['/opportunities', '/dashboard', '/portfolio', '/history', '/guide'];
+const VERSION = 'yieldx-v4';
+// Real pages only: a route that redirects (/dashboard, /opportunities) would be stored as a
+// redirected response, which a browser refuses to show for a navigation — offline it fails.
+const PAGES = ['/', '/tools', '/portfolio', '/history', '/learn', '/guide'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -42,13 +44,13 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    if (response.ok && !response.redirected) {
       const cache = await caches.open(VERSION);
       cache.put(request, response.clone());
     }
     return response;
   } catch {
-    const cached = (await caches.match(request, { ignoreSearch: true })) || (await caches.match('/dashboard'));
+    const cached = (await caches.match(request, { ignoreSearch: true })) || (await caches.match('/'));
     return cached || Response.error();
   }
 }

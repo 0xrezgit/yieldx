@@ -345,7 +345,7 @@ const PRACTICE: Record<string, LessonPractice> = {
       { en: 'Stable pool / StableSwap', fa: 'استخر استیبل', means: 'فرمولی برای دارایی‌های هم‌قیمت؛ اثر قیمتی بسیار کم.' },
       { en: 'Volatile pool', fa: 'استخر پرنوسان', means: 'جفت با قیمت‌های مستقل، مثل ETH/USDC.' },
       { en: 'Correlated pair', fa: 'جفت هم‌بسته', means: 'دو دارایی که با هم حرکت می‌کنند، مثل wstETH/ETH؛ زیان ناپایدار کم، مگر یکی برابری‌اش را از دست بدهد.' },
-      { en: 'Weighted pool', fa: 'استخر وزنی', means: 'استخر با وزن نابرابر (مثلاً ۸۰/۲۰ در Balancer)؛ زیان ناپایدار کمتر برای توکن پرسهم.' },
+      { en: 'Weighted pool', fa: 'استخر وزنی', means: 'استخر با وزن نابرابر (مثلاً ۸۰ به ۲۰ در Balancer)؛ زیان ناپایدار کمتر برای توکن پرسهم.' },
       { en: 'Capital efficiency', fa: 'بهره‌وری سرمایه', means: 'کارمزد هر دلار نسبت به استخر تمام‌بازه.' },
       { en: 'Tick spacing', fa: 'فاصله‌ی پله‌ها', means: 'کمترین پهنای ممکن بازه در هر سطح کارمزد.' },
     ],

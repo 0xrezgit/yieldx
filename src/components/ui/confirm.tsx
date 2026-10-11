@@ -26,7 +26,10 @@ function ConfirmDialog({ title, body, confirmLabel, cancelLabel = 'انصراف'
 
   useEffect(() => {
     const d = ref.current;
-    if (d && !d.open) d.showModal?.();
+    if (!d || d.open) return;
+    // Older Safari (before 15.4, still seen in installed iOS apps) has no showModal: shown in place.
+    if (typeof d.showModal === 'function') d.showModal();
+    else d.setAttribute('open', '');
   }, []);
 
   return (

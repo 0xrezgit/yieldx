@@ -225,7 +225,9 @@ function FundingTable({ list }: { list: Funding[] }) {
         <thead className="text-xs text-muted">
           <tr className="border-b border-default">
             <th className="py-2 px-2 text-right font-medium">بازار وام</th>
-            <th className="py-2 px-2 text-right font-medium">نرخ امروز / محتمل / بدبینانه</th>
+            <th className="py-2 px-2 text-right font-medium">نرخ امروز</th>
+            <th className="py-2 px-2 text-right font-medium">نرخ محتمل</th>
+            <th className="py-2 px-2 text-right font-medium">نرخ بدبینانه</th>
             <th className="py-2 px-2 text-right font-medium">بهره‌ی دوره</th>
             <th className="py-2 px-2 text-right font-medium">لیکویید با افت</th>
             <th className="py-2 px-2" />
@@ -238,9 +240,9 @@ function FundingTable({ list }: { list: Funding[] }) {
                 <bdi dir="ltr">{f.o.protocol.name}</bdi> · {networkByKey(f.o.chain).nameFa} · <bdi dir="ltr">{f.collateral}</bdi>
                 {f.rate.rising && <span className="text-warning text-xs"> · در حال بالا رفتن</span>}
               </td>
-              <td className="py-2 px-2 whitespace-nowrap">
-                <Num>{formatPercent(f.rate.today, 2)}</Num> / <Num>{formatPercent(f.rate.likely, 2)}</Num> / <Num>{formatPercent(f.rate.high, 2)}</Num>
-              </td>
+              <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.rate.today, 2)}</Num></td>
+              <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.rate.likely, 2)}</Num></td>
+              <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.rate.high, 2)}</Num></td>
               <td className="py-2 px-2 text-danger whitespace-nowrap"><Num>{usd(-f.cost.likely)}</Num></td>
               <td className="py-2 px-2 whitespace-nowrap"><Num>{formatPercent(f.liquidationDrop * 100, 0)}</Num></td>
               <td className="py-2 px-2 text-left">

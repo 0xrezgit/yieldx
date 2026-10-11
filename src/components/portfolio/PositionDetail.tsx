@@ -311,8 +311,11 @@ export function KindPanel({ x, onSave }: { x: PositionView; onSave: (p: Position
             <Stat label="بدهی با بهره" q={h.debtQuality}>
               {usd(h.debtUsd)}
             </Stat>
-            <Stat label="نرخ بهره / LLTV">
-              <Num>{formatPercent(lp.borrowAPY, 2)}</Num> / <Num>{formatPercent(lp.lltv, 1)}</Num>
+            <Stat label="نرخ بهره">
+              <Num>{formatPercent(lp.borrowAPY, 2)}</Num>
+            </Stat>
+            <Stat label="LLTV">
+              <Num>{formatPercent(lp.lltv, 1)}</Num>
             </Stat>
             <Stat label="بازار وام‌دهی" className="col-span-2">
               <span dir="ltr" className="text-[15px]">

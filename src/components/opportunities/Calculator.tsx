@@ -566,7 +566,8 @@ export function LoopResult({ c, unreliable = false }: { c: CalcState; unreliable
         rows={[
           ['ارزش وثیقه‌ی PT', <Num key="c">{formatUSD(t.collateralValue, 0)}</Num>],
           ['بدهی', <Num key="d">{formatUSD(t.debt, 0)}</Num>],
-          ['LTV فعلی / در سررسید', <><Num>{formatPercent(t.ltv, 1)}</Num> / <Num>{formatPercent(t.maturityLTV, 1)}</Num></>],
+          ['LTV فعلی', <Num key="lt">{formatPercent(t.ltv, 1)}</Num>],
+          ['LTV در سررسید', <Num key="lm">{formatPercent(t.maturityLTV, 1)}</Num>],
           ['لیکوئید اگر نرخ بازار برسد به', t.liquidationAPY === -Infinity ? 'همین حالا' : <Num key="l">{Number.isFinite(t.liquidationAPY) ? formatPercent(t.liquidationAPY, 2) : '—'}</Num>],
           ['قیمت PT لیکوئید', <Num key="p">{formatNumber(t.liquidationPTPrice, 4)}</Num>],
           ['سقف بهره‌ی وام (سربه‌سر)', Number.isFinite(t.breakEvenBorrowAPY) ? <Num key="b">{formatPercent(t.breakEvenBorrowAPY, 2)}</Num> : '—'],

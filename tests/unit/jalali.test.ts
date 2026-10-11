@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isoToJalaliInput, jalaliMonthLength, parseJalaliInput, toGregorian, toJalali } from '../../src/lib/utils/jalali';
+import { isoToJalali, JALALI_MONTHS, jalaliMonthLength, jalaliToIso, toGregorian, toJalali } from '../../src/lib/utils/jalali';
 
 /** Intl's own Persian calendar, as the reference. */
 const intl = new Intl.DateTimeFormat('en-US-u-ca-persian', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' });
@@ -27,26 +27,32 @@ describe('Jalali calendar', () => {
   });
 });
 
-describe('typing a Jalali date', () => {
-  it('shows a stored date the way it is typed', () => {
-    expect(isoToJalaliInput('2026-10-13')).toBe('۱۴۰۵/۰۷/۲۱');
-    expect(isoToJalaliInput('2026-10-13T00:00:00.000Z')).toBe('۱۴۰۵/۰۷/۲۱');
-    expect(isoToJalaliInput('')).toBe('');
+describe('a date entered as day, month and year', () => {
+  it('splits a stored date into its Jalali day, month and year', () => {
+    expect(isoToJalali('2026-10-13')).toEqual({ jy: 1405, jm: 7, jd: 21 });
+    expect(isoToJalali('2026-10-13T00:00:00.000Z')).toEqual({ jy: 1405, jm: 7, jd: 21 });
+    expect(isoToJalali('')).toBeNull();
   });
 
-  it.each<[string, string]>([
-    ['۱۴۰۵/۰۷/۲۱', '2026-10-13'],
-    ['۱۴۰۵/۷/۲۱', '2026-10-13'],
-    ['1405-07-21', '2026-10-13'],
-    ['١٤٠٥.٠٧.٢١', '2026-10-13'],
-    [' ۱۴۰۵ / ۷ / ۲۱ ', '2026-10-13'],
-    ['۱۴۰۳/۱۲/۳۰', '2025-03-20'],
-    ['2026/10/13', '2026-10-13'],
-  ])('%s → %s', (input, iso) => {
-    expect(parseJalaliInput(input)).toBe(iso);
+  it('turns a real Jalali day into the stored Gregorian date', () => {
+    expect(jalaliToIso({ jy: 1405, jm: 7, jd: 21 })).toBe('2026-10-13');
+    expect(jalaliToIso({ jy: 1403, jm: 12, jd: 30 })).toBe('2025-03-20');
   });
 
-  it.each(['', '۱۴۰۵', '۱۴۰۵/۱۳/۱', '۱۴۰۴/۱۲/۳۰', '۱۴۰۵/۰۷/۳۱', '۲۱/۰۷/۱۴۰۵', '2026/02/30', 'abc'])('rejects %j', (input) => {
-    expect(parseJalaliInput(input)).toBeNull();
+  it.each<[number, number, number]>([
+    [1404, 12, 30],
+    [1405, 7, 31],
+    [1405, 13, 1],
+    [1405, 0, 1],
+    [1405, 1, 0],
+    [999, 1, 1],
+    [1405, 1.5, 1],
+  ])('rejects %i / %i / %i', (jy, jm, jd) => {
+    expect(jalaliToIso({ jy, jm, jd })).toBeNull();
+  });
+
+  it('names the months in order', () => {
+    expect(JALALI_MONTHS[6]).toBe('مهر');
+    expect(JALALI_MONTHS).toHaveLength(12);
   });
 });
