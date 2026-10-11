@@ -417,7 +417,7 @@ export default function CollateralStrategy() {
           <li>
             نرخ وام متغیر است: «محتمل» یعنی نرخ امروز، و برای بازار پر Morpho رشد خودکار آن در <Num>{formatNumber(COLLATERAL_POLICY.likelyDays, 0)}</Num> روز؛ «بدبینانه» <Num>{formatNumber(COLLATERAL_POLICY.highDays, 0)}</Num> روز.
           </li>
-          <li>لوپ‌های PT با همان سیاست اهرم اپ (۳× یا ۲،۵×) حساب شده‌اند، نه اهرم حداکثری.</li>
+          <li>لوپ‌های PT با همان سیاست اهرم اپ (۳× یا ۲.۵×) حساب شده‌اند، نه اهرم حداکثری.</li>
           <li className="flex gap-1.5 list-none -mr-5">
             <Info size={14} className="shrink-0 mt-1.5 text-accent" aria-hidden /> هزینه‌ی پل فرضی شماست (پیش‌فرض <Num>{formatNumber(COLLATERAL_POLICY.defaultBridgeUsd, 0)}</Num> دلار رفت‌وبرگشت)؛ فقط وقتی دو بخش روی دو شبکه‌اند کم می‌شود.
           </li>

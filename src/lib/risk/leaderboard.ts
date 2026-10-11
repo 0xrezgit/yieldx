@@ -104,7 +104,7 @@ export interface LeaderRow {
 }
 
 export interface LoopLender {
-  /** The lending market as its adapter names it, e.g. «USDC · وثیقه PT-… · LLTV ۹۱،۵٪». */
+  /** The lending market as its adapter names it, e.g. «USDC · وثیقه PT-… · LLTV ۹۱.۵٪». */
   name: string;
   protocol: string;
   url: string | null;

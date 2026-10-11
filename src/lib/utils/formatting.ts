@@ -8,10 +8,10 @@
 import { finite } from './math';
 
 /**
- * Decimal separator on screen: the Persian comma «،» (۱۲۳،۴۵ دلار). Intl's fa-IR uses «٫»,
- * which reads as a slash («۱۲۳/۴۵») in Vazirmatn; thousands stay «٬» (۱۲٬۳۴۵،۶۷).
+ * Decimal separator on screen: a point — «۱٬۲۱۱.۲۹ دلار». Intl's fa-IR uses «٫», which
+ * reads as a slash («۱۲۳/۴۵») in Vazirmatn; thousands stay «٬».
  */
-export const DECIMAL = '،';
+export const DECIMAL = '.';
 
 interface Formatter {
   format(x: number): string;
@@ -57,8 +57,8 @@ function magnitude(abs: number, digits: number, sig: number): string {
 }
 
 /**
- * Plain number: 1234.5 → «۱٬۲۳۴،۵», −0.0004 → «−۰،۰۰۰۴» (never a misleading ۰ or «−۰»).
- * Small non-zero values keep 4 significant digits: 0.00003456 → «۰،۰۰۰۰۳۴۵۶».
+ * Plain number: 1234.5 → «۱٬۲۳۴.۵», −0.0004 → «−۰.۰۰۰۴» (never a misleading ۰ or «−۰»).
+ * Small non-zero values keep 4 significant digits: 0.00003456 → «۰.۰۰۰۰۳۴۵۶».
  */
 export function formatNumber(x: number, digits = 2, signed = false): string {
   if (!Number.isFinite(x)) return EMPTY;
@@ -68,7 +68,7 @@ export function formatNumber(x: number, digits = 2, signed = false): string {
   return `${sign}${magnitude(abs, digits, 4)}`;
 }
 
-/** Token amount with its official symbol (Latin, isolated): «۰،۰۰۰۰۳۴۵۶ ETH». */
+/** Token amount with its official symbol (Latin, isolated): «۰.۰۰۰۰۳۴۵۶ ETH». */
 export function formatToken(x: number, symbol: string, digits = 6): string {
   if (!Number.isFinite(x)) return EMPTY;
   // Below 1, keep at least 4 significant digits (0.00003456 ETH, not 0.000035).
@@ -84,8 +84,8 @@ export function formatFull(x: number): string {
 }
 
 /**
- * 12.5M → «۱۲،۵ میلیون». Only the numeric part is isolated (LRI…PDI); the scale word
- * stays in the RTL flow, so «۱۲،۵ میلیون دلار» never turns into «میلیون ۱۲،۵ دلار».
+ * 12.5M → «۱۲.۵ میلیون». Only the numeric part is isolated (LRI…PDI); the scale word
+ * stays in the RTL flow, so «۱۲.۵ میلیون دلار» never turns into «میلیون ۱۲.۵ دلار».
  */
 function compactParts(abs: number, digits: number): string {
   const text = nf({ notation: 'compact', maximumFractionDigits: digits }).format(abs);
@@ -100,7 +100,7 @@ export function formatCompact(x: number, digits = 1): string {
 }
 
 /**
- * Money in US dollars, written the Persian way: −1234.5 → «−۱٬۲۳۴،۵ دلار» (never «$»).
+ * Money in US dollars, written the Persian way: −1234.5 → «−۱٬۲۳۴.۵ دلار» (never «$»).
  * Cent precision is the point of money display, so sub-cent amounts show as «۰ دلار».
  * «دلار» means USD only — stablecoins (USDC, USDT…) are tokens, shown with formatToken.
  */
@@ -120,7 +120,7 @@ export function formatUSDCompact(x: number, signed = false): string {
   return `${LRI}${signOf(x, 1, signed)}${compactParts(Math.abs(x), 1)} ${DOLLAR}`;
 }
 
-/** Percent value in percent units: 8.5 → «۸،۵٪», signed 3.25 → «+۳،۲۵٪». */
+/** Percent value in percent units: 8.5 → «۸.۵٪», signed 3.25 → «+۳.۲۵٪». */
 export function formatPercent(x: number, digits = 2, signed = false): string {
   if (!Number.isFinite(x)) return EMPTY;
   return `${signOf(x, digits, signed)}${nf({ maximumFractionDigits: digits }).format(Math.abs(x))}٪`;
@@ -137,7 +137,7 @@ export function formatRateCapped(x: number, digits = 1, cap = 1000): string {
   return formatPercent(x, digits);
 }
 
-/** Percentage points (for APY gaps): 2.1 → «+۲،۱ واحد درصد». */
+/** Percentage points (for APY gaps): 2.1 → «+۲.۱ واحد درصد». */
 export function formatPP(x: number, digits = 2): string {
   if (!Number.isFinite(x)) return EMPTY;
   return `${formatPercent(x, digits, true).replace('٪', '')} واحد درصد`;
@@ -221,7 +221,7 @@ export const toPersianDigits = (s: string) => s.replace(/[0-9]/g, (d) => FA_DIGI
 
 /**
  * Normalises typed text to a plain `-123.45` string (or null when it is not a number).
- * Accepted: Persian, Arabic and Latin digits; decimal «،» (as shown), «٫», «.» or «/»
+ * Accepted: Persian, Arabic and Latin digits; decimal «.» (as shown), «٫», «،» or «/»
  * between digits;
  * thousands «٬» or spaces; a Latin «,» is a thousands separator when it groups
  * exactly three digits (1,234 · 1,234.5) and a decimal comma otherwise (12,5).
@@ -247,7 +247,7 @@ export function parseLocaleNumber(input: string): number {
 
 /**
  * True for text that is not a number yet but may become one while typing
- * («−», «۰،», «۱۲,»): the input keeps it instead of rejecting or reformatting it.
+ * («−», «۰.», «۱۲,»): the input keeps it instead of rejecting or reformatting it.
  */
 export function isPartialNumber(input: string): boolean {
   const s = toLatinDigits(input).replace(/[\s  ٬']/g, '');
@@ -255,7 +255,7 @@ export function isPartialNumber(input: string): boolean {
 }
 
 /**
- * «۵،۱، 6.2 ، ۷» → [5.1, 6.2, 7] — used by the APY history textarea. «،» between two
+ * «۵.۱، 6.2 ، ۷» → [5.1, 6.2, 7] — used by the APY history textarea. «،» between two
  * digits is a decimal; followed by anything else it separates values.
  */
 export function parseNumberList(input: string): number[] {

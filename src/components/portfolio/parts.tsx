@@ -56,7 +56,7 @@ export function Usd({ x, digits = 2, className = '' }: { x: number; digits?: num
   if (!Number.isFinite(x)) return <span className="text-sx-faint">{EMPTY}</span>;
   return (
     <span className={`whitespace-nowrap ${className}`}>
-      <Num>{dollarNumber(x, digits)}</Num> <span className="text-[max(12px,0.8em)] font-normal text-sx-muted">دلار</span>
+      <Num>{dollarNumber(x, digits)}</Num> <span className="usd-unit">دلار</span>
     </span>
   );
 }

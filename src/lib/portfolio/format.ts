@@ -5,10 +5,10 @@ import { formatMoneyNumber, formatUSD, formatUSDCompact } from '../utils/formatt
  * String forms wrap the number in LRI…PDI so a minus sign stays attached inside
  * RTL sentences.
  */
-/** Signed amount without the unit: −۴،۰۶ (no sign on amounts that round to zero). */
+/** Signed amount without the unit: −۴.۰۶ (no sign on amounts that round to zero). */
 export const dollarNumber = (x: number, digits = 2): string => formatMoneyNumber(x, digits);
 
-/** «۴،۰۶ دلار», «−۴،۰۶ دلار» — for text; components use <Usd>. */
+/** «۴.۰۶ دلار», «−۴.۰۶ دلار» — for text; components use <Usd>. */
 export const formatDollar = (x: number, digits = 2): string => formatUSD(x, digits);
 
 export const formatDollarCompact = (x: number): string => formatUSDCompact(x);

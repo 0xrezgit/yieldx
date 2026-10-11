@@ -13,7 +13,7 @@ const tone = (x: number) => (x >= 0 ? 'text-success' : 'text-danger');
 const LABEL = { low: 'بدبینانه', likely: 'محتمل', high: 'خوش‌بینانه' } as const;
 const FEE_SOURCE: Record<YtPlan['feeSource'], string> = {
   'pendle-amm': 'کارمزد AMM پندل (روی کل اکسپوژر)',
-  'exponent-book': 'دفتر سفارش Exponent (حدود ۰،۰۵٪)',
+  'exponent-book': 'دفتر سفارش Exponent (حدود ۰.۰۵٪)',
   quote: 'از قیمت اجرایی همین مبلغ',
   assumed: 'فرضی (کارمزد این پروتکل معلوم نیست)',
 };
