@@ -137,6 +137,13 @@ body {
   unicode-bidi: isolate;
 }
 
+/* «دلار» after an amount: smaller and lighter than the figure, so the number leads. */
+.usd-unit {
+  font-size: max(10px, 0.68em);
+  font-weight: 400;
+  color: var(--c-secondary);
+}
+
 /* Text that must keep Latin digits (contract addresses, hashes). */
 .latin {
   font-family: 'Vazirmatn Latin', ui-monospace, SFMono-Regular, Menlo, monospace;

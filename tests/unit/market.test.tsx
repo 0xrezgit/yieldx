@@ -448,7 +448,7 @@ describe('YT held to maturity', () => {
     const e = run([yt({ baseAPY: 0, impliedAPY: 10, baseHealth: health })]).rows[0].byHorizon[60];
     expect(e.placement).not.toBe('needs-model');
     expect(e.confidence).toBe('suspect');
-    expect(e.assumptions.join()).toContain('۱۵،۲');
+    expect(e.assumptions.join()).toContain('۱۵.۲');
   });
 
   it('pays the YT price for the yield until maturity; the YT itself ends at zero', () => {

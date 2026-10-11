@@ -87,8 +87,8 @@ describe('loop debt in another token', () => {
 describe('dollar formatting', () => {
   it('writes «دلار» with Persian digits and never a signed zero', () => {
     // The number is bidi-isolated (LRI…PDI) so a minus sign stays attached in RTL text.
-    expect(formatDollar(1234.5)).toBe('\u2066۱٬۲۳۴،۵\u2069 دلار');
-    expect(dollarNumber(-4.06)).toBe('−۴،۰۶');
+    expect(formatDollar(1234.5)).toBe('\u2066۱٬۲۳۴.۵\u2069 دلار');
+    expect(dollarNumber(-4.06)).toBe('−۴.۰۶');
     expect(dollarNumber(-0.001)).toBe('۰');
     expect(formatDollar(12)).not.toContain('$');
   });

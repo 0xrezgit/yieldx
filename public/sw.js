@@ -5,7 +5,7 @@
  * - Build assets (/_next/static), the local font and logos: cache first — they are content-hashed or static.
  * - /api/*: never cached; market data must be live. Offline, the UI labels what it shows as saved data, never as live.
  */
-const VERSION = 'yieldx-v4';
+const VERSION = 'yieldx-v5';
 // Real pages only: a route that redirects (/dashboard, /opportunities) would be stored as a
 // redirected response, which a browser refuses to show for a navigation — offline it fails.
 const PAGES = ['/', '/tools', '/portfolio', '/history', '/learn', '/guide'];
