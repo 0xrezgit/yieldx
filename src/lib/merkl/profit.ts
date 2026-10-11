@@ -104,7 +104,9 @@ export function nativeYield(o: MerklOpportunity, now = Date.now() / 1000): Nativ
   if (n === null) return { apr: 0, counted: false, note: 'بازده بومی گزارش نشده؛ صفر در نظر گرفته شد' };
   if (o.nativeAt === null || now - o.nativeAt > NATIVE_MAX_AGE_H * 3600) return { apr: 0, counted: false, note: 'بازده بومی گزارش‌شده قدیمی است؛ لحاظ نشد' };
   if (o.nativeSource === null) return { apr: 0, counted: false, note: `بازده بومی ${formatPercent(n, 1)} فقط اعلامی است و Merkl روش اندازه‌گیری‌اش را نداده؛ لحاظ نشد` };
-  if (!(n >= 0 && n <= NATIVE_APR_MAX) || o.tokens.some(isYieldToken)) return { apr: 0, counted: false, note: 'بازده بومی گزارش‌شده نامعتبر است؛ لحاظ نشد' };
+  if (o.tokens.some(isYieldToken)) return { apr: 0, counted: false, note: 'سود YT از خود YT می‌آید و بازده بومی دوباره حساب نمی‌شود؛ لحاظ نشد' };
+  if (!(n >= 0)) return { apr: 0, counted: false, note: n < 0 ? `بازده بومی گزارش‌شده منفی است (${formatPercent(n, 1)})؛ لحاظ نشد` : 'بازده بومی گزارش‌شده عدد نیست؛ لحاظ نشد' };
+  if (n > NATIVE_APR_MAX) return { apr: 0, counted: false, note: `بازده بومی گزارش‌شده (${formatPercent(n, 1)}) از سقف باورپذیر ${formatPercent(NATIVE_APR_MAX, 0)} بیشتر است؛ لحاظ نشد` };
   if (o.action === 'BORROW') return { apr: 0, counted: false, note: 'بازده سپرده، نه هزینه‌ی وام؛ لحاظ نشد' };
   const target = o.campaigns.some((c) => c.rateKind === 'target');
   if (!target && nativeInsideCampaign(o)) return { apr: 0, counted: false, note: 'Merkl این بازده را درون APR کمپین گزارش کرده؛ برای جلوگیری از دوباره‌شماری جدا اضافه نشد' };

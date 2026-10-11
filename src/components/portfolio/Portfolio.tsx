@@ -185,15 +185,15 @@ function PositionCards({ rows }: { rows: PositionView[] }) {
               </div>
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[11px] text-sx-faint">ارزش</span>
+                  <span className="text-xs text-sx-faint">ارزش</span>
                   <Usd x={v.netValueUsd} />
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[11px] text-sx-faint">سود و زیان</span>
+                  <span className="text-xs text-sx-faint">سود و زیان</span>
                   <Pnl usd={v.pnlUsd} pct={v.pnlPct} size="sm" word={false} />
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[11px] text-sx-faint">مانده</span>
+                  <span className="text-xs text-sx-faint">مانده</span>
                   <span>{v.status === 'closed' ? '—' : fmtDays(v.daysLeft)}</span>
                 </div>
               </div>

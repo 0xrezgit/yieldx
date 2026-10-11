@@ -1,6 +1,6 @@
 'use client';
 
-import { NumberField, SelectField, TextField } from '../ui/field';
+import { DateField, NumberField, SelectField, TextField } from '../ui/field';
 import type { PointsBasis } from '../../types/market';
 import type { ScenarioParams, ScenarioSetter } from '../../types/scenario';
 import type { FieldMessages } from './messages';
@@ -46,7 +46,7 @@ export function AirdropForm({ p, set, msg }: { p: ScenarioParams; set: ScenarioS
           { value: 'usd', label: 'هر ۱ دلار' },
         ]}
       />
-      <TextField label="تاریخ اسنپ‌شات" type="date" value={p.snapshotDate} onChange={(v) => set('snapshotDate', v)} />
+      <DateField label="تاریخ اسنپ‌شات" value={p.snapshotDate} onChange={(v) => set('snapshotDate', v)} />
       <div className="col-span-2">
         <TextField label="نام پوینت" value={p.pointsName} onChange={(v) => set('pointsName', v)} />
       </div>

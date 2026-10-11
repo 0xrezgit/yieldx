@@ -7,7 +7,7 @@ import { buildExitSteps, dayToDate, type StepTone } from '../../lib/risk/exit-ad
 import { formatCompact, formatNumber, formatUSD } from '../../lib/utils/formatting';
 import { Card } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { NumberField, TextField } from '../ui/field';
+import { DateField, NumberField } from '../ui/field';
 import { Num } from '../ui/num';
 import { ExitChart } from '../charts/ExitChart';
 
@@ -111,7 +111,7 @@ export function ExitPlanCard({ p, a, set }: { p: ScenarioParams; a: Analysis; se
       {set && (
         <div className="grid grid-cols-2 gap-3">
           <NumberField label="سقف ضرر قابل قبول" value={p.maxExitLoss} onChange={(v) => set('maxExitLoss', v)} suffix="%" />
-          <TextField label="تاریخ اسنپ‌شات" type="date" value={p.snapshotDate} onChange={(v) => set('snapshotDate', v)} />
+          <DateField label="تاریخ اسنپ‌شات" value={p.snapshotDate} onChange={(v) => set('snapshotDate', v)} />
         </div>
       )}
 

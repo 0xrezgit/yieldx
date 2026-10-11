@@ -124,7 +124,7 @@ function ExitMap({ m, input, strategy, unit, onPick, current }: { m: CalcMarket;
                 <th key={d} className="px-2 py-1 text-left font-medium">
                   <span className="flex flex-col items-end leading-tight">
                     <span className="text-secondary">{formatDate(new Date(today + d * 86_400_000).toISOString())}</span>
-                    <span className="text-[11px]">{k === map.days.length - 1 && d >= m.daysToMaturity ? 'سررسید' : <><Num>{formatNumber(d, 0)}</Num> روز</>}</span>
+                    <span className="text-xs">{k === map.days.length - 1 && d >= m.daysToMaturity ? 'سررسید' : <><Num>{formatNumber(d, 0)}</Num> روز</>}</span>
                   </span>
                 </th>
               ))}
@@ -134,7 +134,7 @@ function ExitMap({ m, input, strategy, unit, onPick, current }: { m: CalcMarket;
             {map.rates.map((r, i) => (
               <tr key={r}>
                 <td className="px-2 py-1.5 text-secondary whitespace-nowrap">
-                  <Num>{formatPercent(r, 2)}</Num> {Math.abs(r - m.impliedPct) < 1e-9 && <span className="text-[11px] text-muted">امروز</span>}
+                  <Num>{formatPercent(r, 2)}</Num> {Math.abs(r - m.impliedPct) < 1e-9 && <span className="text-xs text-muted">امروز</span>}
                 </td>
                 {map.days.map((d, k) => {
                   const v = map.cells[i][k];
@@ -177,16 +177,16 @@ function Strategies({ m, input, unit }: { m: CalcMarket; input: CalcInput; unit:
           <thead className="text-muted">
             <tr className="border-b border-default">
               <th className="py-2 px-2 text-right font-medium">استراتژی</th>
-              <th className="py-2 px-2 text-right font-medium">بدبینانه <span className="text-[11px]">(<Num>{formatPercent(c.readings.low, 1)}</Num>)</span></th>
-              <th className="py-2 px-2 text-right font-medium">محتمل <span className="text-[11px]">(<Num>{formatPercent(c.readings.likely, 1)}</Num>)</span></th>
-              <th className="py-2 px-2 text-right font-medium">خوش‌بینانه <span className="text-[11px]">(<Num>{formatPercent(c.readings.high, 1)}</Num>)</span></th>
+              <th className="py-2 px-2 text-right font-medium">بدبینانه <span className="text-xs">(<Num>{formatPercent(c.readings.low, 1)}</Num>)</span></th>
+              <th className="py-2 px-2 text-right font-medium">محتمل <span className="text-xs">(<Num>{formatPercent(c.readings.likely, 1)}</Num>)</span></th>
+              <th className="py-2 px-2 text-right font-medium">خوش‌بینانه <span className="text-xs">(<Num>{formatPercent(c.readings.high, 1)}</Num>)</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-default">
             {c.rows.map((r) => (
               <tr key={r.strategy} className={best?.s === r.strategy ? 'bg-brand/[0.06]' : ''}>
                 <td className="py-2 px-2 font-medium text-primary whitespace-nowrap">
-                  {STRATEGY_NAME[r.strategy]} {best?.s === r.strategy && <span className="text-[11px] text-accent">بهترین</span>}
+                  {STRATEGY_NAME[r.strategy]} {best?.s === r.strategy && <span className="text-xs text-accent">بهترین</span>}
                 </td>
                 {(['low', 'likely', 'high'] as const).map((k) => {
                   const v = r.byReading[k];

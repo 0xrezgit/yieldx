@@ -104,7 +104,7 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
         <div className="l-pnl flex flex-col items-end gap-0.5">
           <span className={`text-lg font-semibold leading-tight ${loss ? 'text-danger' : 'text-success'}`}>{e.net === null ? '—' : <Num>{usd(e.net)}</Num>}</span>
           {e.range && Math.abs(e.range.high - e.range.low) >= 0.5 ? (
-            <span className="text-[11px] text-muted">
+            <span className="text-xs text-muted">
               بدبینانه <Num>{usd(e.range.low)}</Num>
             </span>
           ) : (

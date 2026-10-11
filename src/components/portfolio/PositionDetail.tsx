@@ -15,6 +15,7 @@ import { formatDateTime, formatNumber, formatPercent } from '../../lib/utils/for
 import protocols from '../../config/protocols.json';
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
+import { useConfirm } from '../ui/confirm';
 import { TokenLogo } from '../ui/token-logo';
 import { EventForm } from './EventForm';
 import { AirdropCard } from './AirdropCard';
@@ -568,9 +569,11 @@ const EVENT_DOT: Record<PositionEventType, string> = {
 function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void }) {
   const { p, quote } = x;
   const [adding, setAdding] = useState(false);
+  const [confirmDialog, confirm] = useConfirm();
   const sorted = [...p.events].sort((a, b) => b.at.localeCompare(a.at));
   return (
     <>
+      {confirmDialog}
       {adding ? (
         <div className="rounded-lg border border-sx-border bg-sx-raised/30 p-5">
           <EventForm
@@ -630,8 +633,8 @@ function Events({ x, onSave }: { x: PositionView; onSave: (p: Position) => void 
             <button
               type="button"
               className="tap self-start text-sm text-sx-faint hover:text-sx-red inline-flex items-center gap-1 min-h-10 transition-colors"
-              onClick={() => {
-                if (window.confirm('این رویداد حذف شود؟ محاسبات از نو انجام می‌شود.')) onSave({ ...p, events: p.events.filter((y) => y.id !== e.id) });
+              onClick={async () => {
+                if (await confirm({ title: 'این رویداد حذف شود؟', body: 'سود و زیان پوزیشن بدون این رویداد از نو حساب می‌شود.', confirmLabel: 'حذف رویداد' })) onSave({ ...p, events: p.events.filter((y) => y.id !== e.id) });
               }}
             >
               <Trash2 size={12} /> حذف
@@ -674,6 +677,7 @@ function PnlBreakdown({ v }: { v: PositionView['v'] }) {
 
 export default function PositionDetail({ id }: { id: string }) {
   const router = useRouter();
+  const [confirmDialog, confirm] = useConfirm();
   const { positions, views, airdrops, saveAirdrop, removeAirdrop, save, remove, refresh, refreshing, updatedAt } = usePortfolioView();
   const x = views.find((y) => y.p.id === id);
 
@@ -702,6 +706,7 @@ export default function PositionDetail({ id }: { id: string }) {
 
   return (
     <SxPage>
+      {confirmDialog}
       <Link href="/portfolio" className="tap text-sm text-sx-muted hover:text-sx-text flex items-center gap-1 self-start min-h-10 transition-colors">
         <ArrowRight size={14} /> پرتفوی من
       </Link>
@@ -794,8 +799,8 @@ export default function PositionDetail({ id }: { id: string }) {
         <button
           type="button"
           className={btn.danger}
-          onClick={() => {
-            if (window.confirm('این پوزیشن و همه‌ی سوابق آن حذف شود؟')) {
+          onClick={async () => {
+            if (await confirm({ title: 'این پوزیشن حذف شود؟', body: 'پوزیشن و همه‌ی سوابق آن پاک می‌شوند. این کار برگشت‌پذیر نیست.', confirmLabel: 'حذف پوزیشن' })) {
               remove(p.id);
               router.push('/portfolio');
             }

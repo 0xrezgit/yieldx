@@ -9,24 +9,12 @@ import { formatDateTime, formatNumber } from '../../lib/utils/formatting';
 import { formatDollar, priceDigits } from '../../lib/portfolio/format';
 import { nativeToken, tokensForChain } from '../../lib/portfolio/tokens';
 import { TokenSelect, useTokenPrice } from './TokenSelect';
-import { NumberField, SelectField, TextField } from '../ui/field';
+import { DATE_FORMAT_ERROR, DateTimeInputs, NumberField, SelectField, TextField } from '../ui/field';
 import { Num } from '../ui/num';
 import { btn } from './parts';
 
 /** Rates read "now" are only offered for events in the last two hours; older events need the historical rate. */
 export const LIVE_RATE_WINDOW_MS = 2 * 60 * 60_000;
-
-/** datetime-local value (local time) ↔ ISO. */
-export const toLocalInput = (iso: string) => {
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-export const fromLocalInput = (v: string) => {
-  const d = new Date(v);
-  return Number.isFinite(d.getTime()) ? d.toISOString() : '';
-};
 
 export interface Draft {
   type: PositionEventType;
@@ -186,6 +174,7 @@ function FieldError({ msg }: { msg?: string }) {
 export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, types, chain, marketIcon, showErrors = false }: Props) {
   const set = (p: Partial<Draft>) => onChange((x) => ({ ...x, ...p }));
   const [touched, setTouched] = useState<Partial<Record<DraftField, boolean>>>({});
+  const [badDate, setBadDate] = useState(false);
   const touch = (f: DraftField) => setTouched((t) => (t[f] ? t : { ...t, [f]: true }));
   const errors = validateDraftFields(d);
   const err = (f: DraftField) => (showErrors || touched[f] ? errors[f] : undefined);
@@ -212,8 +201,9 @@ export function EventFields({ draft: d, onChange, assetSymbol, liveAssetUsd, typ
             <label className="text-sm block mb-1.5" htmlFor="event-at">
               تاریخ و ساعت
             </label>
-            <input id="event-at" type="datetime-local" dir="ltr" value={toLocalInput(d.at)} max={toLocalInput(new Date().toISOString())} onChange={(e) => set({ at: fromLocalInput(e.target.value) })} aria-invalid={!!err('at')} className="w-full px-3 py-2.5 text-base" />
-            {d.at && !err('at') && (
+            <DateTimeInputs id="event-at" value={d.at} onChange={(at) => set({ at })} invalid={!!err('at') || badDate} onBadDate={setBadDate} />
+            {badDate && <FieldError msg={DATE_FORMAT_ERROR} />}
+            {d.at && !err('at') && !badDate && (
               <p className="text-xs text-sx-muted mt-1">
                 {formatDateTime(d.at)} · <span className="text-sx-faint">زمان محلی مرورگر؛ به‌صورت UTC ذخیره می‌شود</span>
               </p>

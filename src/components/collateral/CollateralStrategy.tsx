@@ -47,7 +47,7 @@ function Leg({ label, o, line }: { label: string; o: Pair['deploy']['o'] | Fundi
     <div className="flex items-center gap-2.5 min-w-0">
       <LogoWithNetwork icon={o.icon} name={symbol} chain={net.name} size={32} />
       <div className="min-w-0 flex flex-col leading-tight">
-        <span className="text-[11px] text-muted">{label}</span>
+        <span className="text-xs text-muted">{label}</span>
         <span className="text-sm text-primary truncate">
           <bdi dir="ltr">{o.protocol.name}</bdi> · {net.nameFa}
         </span>
@@ -174,7 +174,7 @@ function PairRow({ p, s, rank, open, onToggle }: { p: Pair; s: Stored; rank: num
     <li className="py-3">
       <div className="line-row">
         <button type="button" onClick={onToggle} aria-expanded={open} className="l-id flex items-center gap-2.5 min-w-0 text-right">
-          <span className="grid place-items-center size-6 shrink-0 rounded-full bg-hover text-[11px] font-semibold text-muted num">{formatNumber(rank, 0)}</span>
+          <span className="grid place-items-center size-6 shrink-0 rounded-full bg-hover text-xs font-semibold text-muted num">{formatNumber(rank, 0)}</span>
           <LogoWithNetwork icon={p.deploy.o.icon} name={symbol} chain={networkByKey(p.deploy.o.chain).name} size={32} />
           <span className="min-w-0 flex flex-col leading-tight">
             <span className="text-sm font-semibold text-primary truncate">
@@ -197,7 +197,7 @@ function PairRow({ p, s, rank, open, onToggle }: { p: Pair; s: Stored; rank: num
         </div>
         <div className="l-pnl flex flex-col items-end gap-0.5">
           <span className={`text-lg font-semibold leading-tight ${tone(p.net)}`}><Num>{usd(p.net)}</Num></span>
-          <span className="text-[11px] text-muted">بدبینانه <Num>{usd(p.low)}</Num></span>
+          <span className="text-xs text-muted">بدبینانه <Num>{usd(p.low)}</Num></span>
         </div>
         <div className="l-act flex items-center gap-1.5">
           <button type="button" onClick={onToggle} aria-expanded={open} className={`${ghostAction} grow`}>

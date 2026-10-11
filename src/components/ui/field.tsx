@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { formatDate, formatGregorian, isPartialNumber, parseLocaleNumber, toLatinDigits, toPersianDigits } from '../../lib/utils/formatting';
+import { isoToJalaliInput, parseJalaliInput, todayIso } from '../../lib/utils/jalali';
 import { InlineHelp } from './inline-help';
 
 const controlBase =
@@ -145,7 +146,6 @@ interface TextFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  type?: 'text' | 'date';
   placeholder?: string;
   help?: ReactNode;
   hint?: string;
@@ -153,23 +153,16 @@ interface TextFieldProps {
   ltr?: boolean;
 }
 
-export function TextField({ label, value, onChange, type = 'text', placeholder, help, hint, error, ltr }: TextFieldProps) {
+export function TextField({ label, value, onChange, placeholder, help, hint, error, ltr }: TextFieldProps) {
   const id = useId();
   const [touched, setTouched] = useState(false);
   const visibleError = touched ? error : undefined;
   return (
-    <Shell
-      label={label}
-      help={help}
-      hint={hint}
-      error={visibleError}
-      htmlFor={id}
-      note={type === 'date' && value ? <>{formatDate(value)} · <span className="text-muted">میلادی {formatGregorian(value)}</span></> : undefined}
-    >
+    <Shell label={label} help={help} hint={hint} error={visibleError} htmlFor={id}>
       <input
         id={id}
-        type={type}
-        dir={ltr || type === 'date' ? 'ltr' : undefined}
+        type="text"
+        dir={ltr ? 'ltr' : undefined}
         placeholder={placeholder}
         className={`${controlBase}${border(visibleError)}${ltr ? ' font-mono text-sm' : ''}`}
         value={value}
@@ -178,6 +171,142 @@ export function TextField({ label, value, onChange, type = 'text', placeholder, 
         onChange={(e) => onChange(e.target.value)}
       />
     </Shell>
+  );
+}
+
+const FA = '۰۱۲۳۴۵۶۷۸۹';
+/** Latin digits → Persian, nothing else (date separators stay as typed). */
+const faDigits = (s: string) => s.replace(/[0-9]/g, (d) => FA[Number(d)]);
+
+export const DATE_FORMAT_ERROR = 'تاریخ را شمسی و به ترتیب سال/ماه/روز بنویسید؛ مثل ۱۴۰۵/۰۷/۲۱.';
+
+/**
+ * A Jalali date typed as «۱۴۰۵/۰۷/۲۱» (the browser's date picker is Gregorian only).
+ * Reports a Gregorian «yyyy-mm-dd» upward, '' when cleared, and nothing while the
+ * text is not a whole date yet; `bad` is true for text that is not a valid date.
+ */
+function JalaliInput({ id, value, onChange, onBlur, invalid, className = '' }: { id?: string; value: string; onChange: (iso: string) => void; onBlur?: (bad: boolean) => void; invalid?: boolean; className?: string }) {
+  const [draft, setDraft] = useState(() => isoToJalaliInput(value));
+
+  // Follow external changes (reset, «امروز») without touching what is being typed.
+  useEffect(() => {
+    if (parseJalaliInput(draft) !== value.slice(0, 10) && !(draft.trim() === '' && value === '')) setDraft(isoToJalaliInput(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to external value changes
+  }, [value]);
+
+  return (
+    <input
+      id={id}
+      dir="ltr"
+      inputMode="numeric"
+      autoComplete="off"
+      spellCheck={false}
+      placeholder="۱۴۰۵/۰۷/۲۱"
+      className={`${controlBase}${border(invalid ? 'x' : undefined)} num text-right ${className}`}
+      value={draft}
+      aria-invalid={!!invalid}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setDraft(faDigits(raw));
+        const iso = parseJalaliInput(raw);
+        if (iso) onChange(iso);
+        else if (raw.trim() === '') onChange('');
+      }}
+      onBlur={() => {
+        const iso = parseJalaliInput(draft);
+        if (iso) setDraft(isoToJalaliInput(iso));
+        onBlur?.(draft.trim() !== '' && !iso);
+      }}
+    />
+  );
+}
+
+const dateNote = (iso: string) => (
+  <>
+    {formatDate(iso)} · <span className="text-muted">میلادی {formatGregorian(iso)}</span>
+  </>
+);
+
+interface DateFieldProps {
+  label: string;
+  /** Gregorian «yyyy-mm-dd» ('' when empty). */
+  value: string;
+  onChange: (iso: string) => void;
+  help?: ReactNode;
+  hint?: string;
+  error?: string;
+  /** Latest allowed day, «yyyy-mm-dd». */
+  max?: string;
+}
+
+/** Date field in the Jalali calendar, with a «امروز» shortcut and the Gregorian date under it. */
+export function DateField({ label, value, onChange, help, hint, error, max }: DateFieldProps) {
+  const id = useId();
+  const [bad, setBad] = useState(false);
+  const late = !!(max && value && value > max);
+  const shown = bad ? DATE_FORMAT_ERROR : late ? `این تاریخ بعد از ${formatDate(max!)} است.` : error;
+  return (
+    <Shell label={label} help={help} hint={hint} error={shown} htmlFor={id} note={value ? dateNote(value) : 'تقویم شمسی'}>
+      <div className="relative">
+        <JalaliInput
+          id={id}
+          value={value}
+          invalid={!!shown}
+          className="pl-16"
+          onChange={(iso) => {
+            setBad(false);
+            onChange(iso);
+          }}
+          onBlur={setBad}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setBad(false);
+            onChange(todayIso());
+          }}
+          className="tap absolute left-1.5 top-1/2 -translate-y-1/2 rounded-md px-2 min-h-8 text-sm text-accent hover:bg-elevated"
+        >
+          امروز
+        </button>
+      </div>
+    </Shell>
+  );
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+/** ISO instant → the viewer's local «yyyy-mm-dd» and «HH:MM». */
+function localParts(iso: string): { day: string; time: string } {
+  const d = new Date(iso);
+  if (!iso || !Number.isFinite(d.getTime())) return { day: '', time: '' };
+  return { day: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}` };
+}
+function fromLocalParts(day: string, time: string): string {
+  if (!day) return '';
+  const [y, m, d] = day.split('-').map(Number);
+  const [h, min] = (time || '00:00').split(':').map(Number);
+  const t = new Date(y, m - 1, d, h || 0, min || 0);
+  return Number.isFinite(t.getTime()) ? t.toISOString() : '';
+}
+
+/**
+ * Date (Jalali, typed) and clock time side by side, for an instant stored as ISO (UTC).
+ * Only the controls — the caller keeps its own label and messages; `id` goes to the date.
+ */
+export function DateTimeInputs({ id, value, onChange, invalid, onBadDate }: { id?: string; value: string; onChange: (iso: string) => void; invalid?: boolean; onBadDate?: (bad: boolean) => void }) {
+  const { day, time } = localParts(value);
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
+      <JalaliInput id={id} value={day} invalid={invalid} onChange={(d) => onChange(fromLocalParts(d, time))} onBlur={onBadDate} />
+      <input
+        type="time"
+        dir="ltr"
+        aria-label="ساعت"
+        value={time}
+        onChange={(e) => onChange(fromLocalParts(day, e.target.value))}
+        className={`${controlBase}${border(invalid ? 'x' : undefined)} num`}
+      />
+    </div>
   );
 }
 

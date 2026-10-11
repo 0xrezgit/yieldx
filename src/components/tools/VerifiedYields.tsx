@@ -12,7 +12,8 @@ import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store'
 import { networkByName } from '../../lib/registry/networks';
 import { formatDate, formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { DataStatus } from '../ui/data-status';
-import { NumberField, SelectField, TextField } from '../ui/field';
+import { DateField, NumberField, SelectField } from '../ui/field';
+import { todayIso } from '../../lib/utils/jalali';
 import { Num } from '../ui/num';
 import { TokenLogo } from '../ui/token-logo';
 import { Empty, Metric, Pill, Segmented } from '../opportunities/parts';
@@ -182,7 +183,7 @@ function Row({ p, profit, fallback, rank, open, onToggle, explorer }: { p: Verif
             <span className={`text-base font-semibold ${profit && profit.net >= 0 ? 'text-success' : 'text-danger'}`}>
               <Num>{profit ? signedUsd(profit.net) : '—'}</Num>
             </span>
-            <span className="text-[11px] text-muted mt-0.5">
+            <span className="text-xs text-muted mt-0.5">
               <Num>{formatUSDCompact(p.tvlUsd)}</Num>
             </span>
           </span>
@@ -237,7 +238,7 @@ function Growth({ p }: { p: VerifiedPool }) {
       <h3 className="text-sm font-semibold text-primary">ماشین‌حساب رشد سپرده</h3>
       <div className="grid grid-cols-2 gap-3">
         <NumberField label="مبلغ سپرده" value={amount} onChange={(v) => setAmount(Number.isFinite(v) ? Math.max(0, v) : 0)} suffix="دلار" />
-        <TextField label="تاریخ ورود" type="date" value={from} onChange={setFrom} />
+        <DateField label="تاریخ ورود" value={from} onChange={setFrom} max={todayIso()} />
       </div>
       {state === 'loading' ? (
         <p className="text-xs text-secondary flex items-center gap-1.5">
@@ -354,7 +355,7 @@ function Detail({ p, profit, explorer }: { p: VerifiedPool; profit: Profit | nul
                         {' '}(<Num>{formatPercent((h.out / h.value) * 100, 0)}</Num>)
                       </>
                     )}
-                    {h.asWallet && <span className="block text-[11px] text-muted">به‌شرط برداشت به کیف پول ساده</span>}
+                    {h.asWallet && <span className="block text-xs text-muted">به‌شرط برداشت به کیف پول ساده</span>}
                   </td>
                   <td className="py-1.5">{h.feeBps === null ? '—' : <Num>{formatNumber(h.feeBps, 2)} bps</Num>}</td>
                 </tr>

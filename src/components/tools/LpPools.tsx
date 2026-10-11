@@ -168,7 +168,7 @@ function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: num
           <span className={`text-base font-semibold ${est.netUsd >= 0 ? 'text-success' : 'text-danger'}`}>
             <Num>{signed(est.netUsd)}</Num>
           </span>
-          <span className="text-[11px] text-muted mt-0.5">
+          <span className="text-xs text-muted mt-0.5">
             نقدینگی <Num>{formatUSDCompact(p.tvlUsd)}</Num>
           </span>
         </span>

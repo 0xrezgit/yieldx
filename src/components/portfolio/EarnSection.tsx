@@ -14,8 +14,10 @@ import { HORIZONS, type HorizonDays } from '../../lib/opportunity/policy';
 import { Segmented } from '../opportunities/parts';
 import { networkByKey, networkByName } from '../../lib/registry/networks';
 import { formatDate, formatNumber, formatPercent } from '../../lib/utils/formatting';
-import { NumberField, TextField } from '../ui/field';
+import { DateField, NumberField, TextField } from '../ui/field';
+import { todayIso } from '../../lib/utils/jalali';
 import { Num } from '../ui/num';
+import { useConfirm } from '../ui/confirm';
 import { btn, Chip, Panel, Pnl, QualityBadge, Stat, StatGrid, Usd } from './parts';
 
 const FAMILY_FA: Record<EarnFamily, string> = { lend: 'وام‌دهی', vault: 'خزانه', 'fixed-lend': 'نرخ ثابت', leverage: 'لوپ (اهرم)', lp: 'LP', borrow: 'وام‌گیری' };
@@ -52,7 +54,7 @@ function Money({ label, onAdd, needsDebt }: { label: string; onAdd: (e: EarnEven
           ))}
         </select>
       </label>
-      <TextField label="تاریخ" type="date" value={date} onChange={setDate} />
+      <DateField label="تاریخ" value={date} onChange={setDate} max={todayIso()} />
       <TextField label="توکن" value={token} onChange={setToken} ltr />
       <NumberField label="مقدار توکن" value={amount} onChange={setAmount} />
       <NumberField label="نرخ دلاری هر توکن در آن زمان" value={rate} onChange={setRate} suffix="دلار" note="خالی = نامعلوم" />
@@ -81,6 +83,7 @@ function Money({ label, onAdd, needsDebt }: { label: string; onAdd: (e: EarnEven
 
 function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; v: EarnValuation; save: (p: EarnPosition) => void; remove: () => void; byKey: Map<string, Opportunity>; alternatives: (capital: number, days: HorizonDays) => { e: import('../../types/opportunity').Estimate; o: Opportunity }[] }) {
   const [days, setDays] = useState<HorizonDays>(30);
+  const [confirmDialog, confirm] = useConfirm();
   const advice = useMemo(() => switchAdvice(p, v, alternatives(Math.max(0, v.netValueUsd), days), days), [p, v, days, alternatives]);
   const linked = p.opportunityKey ? byKey.has(p.opportunityKey) : false;
   const set = (x: Partial<EarnPosition>) => save({ ...p, ...x });
@@ -213,7 +216,12 @@ function Detail({ p, v, save, remove, byKey, alternatives }: { p: EarnPosition; 
         <p className="text-xs text-sx-faint">مقایسه با بهترین جایگزین برای همین مبلغ و مدت.</p>
       </div>
 
-      <button type="button" className={`${btn.ghost} self-start text-sx-red`} onClick={() => confirm('این پوزیشن حذف شود؟') && remove()}>
+      {confirmDialog}
+      <button
+        type="button"
+        className={`${btn.ghost} self-start text-sx-red`}
+        onClick={async () => (await confirm({ title: 'این پوزیشن حذف شود؟', body: 'پوزیشن و همه‌ی رویدادهای ثبت‌شده‌ی آن پاک می‌شوند. این کار برگشت‌پذیر نیست.', confirmLabel: 'حذف پوزیشن' })) && remove()}
+      >
         <Trash2 size={15} aria-hidden /> حذف پوزیشن
       </button>
     </div>
@@ -254,7 +262,7 @@ function AddForm({ draft, onSave, onCancel }: { draft: EarnPosition | null; onSa
         <TextField label="بازار یا خزانه" value={market} onChange={setMarket} />
         <TextField label={family === 'leverage' ? 'دارایی وثیقه' : 'دارایی'} value={asset} onChange={setAsset} ltr />
         {needsDebt && <TextField label="دارایی بدهی" value={debt} onChange={setDebt} ltr />}
-        <TextField label="تاریخ ورود" type="date" value={date} onChange={setDate} />
+        <DateField label="تاریخ ورود" value={date} onChange={setDate} max={todayIso()} />
         <NumberField label={`مقدار ${asset || 'دارایی'} واریزشده`} value={amount} onChange={setAmount} />
         <NumberField label="نرخ دلاری هر واحد در آن زمان" value={price} onChange={setPrice} suffix="دلار" note="خالی = نامعلوم؛ صفر فرض نمی‌شود." />
         {needsDebt && <NumberField label={`مقدار ${debt || 'بدهی'} وام‌گرفته`} value={borrowed} onChange={setBorrowed} />}

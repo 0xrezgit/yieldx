@@ -8,6 +8,7 @@ import { analyzeScenario } from '../../lib/analysis';
 import { buildInsights, buildVerdict } from '../../lib/risk/advisor';
 import { formatDate, formatPercent } from '../../lib/utils/formatting';
 import { Num } from '../../components/ui/num';
+import { useConfirm } from '../../components/ui/confirm';
 import { AssetIdentity } from '../../components/ui/asset-identity';
 import { button, EmptyState, FinancialNumber } from '../../components/ui/financial';
 
@@ -16,6 +17,7 @@ const dot = { go: 'bg-success', caution: 'bg-warning', stop: 'bg-danger' } as co
 /** Saved what-if analyses — clearly apart from real, recorded positions (پرتفوی من). */
 export default function HistoryPage() {
   const { items, loading, remove } = useScenarios();
+  const [confirmDialog, confirm] = useConfirm();
   const rows = useMemo(
     () =>
       items.map((s) => {
@@ -27,6 +29,7 @@ export default function HistoryPage() {
 
   return (
     <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-6 flex flex-col gap-5">
+      {confirmDialog}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="page-title">سناریوها</h1>
@@ -72,7 +75,7 @@ export default function HistoryPage() {
                 <span className="font-semibold text-primary truncate group-hover:text-accent">{s.name}</span>
                 {s.data.marketName && <AssetIdentity symbol={s.data.marketName} icon={s.data.marketIcon} chain={s.data.chain} protocol={s.data.protocol} maturity={s.data.maturity} size={24} />}
               </Link>
-              <button type="button" onClick={() => confirm(`«${s.name}» حذف شود؟`) && remove(s.id)} className="tap grid place-items-center size-10 rounded-lg text-secondary hover:text-danger" aria-label={`حذف سناریوی ${s.name}`}>
+              <button type="button" onClick={async () => (await confirm({ title: `سناریوی «${s.name}» حذف شود؟`, body: 'این کار برگشت‌پذیر نیست.', confirmLabel: 'حذف سناریو' })) && remove(s.id)} className="tap grid place-items-center size-10 rounded-lg text-secondary hover:text-danger" aria-label={`حذف سناریوی ${s.name}`}>
                 <Trash2 size={16} aria-hidden />
               </button>
             </div>
