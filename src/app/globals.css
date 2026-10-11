@@ -137,11 +137,13 @@ body {
   unicode-bidi: isolate;
 }
 
-/* «دلار» after an amount: smaller and lighter than the figure, so the number leads. */
+/*
+ * «دلار» after an amount: the figure's own colour and weight. In running text (up to 16px)
+ * it is the text's size; only in large figures — headlines, KPI cards — it is smaller:
+ * 16px beside an 18–22px figure, 0.7em above that. Never below the text (≥ 12px).
+ */
 .usd-unit {
-  font-size: max(10px, 0.68em);
-  font-weight: 400;
-  color: var(--c-secondary);
+  font-size: max(0.7em, min(1em, 16px));
 }
 
 /* Text that must keep Latin digits (contract addresses, hashes). */
