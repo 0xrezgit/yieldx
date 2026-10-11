@@ -23,7 +23,6 @@ import { ApyOutlook } from '../results/ApyOutlook';
 import { SensitivityPanel } from '../results/SensitivityPanel';
 import { MarketBrief } from '../results/MarketBrief';
 import { AlertRules } from '../alerts/AlertRules';
-import type { ReadyDashboard } from './useDashboard';
 
 /** Before a market is chosen: what the page does, and how to start. No sample result is shown as real. */
 export function StartState({ onManual }: { onManual: () => void }) {
@@ -66,47 +65,6 @@ export function LoadingResult() {
   );
 }
 
-/** Identity, source and freshness of the selected market — always above the result. */
-export function MarketHeader({ d }: { d: ReadyDashboard }) {
-  const { p, md } = d;
-  const meta = p.dataMeta;
-  const proto = protocolIdentity(p.protocol);
-  return (
-    <section className="flex flex-col gap-2 min-w-0" aria-label="بازار انتخاب‌شده">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {p.manualEntry ? (
-          <div className="flex flex-col">
-            <span className="text-lg font-semibold text-primary">{p.marketName || 'بازار دستی'}</span>
-            <span className="text-sm text-secondary">
-              <bdi dir="ltr">{proto.name}</bdi> · سررسید {formatDate(p.maturity)}
-            </span>
-          </div>
-        ) : (
-          <AssetIdentity symbol={p.marketName || p.marketId} icon={p.marketIcon} chain={p.chain} protocol={p.protocol} platform={p.platform} maturity={p.maturity} size={48} />
-        )}
-        {!p.manualEntry && md.live && (
-          <button type="button" onClick={d.refresh} disabled={md.state === 'loading'} className={button.ghost}>
-            <RefreshCw size={14} className={md.state === 'loading' ? 'animate-spin' : ''} aria-hidden /> به‌روزرسانی داده
-          </button>
-        )}
-      </div>
-      <div className="flex flex-col gap-0.5">
-        {p.manualEntry ? (
-          <DataStatus source="manual" />
-        ) : meta ? (
-          <DataStatus source="api" sourceName={`API ${proto.name}`} fetchedAt={meta.fetchedAt} sourceUpdatedAt={meta.sourceUpdatedAt} stale={md.state === 'error'} />
-        ) : (
-          <p className="text-xs text-warning">داده‌ی قدیمی؛ به‌روزرسانی کنید.</p>
-        )}
-        {d.fromScenario && <p className="text-xs text-info">سناریوی ذخیره‌شده</p>}
-        <p className="text-xs text-muted">
-          قیمت PT و YT بر حسب <bdi dir="ltr">{meta?.accountingSymbol || 'دارایی پایه'}</bdi>؛ مبالغ به دلار آمریکا
-          {meta?.missing?.length ? <> · <span className="text-warning">ناموجود در API: {meta.missing.map(missingLabel).join('، ')}</span></> : null}
-        </p>
-      </div>
-    </section>
-  );
-}
 
 const MISSING_FA: Record<string, string> = {
   underlyingPrice: 'قیمت دلاری دارایی',
@@ -232,84 +190,6 @@ function LoopHealth({ p, a }: { p: ScenarioParams; a: Analysis }) {
   );
 }
 
-/** Main warnings, close to the result: what, which market, when checked, where to read more. */
-export function Warnings({ d }: { d: ReadyDashboard }) {
-  const { p, insights, verdict, triggered } = d;
-  const checked = p.dataMeta?.fetchedAt ? formatDateTime(p.dataMeta.fetchedAt) : null;
-  return (
-    <section className="flex flex-col gap-2" aria-labelledby="warn-title">
-      <h2 id="warn-title" className="text-sm font-semibold text-secondary">
-        هشدارهای <bdi dir="ltr">{p.marketName || 'این بازار'}</bdi>
-        {checked && <span className="font-normal text-muted"> · بررسی‌شده با داده‌ی {checked}</span>}
-      </h2>
-      <InsightList insights={insights} verdict={verdict} triggered={triggered} detailsHref="#details" />
-    </section>
-  );
-}
 
 type Section = 'compare' | 'exit' | 'points' | 'alerts';
 
-/** Details in tabs: comparison, exit plan, points & assumptions, my alerts. Page scroll only — no nested scroll areas. */
-export function ResultSections({ d }: { d: ReadyDashboard }) {
-  const { p, analysis: a, verdict, insights, msg } = d;
-  const [tab, setTab] = useState<Section>('compare');
-  const base = useId();
-  const tabs: { id: Section; label: ReactNode }[] = [
-    { id: 'compare', label: 'مقایسه' },
-    { id: 'exit', label: 'برنامه خروج' },
-    { id: 'points', label: 'پوینت و فرض‌ها' },
-    { id: 'alerts', label: <>هشدارهای من{d.triggered.length > 0 && <Badge tone="accent">{formatNumber(d.triggered.length, 0)}</Badge>}</> },
-  ];
-  return (
-    <section className="flex flex-col gap-4 min-w-0" id="details">
-      <div role="tablist" aria-label="جزئیات" className="tabs strip -mx-[var(--space-page-x)] px-[var(--space-page-x)] lg:mx-0 lg:px-0">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            id={`${base}-${t.id}`}
-            role="tab"
-            type="button"
-            aria-selected={tab === t.id}
-            aria-controls={`${base}-${t.id}-panel`}
-            onClick={() => setTab(t.id)}
-            onKeyDown={(e) => {
-              const i = tabs.findIndex((x) => x.id === tab);
-              // RTL: the right arrow goes to the previous tab.
-              if (e.key === 'ArrowLeft') setTab(tabs[(i + 1) % tabs.length].id);
-              if (e.key === 'ArrowRight') setTab(tabs[(i - 1 + tabs.length) % tabs.length].id);
-            }}
-            tabIndex={tab === t.id ? 0 : -1}
-            className="tap text-[15px]"
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div role="tabpanel" id={`${base}-${tab}-panel`} aria-labelledby={`${base}-${tab}`} className="flex flex-col gap-4 min-w-0">
-        {tab === 'compare' && (
-          <>
-            <p className="text-sm text-secondary">نتیجه‌ی نقدی تخمینی هر استراتژی تا سررسید با سرمایه‌ی <Num>{formatUSD(p.capital, 0)}</Num>. ایردراپ در این مقایسه حساب نشده است.</p>
-            <StrategyList p={p} a={a} verdict={verdict} insights={insights} set={d.set} msg={msg} columns={2} />
-            <MarketBrief p={p} a={a} />
-          </>
-        )}
-        {tab === 'exit' && (a.exit ? <ExitPlanCard p={p} a={a} set={d.set} /> : <p className="text-sm text-secondary">برای برنامه‌ی خروج، ورودی‌های قرمز را اصلاح کنید.</p>)}
-        {tab === 'points' && (
-          <>
-            <PointsPanel p={p} a={a} set={d.set} />
-            <ApyOutlook p={p} a={a} />
-            <SensitivityPanel p={p} days={a.days} />
-          </>
-        )}
-        {tab === 'alerts' && (
-          <div className="sx-card p-5">
-            <AlertRules analysis={a} alerts={d.alerts} />
-          </div>
-        )}
-      </div>
-      <p className="text-xs text-muted">
-        اعداد تخمینی‌اند و توصیه‌ی مالی نیستند. {protocols[p.protocol].hasClmm ? '' : `${protocols[p.protocol].name} نقدینگی CLMM ندارد؛ CLMM فقط برای مقایسه نمایش داده می‌شود.`}
-      </p>
-    </section>
-  );
-}

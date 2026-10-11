@@ -69,3 +69,8 @@ export function isAppRoot(url: string): boolean {
     return true;
   }
 }
+
+/** The calculator in «ابزارها», opened on one market and one position type. */
+export function calculatorLink(p: { protocol: string; market: string; name?: string | null; mode: 'pt' | 'yt' | 'lp' }): string {
+  return `/tools?${new URLSearchParams({ tab: 'calc', protocol: p.protocol, market: p.market, ...(p.name ? { name: p.name } : {}), mode: p.mode })}`;
+}

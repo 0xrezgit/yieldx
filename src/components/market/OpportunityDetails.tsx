@@ -8,7 +8,7 @@ import type { Evaluated } from '../../lib/market/analysis';
 import { HORIZONS, type HorizonDays } from '../../lib/opportunity/policy';
 import { PLACEMENT_LABEL } from '../../lib/market/labels';
 import { earnFromOpportunity } from '../../lib/portfolio/earn';
-import { isAppRoot } from '../../lib/market/links';
+import { calculatorLink, isAppRoot } from '../../lib/market/links';
 import { formatAgo, formatDate, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
 import { StepList } from './ActionPlan';
@@ -74,9 +74,7 @@ function Campaigns({ row, e }: { row: Evaluated; e: Estimate }) {
 
 function calculatorHref(o: Opportunity): string | null {
   if (o.family !== 'pt' && o.family !== 'yt') return null;
-  const protocol = o.protocol.id;
-  const q = new URLSearchParams({ protocol, market: o.market.id, name: o.market.name, ...(o.maturity ? { maturity: o.maturity } : {}) });
-  return `/dashboard?${q}`;
+  return calculatorLink({ protocol: o.protocol.id, market: o.market.id, name: o.market.name, mode: o.family });
 }
 
 const action = 'tap inline-flex items-center gap-1.5 rounded-lg border border-control px-3 min-h-10 text-sm text-primary hover:bg-elevated';
@@ -198,7 +196,7 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
       <div className="flex flex-wrap gap-2">
         {calc && (
           <Link href={calc} className={action}>
-            <Calculator size={14} aria-hidden /> محاسبه‌گر PT و YT
+            <Calculator size={14} aria-hidden /> ماشین‌حساب
           </Link>
         )}
         {earn && (

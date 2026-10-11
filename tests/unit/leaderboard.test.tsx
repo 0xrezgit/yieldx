@@ -111,13 +111,17 @@ describe('leaderYt', () => {
     expect(sp.pnl).toBeGreaterThan(ex.pnl);
   });
 
-  it('keeps broken data and points-only YTs out of the dollar ranking, ranks a suspect one on its conservative base', async () => {
+  it('keeps broken data out, keeps a points-only YT flagged (points at a cost), ranks a suspect one on its conservative base', async () => {
     const { ytExcluded } = await import('../../src/lib/risk/leaderboard');
     const broken = listing({ id: 'b', baseAPY: 27, impliedAPY: 4.6, baseHealth: { status: 'broken', reasons: ['x'], conservativePct: null, pointsOnly: false } });
     const points = listing({ id: 'p', baseAPY: 0, baseHealth: { status: 'ok', reasons: [], conservativePct: 0, pointsOnly: true } });
     const suspect = listing({ id: 's', baseAPY: 12, impliedAPY: 8, baseHealth: { status: 'suspect', reasons: ['jump'], conservativePct: 6, pointsOnly: false } });
-    const rows = leaderYt([broken, points, suspect], s, { capital: 1000 }, false);
-    expect(rows.map((r) => r.m.id)).toEqual(['s']);
+    const all = leaderYt([broken, points, suspect], s, { capital: 1000 }, false);
+    expect(all.map((r) => r.m.id)).toEqual(['p', 's']);
+    expect(all[0].pointsOnly).toBe(true);
+    // Never in the profit list; a candidate for points at a cost.
+    expect(ytGoalRows(all, 'profit').map((r) => r.m.id)).not.toContain('p');
+    const rows = all.filter((r) => !r.pointsOnly);
     const atSix = leaderYt([listing({ id: 's', baseAPY: 6, impliedAPY: 8 })], s, { capital: 1000 }, false)[0];
     expect(rows[0].pnl).toBeCloseTo(atSix.pnl, 9);
     expect(rows[0].confidence).toBe('suspect');
@@ -340,7 +344,7 @@ describe('entry links', () => {
   it('each ranked row and suggestion carries its entry link', async () => {
     const { renderToString } = await import('react-dom/server');
     const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
-    const markets = [listing({ id: '1-0x3ffdf143cbe1e594fba183e2b9035eb027a732ec', impliedAPY: 5, baseAPY: 9 }), listing({ id: 'base-0x0000000000000000000000000000000000000abc', protocol: 'spectra', name: 'stUSR', impliedAPY: 5, baseAPY: 9 })];
+    const markets = [listing({ id: '1-0x3ffdf143cbe1e594fba183e2b9035eb027a732ec', impliedAPY: 5, baseAPY: 9, liquidity: 5e9 }), listing({ id: 'base-0x0000000000000000000000000000000000000abc', protocol: 'spectra', name: 'stUSR', impliedAPY: 5, baseAPY: 9, liquidity: 5e9 })];
     const html = renderToString(<LeaderRanking markets={markets} capital={1000} strategy="yt" />);
     expect(html).toContain('href="https://app.pendle.finance/trade/markets/0x3ffdf143cbe1e594fba183e2b9035eb027a732ec/swap?view=yt&amp;chain=ethereum"');
     expect(html).toContain('ورود به بازار');
@@ -362,7 +366,9 @@ describe('entry links', () => {
     const { renderToString } = await import('react-dom/server');
     const { LeaderRanking } = await import('../../src/components/market/LeaderRanking');
     const html = renderToString(<LeaderRanking markets={[listing({ name: 'thinYT', impliedAPY: 1, baseAPY: 5, liquidity: 200_000 })]} capital={1000} strategy="yt" />);
-    expect(html).toContain('نیازمند قیمت اجرایی');
+    // Too shallow for this amount: counted in one line, never listed.
+    expect(html).toContain('بازار برای این مبلغ عمق کافی ندارند');
+    expect(html).not.toContain('نیازمند قیمت اجرایی');
     expect(html).toMatch(/بیشترین سود دلاری<\/span><span class="[^"]*"><bdi dir="ltr" class="num ">۰<\/bdi>/);
   });
 });

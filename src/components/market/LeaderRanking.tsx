@@ -17,7 +17,7 @@ import { defaultScreenSettings, type OpportunityListing } from '../../lib/risk/o
 import { PT_LOOP_POLICY, temporaryBase as isTemporaryBase } from '../../lib/opportunity/policy';
 import thresholds from '../../config/thresholds.json';
 import { isStable } from '../../lib/risk/opportunities';
-import { listingLink, marketAddress } from '../../lib/market/links';
+import { calculatorLink, listingLink, marketAddress } from '../../lib/market/links';
 import { loopLeaderSteps, ytLeaderSteps } from '../../lib/market/steps';
 import { StepList, StepStrip } from './ActionPlan';
 import { Count, Facts, primaryAction, Rank, secondaryAction, Stats, Tags } from './RowParts';
@@ -51,7 +51,7 @@ const GOAL_TITLE: Record<YtGoal, string> = {
 const GOAL_NOTE: Record<YtGoal, string> = {
   profit: 'فقط بازارهایی که با نرخ بازار ثابت در سود خارج می‌شوند؛ روز خروج روزی است که سود بیشترین است (دست‌کم یک هفته یا یک‌چهارم زمان تا سررسید). ۱۵ بازار.',
   free: 'بازارهای پوینتی که تا روزی بدون ضرر نقدی می‌شود نگه داشت؛ خروج در آخرین روز بی‌ضرر، و ترتیب با بیشترین اکسپوژر پوینت (دلار-روز × ضریب) به ازای سرمایه. ۱۵ بازار.',
-  paid: 'بازارهای پوینتی نگه‌داشته تا سررسید، ارزان‌ترین هزینه به ازای هر دلار-روز اکسپوژر (÷ ضریب YT) اول. ضرر نقدی همان بهای پوینت است. ۱۵ بازار.',
+  paid: 'بازارهای پوینتی نگه‌داشته تا سررسید، ارزان‌ترین هزینه به ازای هر دلار-روز اکسپوژر (÷ ضریب YT) اول. ضرر نقدی همان بهای پوینت است؛ بازارهای «فقط پوینت» هم این‌جا هستند. ۴۵ بازار.',
 };
 
 /** Below this health a loop is shown but never suggested. */
@@ -90,7 +90,7 @@ export function EntryLink({ m, strategy, primary = false }: { m: OpportunityList
   );
 }
 
-const calcHref = (m: OpportunityListing) => `/dashboard?${new URLSearchParams({ protocol: m.protocol, market: m.id, name: m.name, maturity: m.maturity })}`;
+const calcHref = (m: OpportunityListing, strategy: LeaderStrategy) => calculatorLink({ protocol: m.protocol, market: m.id, name: m.name, mode: strategy === 'yt' ? 'yt' : 'pt' });
 
 const leaderSteps = (row: LeaderRow, strategy: LeaderStrategy) => {
   const { m } = row;
@@ -159,6 +159,7 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
             )}
             {row.tooBig && <Pill tone="danger">بزرگ نسبت به نقدینگی</Pill>}
             {row.needsQuote && <Pill tone="warning">برآورد، بدون قیمت اجرایی</Pill>}
+            {row.pointsOnly && <Pill tone="info">فقط پوینت — بازده دلاری ندارد</Pill>}
             {strategy === 'loop' && row.health != null && row.health < MIN_HEALTH && <Pill tone="warning">نزدیک لیکوییدشدن</Pill>}
             {strategy === 'yt' && temporaryBase(m) && <Pill tone="warning">بازده پایه احتمالاً موقت</Pill>}
             {!isStable(m) && <Pill>وابسته به قیمت دارایی</Pill>}
@@ -194,11 +195,11 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
               <Landmark size={15} aria-hidden /> وام
             </a>
           )}
-          <Link href={calcHref(m)} className={secondaryAction} aria-label="محاسبه‌گر">
+          <Link href={calcHref(m, strategy)} className={secondaryAction} aria-label="ماشین‌حساب">
             <Calculator size={15} aria-hidden />
           </Link>
           <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className={secondaryAction}>
-            <ListOrdered size={15} aria-hidden /> {strategy === 'yt' ? 'شبیه‌سازی و قدم‌ها' : 'قدم‌به‌قدم'}
+            <ListOrdered size={15} aria-hidden /> {strategy === 'yt' ? 'شبیه‌سازی' : 'قدم‌به‌قدم'}
             <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
           </button>
         </div>
@@ -412,7 +413,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       </section>
       <div className="flex flex-col gap-1.5 text-xs">
         <p className="text-secondary leading-6">
-          {strategy === 'yt' ? <>خرید <bdi dir="ltr">YT</bdi>، فروش در بهترین روز؛ بدون ارزش پوینت.</> : <>لوپ <bdi dir="ltr">PT</bdi> تا سررسید روی بازار وام واقعی.</>}
+          {strategy === 'yt' ? <>خرید <bdi dir="ltr">YT</bdi> با سه هدف؛ سود دلاری بدون ارزش پوینت حساب می‌شود.</> : <>لوپ <bdi dir="ltr">PT</bdi> تا سررسید روی بازار وام واقعی.</>}
         </p>
         <ul className="meta text-muted" aria-label="خلاصه">
           <li>
@@ -458,17 +459,14 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
         </>
       )}
       {waiting.length > 0 && (
-        <Excluded
-          title="نیازمند قیمت اجرایی"
-          note="برای استخر بزرگ است؛ فقط با قیمت اجرایی عدد می‌گیرد."
-          list={waiting.map((r) => ({ m: r.m, reasons: [] }))}
-          strategy={strategy}
-        />
+        // Too large for what the market can trade at this amount (and no executable quote): counted, not listed.
+        <p className="text-xs text-muted">
+          <Num>{formatNumber(waiting.length, 0)}</Num> بازار برای این مبلغ عمق کافی ندارند و نشان داده نمی‌شوند.
+        </p>
       )}
       {board && board.noLender.length > 0 && <NoLender list={board.noLender} />}
       {board && board.broken.length > 0 && <Excluded title="نرخ بازار PT قابل اتکا نیست" note="قیمت PT و نرخ اعلامی نمی‌خوانند." list={board.broken} strategy={strategy} />}
       {excluded && excluded.broken.length > 0 && <Excluded title="داده‌ی بازار خراب" note="بازده یا نرخ اعلامی با داده‌ی خود پروتکل نمی‌خواند." list={excluded.broken} strategy={strategy} />}
-      {excluded && excluded.pointsOnly.length > 0 && <Excluded title="فقط پوینت" note="بازده فقط پوینت است." list={excluded.pointsOnly.map((m) => ({ m, reasons: [] }))} strategy={strategy} />}
     </div>
     </PlanContext.Provider>
   );

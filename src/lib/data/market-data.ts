@@ -282,3 +282,11 @@ export function markManual(p: ScenarioParams, key: keyof ScenarioParams): Scenar
 }
 
 const round = (x: number, d: number) => Math.round(x * 10 ** d) / 10 ** d;
+
+/**
+ * Applies a fetched market only if it is still the one selected — a late answer for a
+ * market (or protocol) the user has already left is dropped. Pure, for tests.
+ */
+export function applyIfCurrent(prev: ScenarioParams, protocol: ProtocolId, marketId: string, apply: (p: ScenarioParams) => ScenarioParams): ScenarioParams {
+  return prev.protocol === protocol && prev.marketId === marketId ? apply(prev) : prev;
+}

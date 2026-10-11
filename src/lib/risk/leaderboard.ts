@@ -13,7 +13,7 @@ import { ytFees, ytMinHold } from '../calculators/yt-plan';
 export { ytMinHold };
 
 /**
- * Dollar leaderboards kept beside the market analysis («رتبه‌بندی دلاری YT» and
+ * Dollar leaderboards kept beside the market analysis («YT: سود و پوینت» and
  * «رتبه‌بندی دلاری Loop PT»): what a given capital earns or loses in each market.
  *
  * - A PT loop is built only on a real lending market that takes this exact PT as
@@ -80,6 +80,8 @@ export interface LeaderRow {
   entryPrice?: number;
   /** YT only: the exposure bought as a share of the pool's liquidity; null when the liquidity is unknown. */
   poolShare?: number | null;
+  /** YT only: the base is 0% on a points market — the YT pays in points alone. */
+  pointsOnly?: boolean;
   /**
    * YT only, by the buyer's goal: the shortest hold considered; the last loss-free exit
    * (points without a cash loss); and the hold to maturity (points at a cost). Market rate
@@ -277,13 +279,17 @@ export function ytBaseOf(m: OpportunityListing): { basePct: number; capPct: numb
 export type YtGoal = 'profit' | 'free' | 'paid';
 
 /**
- * The YT board by the buyer's goal, at most `n` markets each:
+ * The YT board by the buyer's goal, at most `n` markets each (`YT_GOAL_SIZE`):
  * - profit: a dollar profit at its best exit (from the minimum hold on), biggest first;
  * - free: points markets with a loss-free exit, the most exposure (dollar-days) for the money first;
- * - paid: points markets held to maturity, cheapest exposure per dollar-day (÷ YT multiplier) first.
+ * - paid: points markets held to maturity, cheapest exposure per dollar-day (÷ YT multiplier) first;
+ *   points-only markets (0% base, the whole capital buys points) are among them.
  * Each row is shown on its own goal's exit (day, cash result).
  */
-export function ytGoalRows(rows: LeaderRow[], goal: YtGoal, by: RankBy = 'total', n = 15): LeaderRow[] {
+/** Markets listed per goal: 15, 15 — and 45 for points at a cost, the widest choice. */
+export const YT_GOAL_SIZE: Record<YtGoal, number> = { profit: 15, free: 15, paid: 45 };
+
+export function ytGoalRows(rows: LeaderRow[], goal: YtGoal, by: RankBy = 'total', n = YT_GOAL_SIZE[goal]): LeaderRow[] {
   const capitalOf = (r: LeaderRow) => (r.pnlPercent !== 0 ? (r.pnl / r.pnlPercent) * 100 : NaN);
   const view = (r: LeaderRow, day: number, cash: number): LeaderRow => {
     const cap = capitalOf(r);
@@ -291,7 +297,7 @@ export function ytGoalRows(rows: LeaderRow[], goal: YtGoal, by: RankBy = 'total'
   };
   if (goal === 'profit') {
     const key = (r: LeaderRow) => (by === 'total' ? r.pnl : r.perDay);
-    return rows.filter((r) => r.pnl > 0).sort((a, b) => key(b) - key(a)).slice(0, n);
+    return rows.filter((r) => r.pnl > 0 && !r.pointsOnly).sort((a, b) => key(b) - key(a)).slice(0, n);
   }
   const points = rows.filter((r) => r.m.hasPoints && r.goals);
   if (goal === 'free') {
@@ -326,7 +332,8 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
   for (const m of markets) {
     if (!eligible(m, s) || m.baseAPY === null || !Number.isFinite(m.baseAPY)) continue;
     if (pointsOnly && !m.hasPoints) continue;
-    if (m.baseHealth?.pointsOnly || m.baseHealth?.status === 'broken' || m.impliedHealth?.status === 'broken') continue;
+    // A points-only market (0% base) earns no dollars but is a way to buy points: it is kept, flagged.
+    if (m.baseHealth?.status === 'broken' || m.impliedHealth?.status === 'broken') continue;
     const D = m.daysToMaturity;
     const multiplier = m.points?.ytMultiplier ?? m.ytMultiplier ?? 1;
     const q = i.quotes?.[leaderQuoteKey(m.id, 'yt', usdQ)];
@@ -413,6 +420,7 @@ export function leaderYt(markets: OpportunityListing[], s: ScreenSettings, i: Le
       scenarios,
       ...(entryPrice !== undefined ? { entryPrice } : {}),
       poolShare: m.liquidity && m.liquidity > 0 ? best.notional / m.liquidity : null,
+      ...(m.baseHealth?.pointsOnly ? { pointsOnly: true } : {}),
       ...(entryPrice !== undefined ? { confidence: 'executable' as const } : doubts.length ? { confidence: 'suspect' as const } : {}),
       ...(spread.length > 1 ? { range: { low: Math.min(...spread), high: Math.max(...spread) } } : {}),
       ...(doubts.length ? { doubts } : {}),

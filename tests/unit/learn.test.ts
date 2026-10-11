@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GLOSSARY, WALKTHROUGHS } from '../../src/lib/learn/content';
 import { COMPARE, LESSONS } from '../../src/lib/learn/lessons';
 
-const TOOL_TABS = ['yt', 'calc', 'lp', 'borrow', 'verified'];
+const TOOL_TABS = ['calc', 'lp', 'borrow', 'verified'];
 
 /** Every in-app link the learn section points to resolves to a real page or tab. */
 function resolves(href: string): boolean {
