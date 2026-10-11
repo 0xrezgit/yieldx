@@ -33,13 +33,6 @@ export default function HistoryPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="page-title">سناریوها</h1>
-          <p className="text-sm text-secondary max-w-2xl">
-            تحلیل‌های «چه می‌شد اگر» که ذخیره کرده‌اید. سناریو معامله‌ی واقعی نیست؛ خریدهای واقعی در{' '}
-            <Link href="/portfolio" className="text-accent underline underline-offset-4">
-              پرتفوی من
-            </Link>{' '}
-            ثبت می‌شوند.
-          </p>
         </div>
         {rows.length > 0 && (
           <Link href="/dashboard" className={button.primary}>

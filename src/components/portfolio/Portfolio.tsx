@@ -452,7 +452,6 @@ export default function Portfolio() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="page-title">پرتفوی من</h1>
-          <p className="page-sub">ارزش امروز و سود خریدهایی که ثبت کرده‌اید.</p>
           <span className="text-xs text-sx-faint inline-flex items-center gap-1.5">
             {refreshing ? <Loader2 size={12} className="animate-spin" aria-hidden /> : <span className={`size-1.5 rounded-full ${updatedAt ? 'bg-sx-green' : 'bg-sx-faint'}`} aria-hidden />}
             {updatedAt ? <>به‌روز {formatAgo(updatedAt)}</> : views.length ? 'در حال دریافت قیمت‌ها' : 'بدون پوزیشن'}

@@ -186,7 +186,6 @@ export default function Tools() {
       <header className="flex items-start justify-between gap-3">
         <div className="flex flex-col">
           <h1 className="page-title">ابزارها</h1>
-          <p className="page-sub">برای وقتی که می‌خواهید یک معامله را خودتان دقیق حساب کنید.</p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <button type="button" onClick={refresh} className="tap inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-elevated">

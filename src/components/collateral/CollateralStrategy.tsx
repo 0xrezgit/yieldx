@@ -309,7 +309,6 @@ export default function CollateralStrategy() {
       <header className="flex items-start justify-between gap-3">
         <div className="flex flex-col">
           <h1 className="page-title">وام با وثیقه</h1>
-          <p className="page-sub max-w-2xl">دارایی‌تان (مثلاً BTC) را نگه دارید، با وثیقه‌اش دلار وام بگیرید و آن دلار را در بهترین فرصت بگذارید. جدا از رتبه‌بندی تحلیل بازار.</p>
         </div>
         <button type="button" onClick={m.refresh} disabled={m.refreshing} className="tap shrink-0 inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-9 text-xs font-medium text-muted hover:text-primary hover:bg-elevated disabled:opacity-60" aria-label="به‌روزرسانی داده‌ها">
           <RefreshCw size={14} className={m.refreshing ? 'animate-spin' : ''} aria-hidden />

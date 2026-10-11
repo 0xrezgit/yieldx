@@ -23,9 +23,6 @@ export default function LearnPage() {
     <main className="sx max-w-5xl mx-auto px-[var(--space-page-x)] py-6 lg:py-8 flex flex-col gap-5">
       <header className="flex flex-col gap-1">
         <h1 className="page-title">آموزش</h1>
-        <p className="page-sub max-w-2xl">
-          یک روش را انتخاب کنید: پول از کجا می‌آید، فرمول و یک مثال عددی، YieldX چطور سود خالص دلاری را می‌سازد و قبل از ورود چه چیزی را خودتان چک کنید.
-        </p>
       </header>
 
       <nav aria-label="بخش‌های دیگر" className="flex flex-wrap gap-2">
