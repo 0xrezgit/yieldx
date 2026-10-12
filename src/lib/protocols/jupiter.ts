@@ -18,13 +18,13 @@ interface JupiterToken {
  * up to 100 mints). Best-effort: returns an empty map if Jupiter is unreachable,
  * so market data still loads without logos.
  */
-export async function fetchSolanaTokens(mints: string[]): Promise<Map<string, SolanaToken>> {
+export async function fetchSolanaTokens(mints: string[], fresh = false): Promise<Map<string, SolanaToken>> {
   const out = new Map<string, SolanaToken>();
   const unique = [...new Set(mints.filter(Boolean))].slice(0, 100);
   if (!unique.length) return out;
   try {
     const res = await fetch(`${protocols.exponent.tokenApi}?query=${unique.join(',')}`, {
-      next: { revalidate: 300 },
+      ...(fresh ? { cache: 'no-store' } : { next: { revalidate: 300 } }),
       headers: { accept: 'application/json' },
     } as RequestInit);
     if (!res.ok) return out;
@@ -32,7 +32,8 @@ export async function fetchSolanaTokens(mints: string[]): Promise<Map<string, So
     for (const t of Array.isArray(list) ? list : []) {
       out.set(t.id, {
         symbol: t.symbol ?? null,
-        icon: typeof t.icon === 'string' && t.icon.startsWith('https://') ? t.icon : null,
+        // arweave.net is unreachable on some networks; ardrive.net serves the same files.
+        icon: typeof t.icon === 'string' && t.icon.startsWith('https://') ? t.icon.replace(/^https:\/\/arweave\.net\//, 'https://ardrive.net/') : null,
         usdPrice: Number.isFinite(t.usdPrice) && (t.usdPrice as number) > 0 ? (t.usdPrice as number) : null,
       });
     }

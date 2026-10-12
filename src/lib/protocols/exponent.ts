@@ -44,6 +44,18 @@ interface ExponentMarket {
 /** A market counts as new for two weeks after it opens. */
 const NEW_WINDOW_MS = 14 * 86_400_000;
 
+/**
+ * Exponent's senior tranches have no logo on Jupiter; they show their base token's
+ * (srONyc → ONyc, srEHYUSD → eHYUSD), by mint.
+ */
+const LOGO_MINT: Record<string, string> = {
+  '9J8VvigcjFTkN3jhZH2ieTi2hdGVBVpEXbcA1JDo7QpA': '5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5',
+  FvQP1fjox2GPSwkEhENuZisz8UeRURLWf7GYF9n2mURD: 'HnnGv3HrSqjRpgdFmx7vQGjntNEoex1SU4e9Lxcxuihz',
+};
+const logoMint = (m: ExponentMarket) => LOGO_MINT[m.underlyingAsset?.mint ?? ''] ?? '';
+const iconOf = (m: ExponentMarket, tokens: Map<string, SolanaToken>) =>
+  tokens.get(m.underlyingAsset?.mint ?? '')?.icon ?? tokens.get(logoMint(m))?.icon ?? null;
+
 const activeProgram = (m: ExponentMarket) => (m.pointsBoost?.is_active ? m.pointsBoost : null);
 
 const program = (pb: NonNullable<ExponentMarket['pointsBoost']>): MarketPointsProgram => ({
@@ -108,13 +120,13 @@ export class ExponentAdapter extends BaseAdapter {
   liveData = true;
   private base = protocols.exponent.apiBase;
 
-  private async all(): Promise<ExponentMarket[]> {
-    return fetchJson<ExponentMarket[]>(this.name, `${this.base}/markets`, isArrayOf<ExponentMarket>);
+  private async all(fresh = false): Promise<ExponentMarket[]> {
+    return fetchJson<ExponentMarket[]>(this.name, `${this.base}/markets`, isArrayOf<ExponentMarket>, undefined, fresh);
   }
 
   async listMarkets(): Promise<MarketSummary[]> {
     const markets = (await this.all()).filter((m) => m.marketStatus === 'active');
-    const tokens = await fetchSolanaTokens([...markets.map((m) => m.underlyingAsset?.mint ?? ''), ...markets.map((m) => m.quoteAsset?.mint ?? '')].filter(Boolean));
+    const tokens = await fetchSolanaTokens([...markets.map((m) => m.underlyingAsset?.mint ?? ''), ...markets.map((m) => m.quoteAsset?.mint ?? ''), ...markets.map(logoMint)].filter(Boolean));
     return markets.map((m) => {
       const token = tokens.get(m.underlyingAsset?.mint ?? '');
       const pb = activeProgram(m);
@@ -122,7 +134,7 @@ export class ExponentAdapter extends BaseAdapter {
         id: m.vaultAddress,
         name: m.tokenName,
         platform: m.platformName ?? null,
-        icon: token?.icon ?? null,
+        icon: iconOf(m, tokens),
         chain: 'Solana',
         maturity: new Date(m.maturityDateUnixTs * 1000).toISOString(),
         impliedAPY: toPercent(m.impliedApy),
@@ -145,9 +157,11 @@ export class ExponentAdapter extends BaseAdapter {
   }
 
   async fetchMarketData(marketId: string): Promise<MarketData> {
-    const m = (await this.all()).find((x) => x.vaultAddress === marketId);
+    // Fresh, not cached: this is the price a new position is recorded at.
+    const m = (await this.all(true)).find((x) => x.vaultAddress === marketId);
     if (!m) throw new MarketNotFoundError(this.name, marketId);
-    const token = (await fetchSolanaTokens([m.underlyingAsset?.mint ?? ''])).get(m.underlyingAsset?.mint ?? '');
+    const tokens = await fetchSolanaTokens([m.underlyingAsset?.mint ?? '', logoMint(m)], true);
+    const token = tokens.get(m.underlyingAsset?.mint ?? '');
     const maturity = new Date(m.maturityDateUnixTs * 1000).toISOString();
     const pb = activeProgram(m);
 
@@ -173,7 +187,7 @@ export class ExponentAdapter extends BaseAdapter {
       pointsStatus: pb ? 'active' : 'none',
       points: pb ? program(pb) : null,
       platform: m.platformName ?? null,
-      icon: token?.icon ?? null,
+      icon: iconOf(m, tokens),
       chain: 'Solana',
       fetchedAt: new Date().toISOString(),
       asset: { symbol: m.underlyingAsset?.ticker ?? m.tokenName ?? null, address: m.underlyingAsset?.mint ?? null },

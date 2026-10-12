@@ -45,11 +45,12 @@ export const isObject = <T extends object>(body: unknown): body is T =>
  * can report «this source is down» instead of a 500: timeout (504), network error
  * or unreadable body (502), HTTP error (its status), unexpected shape (502).
  */
-export async function fetchJson<T>(protocol: string, url: string, shape?: Shape<T>, timeoutMs = FETCH_TIMEOUT_MS): Promise<T> {
+export async function fetchJson<T>(protocol: string, url: string, shape?: Shape<T>, timeoutMs = FETCH_TIMEOUT_MS, fresh = false): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, {
-      next: { revalidate: 60 },
+      // fresh: a price someone is about to record, so not one up to a minute old.
+      ...(fresh ? { cache: 'no-store' } : { next: { revalidate: 60 } }),
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(timeoutMs),
     } as RequestInit);
