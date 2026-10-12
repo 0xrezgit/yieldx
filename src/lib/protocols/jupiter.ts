@@ -32,7 +32,8 @@ export async function fetchSolanaTokens(mints: string[], fresh = false): Promise
     for (const t of Array.isArray(list) ? list : []) {
       out.set(t.id, {
         symbol: t.symbol ?? null,
-        icon: typeof t.icon === 'string' && t.icon.startsWith('https://') ? t.icon : null,
+        // arweave.net is unreachable on some networks; ardrive.net serves the same files.
+        icon: typeof t.icon === 'string' && t.icon.startsWith('https://') ? t.icon.replace(/^https:\/\/arweave\.net\//, 'https://ardrive.net/') : null,
         usdPrice: Number.isFinite(t.usdPrice) && (t.usdPrice as number) > 0 ? (t.usdPrice as number) : null,
       });
     }
