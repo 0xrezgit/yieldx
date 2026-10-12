@@ -160,8 +160,11 @@ export class ExponentAdapter extends BaseAdapter {
     // Fresh, not cached: this is the price a new position is recorded at.
     const m = (await this.all(true)).find((x) => x.vaultAddress === marketId);
     if (!m) throw new MarketNotFoundError(this.name, marketId);
-    const tokens = await fetchSolanaTokens([m.underlyingAsset?.mint ?? '', logoMint(m)], true);
+    const tokens = await fetchSolanaTokens([m.underlyingAsset?.mint ?? '', m.quoteAsset?.mint ?? '', logoMint(m)], true);
     const token = tokens.get(m.underlyingAsset?.mint ?? '');
+    // PT and YT are priced in the quote asset (USD on ONyc, SOL on BulkSOL), not in the token;
+    // the token's own price only when Jupiter has none for the quote (STRC on STRCx).
+    const quoteUsd = m.quoteAsset?.ticker === 'USD' ? 1 : (tokens.get(m.quoteAsset?.mint ?? '')?.usdPrice ?? token?.usdPrice ?? null);
     const maturity = new Date(m.maturityDateUnixTs * 1000).toISOString();
     const pb = activeProgram(m);
 
@@ -169,9 +172,9 @@ export class ExponentAdapter extends BaseAdapter {
       protocol: this.id,
       marketId,
       name: m.tokenName,
-      // Exponent quotes prices in the asset; the USD price comes from Jupiter when available.
-      underlyingPrice: token?.usdPrice ?? null,
-      assetSymbol: m.tokenName ?? null,
+      // USD per quote-asset unit, the unit ptPrice and ytPrice are in (Jupiter when not USD).
+      underlyingPrice: quoteUsd,
+      assetSymbol: m.quoteAsset?.ticker ?? m.tokenName ?? null,
       // A USD-quoted market's YT pays the yield of $1, not of one asset unit.
       ytUnit: m.quoteAsset?.ticker === 'USD' ? 'usd' : 'asset',
       ptPrice: m.ptPriceInAsset,
