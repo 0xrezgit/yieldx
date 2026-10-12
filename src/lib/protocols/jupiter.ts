@@ -18,13 +18,13 @@ interface JupiterToken {
  * up to 100 mints). Best-effort: returns an empty map if Jupiter is unreachable,
  * so market data still loads without logos.
  */
-export async function fetchSolanaTokens(mints: string[]): Promise<Map<string, SolanaToken>> {
+export async function fetchSolanaTokens(mints: string[], fresh = false): Promise<Map<string, SolanaToken>> {
   const out = new Map<string, SolanaToken>();
   const unique = [...new Set(mints.filter(Boolean))].slice(0, 100);
   if (!unique.length) return out;
   try {
     const res = await fetch(`${protocols.exponent.tokenApi}?query=${unique.join(',')}`, {
-      next: { revalidate: 300 },
+      ...(fresh ? { cache: 'no-store' } : { next: { revalidate: 300 } }),
       headers: { accept: 'application/json' },
     } as RequestInit);
     if (!res.ok) return out;
