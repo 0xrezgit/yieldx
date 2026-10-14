@@ -95,7 +95,17 @@ export const LEVERAGE_POLICY = { version: 'lev-v1', minHealth: 1.25, maxLeverage
  * only where health 1.25 or surviving a `rateBufferPp` jump of the PT's implied rate
  * (its market price falls) requires. See `ptLoopLeverage`.
  */
-export const PT_LOOP_POLICY = {
+export interface PtLoopPolicy {
+  version: string;
+  minHealth: number;
+  maxLeverage: number;
+  cautiousLeverage: number;
+  longDays: number;
+  minSpreadPp: number;
+  rateBufferPp: number;
+}
+
+export const PT_LOOP_POLICY: PtLoopPolicy = {
   version: 'lev-pt-v2',
   minHealth: 1.25,
   maxLeverage: 3,
@@ -103,7 +113,27 @@ export const PT_LOOP_POLICY = {
   longDays: 90,
   minSpreadPp: 3,
   rateBufferPp: 10,
-} as const;
+};
+
+export type LeverageProfileId = 'cautious' | 'balanced' | 'aggressive';
+
+/**
+ * Leverage profiles the user picks in «هدف سود». «محتاط» is the app's policy everywhere
+ * else (LEVERAGE_POLICY, PT_LOOP_POLICY). The others trade a smaller distance to
+ * liquidation for more profit. Every profile stays under the protocol's own borrow
+ * limit; none is the protocol maximum.
+ */
+export const LEVERAGE_PROFILES: Record<LeverageProfileId, { lev: { version: string; minHealth: number; maxLeverage: number }; pt: PtLoopPolicy }> = {
+  cautious: { lev: LEVERAGE_POLICY, pt: PT_LOOP_POLICY },
+  balanced: {
+    lev: { version: 'lev-v1-balanced', minHealth: 1.12, maxLeverage: 6 },
+    pt: { version: 'lev-pt-v2-balanced', minHealth: 1.12, maxLeverage: 5, cautiousLeverage: 4, longDays: 90, minSpreadPp: 2, rateBufferPp: 5 },
+  },
+  aggressive: {
+    lev: { version: 'lev-v1-aggressive', minHealth: 1.05, maxLeverage: 12 },
+    pt: { version: 'lev-pt-v2-aggressive', minHealth: 1.05, maxLeverage: 10, cautiousLeverage: 8, longDays: 125, minSpreadPp: 1, rateBufferPp: 2 },
+  },
+};
 
 /**
  * Without an executable quote, an AMM entry (PT) is only estimated while the amount

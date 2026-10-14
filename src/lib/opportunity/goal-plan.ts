@@ -2,6 +2,7 @@ import type { Estimate, Opportunity } from '../../types/opportunity';
 import type { GasQuote } from '../merkl/types';
 import type { Evaluated } from '../market/analysis';
 import { estimateAt } from '../market/analysis';
+import { defaultLeverageInput, type LeverageInput } from './leverage';
 import { certaintyOf, split, unitOf, type Certainty } from './goal';
 import { HORIZONS, type HorizonDays } from './policy';
 
@@ -34,6 +35,11 @@ export interface Allocation {
   net: number;
   e: Estimate;
   certainty: Certainty;
+  /**
+   * With «تکرار»: how many times the position is opened over the period (1 = once). After
+   * the first round the rate is today's assumed again — not locked, whatever the instrument.
+   */
+  rounds: number;
 }
 
 export interface Plan {
@@ -65,23 +71,39 @@ interface Ctx {
   days: HorizonDays;
   /** Most of a plan one opportunity may take (MAX_SHARE, or 1 without the diversity rule). */
   maxShare: number;
+  /** Repeat what ends before the period at today's rate (see `rolled`). */
+  roll: boolean;
+  /** Leverage profile loops are estimated under. */
+  lev: LeverageInput;
   gas: GasQuote[];
   now: number;
   cache: Map<string, Estimate>;
 }
 
 function estAt(c: Ctx, o: Opportunity, amount: number, days = c.days): Estimate {
-  const k = `${o.key}|${days}|${Math.round(amount * 100)}`;
+  const k = `${o.key}|${days}|${Math.round(amount * 100)}|${c.lev.version}`;
   let e = c.cache.get(k);
   if (!e) {
-    e = estimateAt(o, amount, days, c.gas, c.now);
+    e = estimateAt(o, amount, days, c.gas, c.now, c.lev);
     c.cache.set(k, e);
   }
   return e;
 }
 
 /** Dollars an opportunity is counted for at an amount under a level; null when it does not qualify. */
-function value(c: Ctx, o: Opportunity, amount: number, level: PlanLevel, days = c.days): { net: number; e: Estimate; certainty: Certainty } | null {
+/**
+ * An option that ends before the period, opened again with what comes back, at the same
+ * rate per day: (1 + g)^(days ÷ its days) − 1 on the amount. Costs repeat with each round
+ * (they are inside g). Fewer than 1.25 rounds is not worth a second entry: kept as is.
+ */
+export function rolled(amount: number, net: number, earningDays: number, days: number): { net: number; rounds: number } {
+  const rounds = earningDays > 0 ? days / earningDays : 1;
+  const g = net / amount;
+  if (!(rounds >= 1.25) || !(g > -1)) return { net, rounds: 1 };
+  return { net: amount * (Math.pow(1 + g, rounds) - 1), rounds };
+}
+
+function value(c: Ctx, o: Opportunity, amount: number, level: PlanLevel, days = c.days): { net: number; e: Estimate; certainty: Certainty; rounds: number } | null {
   // A dollar target: profit in ETH, BTC or SOL (or of unknown unit) is not planned on.
   if (!(amount > 0) || unitOf(o) !== 'usd') return null;
   const e = estAt(c, o, amount, days);
@@ -92,7 +114,10 @@ function value(c: Ctx, o: Opportunity, amount: number, level: PlanLevel, days = 
   if (level === 'locked' && certainty !== 'locked') return null;
   if (level === 'variable-only' && certainty !== 'variable') return null;
   // Only what is earned on the money actually placed counts (the rest stays idle).
-  return { net: s.lockedUsd + s.variableUsd, e, certainty };
+  const once = s.lockedUsd + s.variableUsd;
+  if (!c.roll) return { net: once, e, certainty, rounds: 1 };
+  const r = rolled(amount, once, e.earningDays, days);
+  return { net: r.net, e, certainty, rounds: r.rounds };
 }
 
 /**
@@ -129,7 +154,7 @@ function plan(c: Ctx, candidates: Opportunity[], amount: number, level: PlanLeve
     const a = held.get(o.key);
     if (!a) continue;
     const v = value(c, o, a, level, days);
-    if (v) parts.push({ o, amount: a, net: v.net, e: v.e, certainty: v.certainty });
+    if (v) parts.push({ o, amount: a, net: v.net, e: v.e, certainty: v.certainty, rounds: v.rounds });
   }
   parts.sort((x, y) => y.net - x.net);
   return { amount, total: parts.reduce((s, p) => s + p.net, 0), parts };
@@ -152,8 +177,18 @@ function pick(c: Ctx, rows: Evaluated[], probe: number, level: PlanLevel, days =
     .map((x) => x.o);
 }
 
-export function nearestPaths(rows: Evaluated[], gas: GasQuote[], days: HorizonDays, capital: number, target: number, now = Date.now(), maxShare = MAX_SHARE): NearResult {
-  const c: Ctx = { days, gas, now, maxShare, cache: new Map() };
+export interface PlanOptions {
+  now?: number;
+  /** Most of a plan in one opportunity (default MAX_SHARE; 1 turns the rule off). */
+  maxShare?: number;
+  /** Repeat what ends before the period at today's rate. */
+  roll?: boolean;
+  /** Leverage profile for loops (default: the app's cautious policy). */
+  leverage?: LeverageInput;
+}
+
+export function nearestPaths(rows: Evaluated[], gas: GasQuote[], days: HorizonDays, capital: number, target: number, opts: PlanOptions = {}): NearResult {
+  const c: Ctx = { days, gas, now: opts.now ?? Date.now(), maxShare: opts.maxShare ?? MAX_SHARE, roll: opts.roll ?? false, lev: opts.leverage ?? defaultLeverageInput, cache: new Map() };
   const probe = capital / CHUNKS;
   const locked = pick(c, rows, probe, 'locked');
   const variableOnly = pick(c, rows, probe, 'variable-only');

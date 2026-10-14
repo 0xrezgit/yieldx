@@ -40,7 +40,7 @@ const lend = (rate: number, room: number): Opportunity => ({
 
 const run = (opps: Opportunity[], capital: number, target: number) => {
   const a = evaluate({ opportunities: opps, merkl: null, gas: [] }, capital, NOW);
-  return nearestPaths(a.rows, a.gas, 90, capital, target, NOW);
+  return nearestPaths(a.rows, a.gas, 90, capital, target, { now: NOW });
 };
 
 describe('نزدیک‌ترین راه‌های واقعی', () => {
@@ -85,10 +85,10 @@ describe('نزدیک‌ترین راه‌های واقعی', () => {
 
   it('the money is back on the last payout day, not at the end of the period; without the diversity rule one market may take it all', () => {
     const a = evaluate({ opportunities: opps, merkl: null, gas: [] }, 10_000, NOW);
-    const capped = nearestPaths(a.rows, a.gas, 125, 10_000, 5_000, NOW);
+    const capped = nearestPaths(a.rows, a.gas, 125, 10_000, 5_000, { now: NOW });
     expect(finishDay(capped.realistic.locked)).toBeLessThanOrEqual(91);
     expect(finishDay(capped.realistic.locked)).toBeGreaterThan(0);
-    const free = nearestPaths(a.rows, a.gas, 125, 10_000, 5_000, NOW, 1);
+    const free = nearestPaths(a.rows, a.gas, 125, 10_000, 5_000, { now: NOW, maxShare: 1 });
     expect(free.realistic.locked.total).toBeGreaterThanOrEqual(capped.realistic.locked.total - 1e-9);
     expect(Math.max(...free.realistic.locked.parts.map((p) => p.amount))).toBeGreaterThan(10_000 * MAX_SHARE);
   });

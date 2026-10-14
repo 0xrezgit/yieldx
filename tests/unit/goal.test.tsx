@@ -4,7 +4,10 @@ import type { OpportunityListing } from '../../src/lib/risk/opportunities';
 import { ptOpportunity } from '../../src/lib/opportunity/from-market';
 import { buildPtLoops } from '../../src/lib/opportunity/leverage';
 import { evaluate } from '../../src/lib/market/analysis';
-import { goalOptions, requiredReturn } from '../../src/lib/opportunity/goal';
+import { goalOptions, liquidationOf, requiredReturn } from '../../src/lib/opportunity/goal';
+import { rolled } from '../../src/lib/opportunity/goal-plan';
+import { LEVERAGE_PROFILES } from '../../src/lib/opportunity/policy';
+import { estimateAt } from '../../src/lib/market/analysis';
 
 // Controlled data for the formulas; shapes follow the adapters. Not market data.
 const NOW = Date.parse('2026-10-15T00:00:00Z');
@@ -111,5 +114,39 @@ describe('«قفل‌شده» is in dollars', () => {
     const a = evaluate({ opportunities: [sol], merkl: null, gas: [] }, 1000, NOW);
     const g = goalOptions(a.rows, 90, 1000, 1);
     expect(g.groups.locked.some((x) => x.o.key === sol.key)).toBe(false);
+  });
+});
+
+describe('leverage profiles, liquidation and «تکرار»', () => {
+  const opps = () => [ptOpportunity('exponent', listing(), AT, NOW), kamino(undefined, 4)];
+  const loopOf = () => evaluate({ opportunities: opps(), merkl: null, gas: [] }, 1000, NOW).rows.find((r) => r.o.family === 'leverage')!.o;
+  const lev = (id: keyof typeof LEVERAGE_PROFILES) => ({ ...LEVERAGE_PROFILES[id].lev, pt: LEVERAGE_PROFILES[id].pt });
+
+  it('a bolder profile borrows more, but a PT loop never past the protocol’s borrow limit', () => {
+    const capped = loopOf();
+    // borrowLtv 0.6 → at most 2.5×, whatever the profile.
+    for (const id of ['cautious', 'balanced', 'aggressive'] as const) expect(estimateAt(capped, 1000, 90, [], NOW, lev(id)).leverage!.leverage).toBeLessThanOrEqual(1 / (1 - 0.6) + 1e-9);
+    // Without a borrow limit under the liquidation line, the profile decides.
+    const o = { ...capped, loop: { ...capped.loop!, borrowLtv: undefined } };
+    const c = estimateAt(o, 1000, 90, [], NOW, lev('cautious')).leverage!.leverage;
+    const b = estimateAt(o, 1000, 90, [], NOW, lev('balanced')).leverage!.leverage;
+    const g = estimateAt(o, 1000, 90, [], NOW, lev('aggressive')).leverage!.leverage;
+    expect(b).toBeGreaterThan(c);
+    expect(g).toBeGreaterThan(b);
+  });
+
+  it('liquidation: the fall, the PT market rate and the borrow rate that reach it', () => {
+    const o = loopOf();
+    const e = estimateAt(o, 1000, 90, [], NOW, lev('cautious'));
+    const q = liquidationOf(o, e)!;
+    expect(q.dropPct).toBeCloseTo(e.leverage!.liquidationDrop * 100, 9);
+    expect(q.ptRatePct!).toBeGreaterThan(13);
+    expect(q.zeroPct!).toBeGreaterThan(4);
+    expect(q.borrowPct!).toBeGreaterThan(q.zeroPct!);
+  });
+
+  it('«تکرار»: an option of 30 days over 90 is opened three times at the same rate', () => {
+    expect(rolled(1000, 10, 30, 90)).toEqual({ net: expect.closeTo(1000 * (1.01 ** 3 - 1), 9), rounds: 3 });
+    expect(rolled(1000, 10, 80, 90).rounds).toBe(1);
   });
 });

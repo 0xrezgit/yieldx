@@ -5,7 +5,7 @@ import { estimate } from '../opportunity/estimate';
 import { dedupeOpportunities, rankEstimates, type Ranking } from '../opportunity/rank';
 import { PT_UNKNOWN_COSTS } from '../opportunity/from-market';
 import { addMerklRewards, COVERED_BY_ADAPTER, linkMerkl, merklAsOpportunity, merklEstimateShared, withoutMerklDuplicates } from '../opportunity/merkl-link';
-import { buildLoops, buildPtLoops, defaultLeverageInput } from '../opportunity/leverage';
+import { buildLoops, buildPtLoops, defaultLeverageInput, type LeverageInput } from '../opportunity/leverage';
 import { claimCost, FALLBACK_TX_USD, gasLines } from '../opportunity/costs';
 import { HORIZONS, MODEL_VERSION, RANKING_VERSION, TOP_LIMIT, type HorizonDays } from '../opportunity/policy';
 import { networkByKey } from '../registry/networks';
@@ -91,7 +91,7 @@ export function searchText(o: Opportunity): string {
  * One protocol opportunity estimated for an amount and horizon, as the ranking does it
  * (gas, unknown costs, leverage policy) — without Merkl rewards, which `evaluate` adds.
  */
-export function estimateAt(o: Opportunity, capital: number, days: HorizonDays, gas: GasQuote[], now = Date.now()): Estimate {
+export function estimateAt(o: Opportunity, capital: number, days: HorizonDays, gas: GasQuote[], now = Date.now(), leverage: LeverageInput = defaultLeverageInput): Estimate {
   const g = gasLines(o, gas);
   return estimate(o, {
     capital,
@@ -100,7 +100,7 @@ export function estimateAt(o: Opportunity, capital: number, days: HorizonDays, g
     exitCosts: g.exit,
     unknownCosts: o.family === 'pt' ? [...PT_UNKNOWN_COSTS] : o.family === 'yt' ? [] : o.rewards.length ? ['گس دریافت پاداش (claim)'] : [],
     now,
-    leverage: defaultLeverageInput,
+    leverage,
   });
 }
 

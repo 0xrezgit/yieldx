@@ -147,7 +147,10 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (o.quality === 'insufficient') return stop('insufficient', 'داده‌ی منبع برای برآورد کافی نیست.');
   if (o.risk?.paused) return stop('inactive', 'بازار متوقف یا منجمد است.');
   // A loop with a maturity is a PT loop: its own, tighter policy.
-  if (o.family === 'leverage' && o.loop && input.leverage) return leverageEstimate(o, input, o.maturity !== null ? PT_LOOP_POLICY : input.leverage, base, now);
+  if (o.family === 'leverage' && o.loop && input.leverage) {
+    const pt = input.leverage.pt ?? PT_LOOP_POLICY;
+    return leverageEstimate(o, input, o.maturity !== null ? { ...pt, pt } : input.leverage, base, now);
+  }
   if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
   if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
   // A deposit in a non-dollar fiat currency: its dollar result is an exchange-rate bet.
