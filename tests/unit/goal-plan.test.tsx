@@ -3,7 +3,7 @@ import type { Opportunity } from '../../src/types/opportunity';
 import type { OpportunityListing } from '../../src/lib/risk/opportunities';
 import { ptOpportunity } from '../../src/lib/opportunity/from-market';
 import { evaluate } from '../../src/lib/market/analysis';
-import { MAX_SHARE, nearestPaths } from '../../src/lib/opportunity/goal-plan';
+import { finishDay, MAX_SHARE, nearestPaths } from '../../src/lib/opportunity/goal-plan';
 
 // Controlled data: two dollar PTs on Solana (cheap gas) and a variable lending reserve. Not market data.
 const NOW = Date.parse('2026-10-15T00:00:00Z');
@@ -81,5 +81,15 @@ describe('نزدیک‌ترین راه‌های واقعی', () => {
     expect(r.horizons.map((h) => h.days)).toEqual([30, 60, 90, 125]);
     expect(r.horizons[0].locked).toBe(0); // the PTs mature after 30 days
     expect(r.horizons[2].locked).toBeGreaterThan(0);
+  });
+
+  it('the money is back on the last payout day, not at the end of the period; without the diversity rule one market may take it all', () => {
+    const a = evaluate({ opportunities: opps, merkl: null, gas: [] }, 10_000, NOW);
+    const capped = nearestPaths(a.rows, a.gas, 125, 10_000, 5_000, NOW);
+    expect(finishDay(capped.realistic.locked)).toBeLessThanOrEqual(91);
+    expect(finishDay(capped.realistic.locked)).toBeGreaterThan(0);
+    const free = nearestPaths(a.rows, a.gas, 125, 10_000, 5_000, NOW, 1);
+    expect(free.realistic.locked.total).toBeGreaterThanOrEqual(capped.realistic.locked.total - 1e-9);
+    expect(Math.max(...free.realistic.locked.parts.map((p) => p.amount))).toBeGreaterThan(10_000 * MAX_SHARE);
   });
 });

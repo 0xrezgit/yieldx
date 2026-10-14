@@ -42,6 +42,9 @@ export interface Plan {
   parts: Allocation[];
 }
 
+/** The day the last part of a plan pays out (its money and profit are all back); 0 for an empty plan. */
+export const finishDay = (p: Pick<Plan, 'parts'>) => p.parts.reduce((m, x) => Math.max(m, x.e.earningDays), 0);
+
 export interface NearResult {
   realistic: { locked: Plan; variable: Plan };
   /** Capital needed for the target with locked dollars; `reachable` false when the market cannot take it. */
@@ -60,6 +63,8 @@ export const MAX_SHARE = 0.5;
 
 interface Ctx {
   days: HorizonDays;
+  /** Most of a plan one opportunity may take (MAX_SHARE, or 1 without the diversity rule). */
+  maxShare: number;
   gas: GasQuote[];
   now: number;
   cache: Map<string, Estimate>;
@@ -103,7 +108,7 @@ function plan(c: Ctx, candidates: Opportunity[], amount: number, level: PlanLeve
     let best: { o: Opportunity; size: number; perDollar: number } | null = null;
     for (const o of candidates) {
       const h = held.get(o.key) ?? 0;
-      const room = capBase * MAX_SHARE - h;
+      const room = capBase * c.maxShare - h;
       if (room <= amount * 1e-6) continue;
       const now = h > 0 ? value(c, o, h, level, days) : { net: 0 };
       if (!now) continue;
@@ -147,8 +152,8 @@ function pick(c: Ctx, rows: Evaluated[], probe: number, level: PlanLevel, days =
     .map((x) => x.o);
 }
 
-export function nearestPaths(rows: Evaluated[], gas: GasQuote[], days: HorizonDays, capital: number, target: number, now = Date.now()): NearResult {
-  const c: Ctx = { days, gas, now, cache: new Map() };
+export function nearestPaths(rows: Evaluated[], gas: GasQuote[], days: HorizonDays, capital: number, target: number, now = Date.now(), maxShare = MAX_SHARE): NearResult {
+  const c: Ctx = { days, gas, now, maxShare, cache: new Map() };
   const probe = capital / CHUNKS;
   const locked = pick(c, rows, probe, 'locked');
   const variableOnly = pick(c, rows, probe, 'variable-only');
