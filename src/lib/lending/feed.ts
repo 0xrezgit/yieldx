@@ -26,7 +26,10 @@ interface Source {
   /** How long a good copy is served before asking upstream again (per source: limits and cost differ). */
   ttlMs: number;
   load: (fetchedAt: string) => Promise<Opportunity[]>;
-  /** Slow source: once cached, refresh in the background instead of making the feed wait. */
+  /**
+   * Once cached, refresh in the background instead of making the feed wait (every source
+   * now: one slow or timing-out API — Morpho's took 15 s — held the whole answer).
+   */
   background?: boolean;
   /** Daily rate history for the robust rate (robust-rate.ts), attached each time the list is served. */
   history?: { load: HistoryLoader; adjust?: (o: Opportunity, pct: number) => number };
@@ -34,17 +37,17 @@ interface Source {
 
 export const SOURCES: Source[] = [
   // Variable rates with a daily history get the robust rate (robust-rate.ts), filled in the background.
-  { id: 'morpho', name: 'Morpho', ttlMs: 60_000, load: async (at) => normalizeMorpho(await fetchMorpho(), at), history: { load: () => fetchMorphoHistory(), adjust: morphoHistoryAdjust } },
-  { id: 'aave', name: 'Aave V4', ttlMs: 60_000, load: async (at) => normalizeAave(await fetchAave(), at), history: { load: fetchAaveHistory } },
+  { id: 'morpho', name: 'Morpho', ttlMs: 60_000, load: async (at) => normalizeMorpho(await fetchMorpho(), at), background: true, history: { load: () => fetchMorphoHistory(), adjust: morphoHistoryAdjust } },
+  { id: 'aave', name: 'Aave V4', ttlMs: 60_000, load: async (at) => normalizeAave(await fetchAave(), at), background: true, history: { load: fetchAaveHistory } },
   // Order books: several requests per market.
   { id: 'midnight', name: 'Morpho Midnight', ttlMs: 2 * 60_000, load: (at) => fetchMidnight(at, new Date(at).getTime()), background: true },
-  // Two requests per Kamino market; vault pages for Loopscale.
-  { id: 'kamino', name: 'Kamino', ttlMs: 5 * 60_000, load: (at) => fetchKamino(at), history: { load: fetchKaminoHistory } },
+  // Two requests per Kamino market (every market, ~50): refreshed behind the cached copy.
+  { id: 'kamino', name: 'Kamino', ttlMs: 5 * 60_000, load: (at) => fetchKamino(at), background: true, history: { load: fetchKaminoHistory } },
   // Fluid: fTokens and every vault type (two requests per network).
-  { id: 'fluid', name: 'Fluid', ttlMs: 2 * 60_000, load: (at) => fetchFluid(at) },
-  { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at) },
+  { id: 'fluid', name: 'Fluid', ttlMs: 2 * 60_000, load: (at) => fetchFluid(at), background: true },
+  { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at), background: true },
   // Daily rate from Revert's API, vault state read on-chain (two RPC batches per vault).
-  { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at) },
+  { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at), background: true },
 ];
 
 interface Cached {
