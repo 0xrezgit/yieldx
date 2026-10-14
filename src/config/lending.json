@@ -40,11 +40,18 @@
     "depth": 100,
     "maxTokens": 500
   },
+  "fluid": {
+    "name": "Fluid",
+    "api": "https://api.fluid.instadapp.io/v2",
+    "app": "https://fluid.io",
+    "chains": [1, 42161, 8453, 9745],
+    "minSupplyUsd": 100000
+  },
   "kamino": {
     "name": "Kamino",
     "api": "https://api.kamino.finance",
     "app": "https://kamino.com/earn/lend",
-    "maxMarkets": 25,
+    "maxMarkets": 60,
     "concurrency": 4,
     "minSupplyUsd": 100000
   },

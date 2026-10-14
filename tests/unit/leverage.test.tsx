@@ -7,6 +7,7 @@ import { borrowQuotes } from '../../src/lib/opportunity/borrow';
 import { maxLoopLeverage } from '../../src/lib/calculators/trade';
 import { morphoMarket, type RawMorphoMarket } from '../../src/lib/lending/morpho';
 import { normalizeAave, type RawAaveReserve } from '../../src/lib/lending/aave';
+import { kaminoBorrowSide, type KaminoPair } from '../../src/lib/lending/kamino';
 import { evaluate, selectHorizon } from '../../src/lib/market/analysis';
 
 // Controlled test data for the formulas; adapter fixtures follow the official
@@ -219,6 +220,54 @@ describe('adapters feed loops', () => {
     expect(loop.quality).toBe('partial');
     // Collateral earns its own yield and the supply rate on the Spoke.
     expect(loop.loop!.collateral.supplyPct).toBeCloseTo(1, 9);
+  });
+
+  it('Kamino: each Multiply pair at its own limits; a dollar name alone is an unverified peg', () => {
+    // Shapes of /markets/multiply-pairs and /reserves/batch/stats (Apyx market, 2026-10-15).
+    const pair = (over: Partial<KaminoPair> = {}): KaminoPair => ({
+      lendingMarket: 'M', collateralReserve: 'C', borrowReserve: 'D', collateralMint: 'APY', elevationGroup: 0,
+      maxLtv: '0.7', liquidationLtv: '0.75', borrowFactor: '1', flashLoanFee: '0', ...over,
+    });
+    const coll = { status: 'Active', underlyingApy: { current: '0.137609' }, supplyApyBreakdown: { lending: '0' } };
+    const usdc = { status: 'Active', borrowApyBreakdown: { borrow: '0.0378' }, borrowApy: { avg7d: '0.0325' }, actualAvailableLiquidityUsd: '560000', liquidityAvailableUsd: '610000' };
+    const s = kaminoBorrowSide(usdc, [
+      { pair: pair(), symbol: 'apyUSD', stats: coll },
+      { pair: pair({ collateralMint: 'X', flashLoanFee: '0.001' }), symbol: 'xUSD', stats: coll },
+      { pair: pair({ collateralMint: 'Y', borrowFactor: '1.1' }), symbol: 'yUSD', stats: coll },
+    ])!;
+    expect(s).toMatchObject({ metric: 'ltv', availableUsd: 560000, curve: null });
+    expect(s.ratePct).toBeCloseTo(3.78, 12);
+    expect(s.collateral).toHaveLength(1);
+    expect(s.collateral[0]).toMatchObject({ token: { symbol: 'apyUSD', address: 'APY' }, maxLtv: 0.75, borrowLtv: 0.7, supplyPct: null });
+    expect(s.collateral[0].yield!.pct).toBeCloseTo(13.7609, 12);
+    expect(kaminoBorrowSide({ ...usdc, status: 'Frozen' }, [{ pair: pair(), symbol: 'apyUSD', stats: coll }])).toBeNull();
+
+    const [loop] = buildLoops([market({ borrow: s })]);
+    expect(loop.loop).toMatchObject({ pairClass: 'usd', pegVerified: false, maxLtv: 0.75, borrowLtv: 0.7 });
+    // Health 1.25 allows 2.5×; an unverified peg is held to the cautious 2.5× too.
+    expect(estimate(loop, input(pol(1.25))).leverage!.leverage).toBeCloseTo(2.5, 12);
+  });
+
+  it('Solana: SOL and its liquid staking tokens pair as one class; elsewhere a «…SOL» name does not', () => {
+    const sol = (chain: string) =>
+      market({
+        key: `k:${chain}`,
+        chain,
+        assets: { deposit: [{ symbol: 'SOL', address: 'So111' }] },
+        borrow: side({ collateral: [{ token: { symbol: 'JITOSOL', address: 'J1to' }, maxLtv: 0.9, borrowLtv: 0.85, yield: { pct: 4.8, kind: 'apy', source: 'Kamino، بازده استیکینگ LST' } }] }),
+      });
+    const loops = buildLoops([sol('solana:mainnet'), sol('eip155:1')]);
+    expect(loops).toHaveLength(1);
+    expect(loops[0].loop).toMatchObject({ pairClass: 'sol', maxLtv: 0.9, borrowLtv: 0.85 });
+    expect(loops[0].loop!.pegVerified).toBeUndefined();
+  });
+
+  it('never borrows past the protocol’s borrow limit, even when health would allow it', () => {
+    const s = side({ collateral: [{ token: { symbol: 'sUSDe', address: '0xsusde' }, maxLtv: 0.9, borrowLtv: 0.5, yield: { pct: 8, kind: 'apy', source: 't' } }] });
+    const [loop] = buildLoops([market({ borrow: s })]);
+    const e = estimate(loop, input(pol(1.1)));
+    expect(e.leverage!.leverage).toBeCloseTo(2, 12);
+    expect(e.leverage!.maxSafe).toBeCloseTo(2, 12);
   });
 
   it('puts loops in the same ranking under the policy, and keeps borrow-only reserves out', () => {

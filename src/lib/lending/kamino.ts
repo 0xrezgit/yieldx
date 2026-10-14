@@ -1,6 +1,6 @@
 import lending from '../../config/lending.json';
 import { fetchSolanaTokens, type SolanaToken } from '../protocols/jupiter';
-import type { Opportunity, RewardStream } from '../../types/opportunity';
+import type { BorrowSide, Opportunity, RewardStream } from '../../types/opportunity';
 import { fetchJson, isArrayOf, isObject, mapLimit, withRetry } from '../protocols/base';
 import { HISTORY_DAYS } from '../opportunity/robust-rate';
 import type { HistoryPoints } from './history';
@@ -19,12 +19,20 @@ import type { HistoryPoints } from './history';
  * - GET /v2/kamino-market                      → markets (lendingMarket, name, isPrimary)
  * - GET /kamino-market/{market}/reserves/metrics → per reserve: symbol, mint, USD totals, token totals
  * - GET /reserves/batch/stats?market={market}  → keyed by reserve: status, APY breakdown, limits
+ * - GET /markets/multiply-pairs                → every Multiply pair's collateral terms (below)
  *
  * Meanings used: decimal strings; APYs are fractions. `supplyApyBreakdown.lending`
  * is the supply APY from borrower interest (incentives, season rewards and the
  * asset's own yield are separate lines). `depositLimit` is in token units, "0" =
  * closed. `liquidityAvailableUsd` is what can be withdrawn now; `actualAvailableLiquidity`
  * is not — live it equals `borrowLimit − totalBorrow` (0 on collateral-only reserves).
+ *
+ * Borrowing and Multiply: a reserve's own max LTV is not what a pair gets — an
+ * elevation group can raise it, and the reserve list does not say which. Kamino's
+ * OpenAPI document (api.kamino.finance/openapi/json, read 2026-10-15) describes
+ * `/markets/multiply-pairs`: per collateral + debt reserve, the group the pair
+ * auto-selects and its raw `maxLtv`, `liquidationLtv`, `borrowFactor` and
+ * `flashLoanFee`. That is the borrow side of each debt reserve here.
  */
 
 const CFG = lending.kamino;
@@ -54,6 +62,29 @@ export interface KaminoStats {
   supplyRewardApys?: KaminoRewardApy[];
   liquidityAvailableUsd?: string;
   depositLimit?: string | null;
+  /** Borrow interest alone (`borrow`, without incentives); and the borrow APY averaged. */
+  borrowApyBreakdown?: { borrow?: string };
+  borrowApy?: { current?: string; avg7d?: string };
+  /** What can be borrowed now, USD. */
+  actualAvailableLiquidityUsd?: string;
+  /** Fixed-rate reserves: the term in seconds and its APY; null on variable-rate ones. */
+  rateType?: string;
+  fixedTerm?: { termSeconds?: number; apy?: string } | null;
+  /** The token's own yield (a yield-bearing collateral), e.g. `{ current: "0.137609", sourceType: "yield-feed" }`. */
+  underlyingApy?: { current?: string; sourceType?: string } | null;
+}
+
+/** One Multiply pair (GET /markets/multiply-pairs); limits are fractions, raw protocol values. */
+export interface KaminoPair {
+  lendingMarket: string;
+  collateralReserve: string;
+  borrowReserve: string;
+  collateralMint: string | null;
+  elevationGroup: number | null;
+  maxLtv: string | null;
+  liquidationLtv: string | null;
+  borrowFactor: string | null;
+  flashLoanFee: string | null;
 }
 
 export interface KaminoReserveInput {
@@ -115,18 +146,87 @@ export function kaminoReserve(r: KaminoReserveInput, fetchedAt: string): Opportu
   };
 }
 
+/**
+ * A debt reserve's borrow side: its rate, what can be borrowed, and the collaterals
+ * Multiply pairs it with — at each pair's own limits, not the reserve's. Pairs with a
+ * borrow factor other than 1 or a flash-loan fee are left out (neither is modelled),
+ * as are inactive collaterals. Null when no pair is left.
+ */
+export function kaminoBorrowSide(stats: KaminoStats, collaterals: { pair: KaminoPair; symbol: string | null; stats: KaminoStats }[]): BorrowSide | null {
+  const rate = num(stats.borrowApyBreakdown?.borrow);
+  if (rate === null || rate < 0 || rate > 10 || (stats.status && stats.status !== 'Active')) return null;
+  const collateral: BorrowSide['collateral'] = [];
+  for (const { pair, symbol, stats: c } of collaterals) {
+    const liq = num(pair.liquidationLtv);
+    const max = num(pair.maxLtv);
+    if (!pair.collateralMint || liq === null || !(liq > 0 && liq < 1) || max === null || !(max > 0) || num(pair.borrowFactor) !== 1 || num(pair.flashLoanFee) !== 0) continue;
+    if (c.status && c.status !== 'Active') continue;
+    const own = num(c.underlyingApy?.current);
+    const lending = num(c.supplyApyBreakdown?.lending);
+    collateral.push({
+      token: { symbol, address: pair.collateralMint },
+      maxLtv: liq,
+      ...(max < liq ? { borrowLtv: max } : {}),
+      yield: own !== null && own > 0 && own < 10 ? { pct: own * 100, kind: 'apy', source: c.underlyingApy?.sourceType === 'lst' ? 'Kamino، بازده استیکینگ LST' : 'Kamino' } : null,
+      supplyPct: lending !== null && lending > 0 && lending < 10 ? lending * 100 : null,
+    });
+  }
+  if (!collateral.length) return null;
+  const avg7d = num(stats.borrowApy?.avg7d);
+  const available = [num(stats.actualAvailableLiquidityUsd), num(stats.liquidityAvailableUsd)].filter((x): x is number => x !== null && x >= 0);
+  const term = stats.rateType === 'fixed' ? num(stats.fixedTerm?.termSeconds) : null;
+  return {
+    ratePct: rate * 100,
+    // A fixed rate has no 7-day average to guard against: it is the rate for the term.
+    ratePct7d: term ? null : avg7d === null ? null : avg7d * 100,
+    curve: null,
+    availableUsd: available.length ? Math.min(...available) : null,
+    collateral,
+    metric: 'ltv',
+    ...(term && term > 0 ? { fixedTermDays: term / 86_400 } : {}),
+  };
+}
+
 const isStats = (b: unknown): b is Record<string, KaminoStats> => isObject(b);
+const isPairs = (b: unknown): b is { multiplyPairs: KaminoPair[] } => isObject(b) && Array.isArray((b as { multiplyPairs?: unknown }).multiplyPairs);
+
+/** Multiply pairs by `market:borrowReserve`; empty when the route fails (lending rows still load). */
+async function fetchPairs(): Promise<Map<string, KaminoPair[]>> {
+  const out = new Map<string, KaminoPair[]>();
+  try {
+    const body = await withRetry(() => fetchJson<{ multiplyPairs: KaminoPair[] }>(CFG.name, `${CFG.api}/markets/multiply-pairs`, isPairs));
+    for (const p of body.multiplyPairs) {
+      if (typeof p?.lendingMarket !== 'string' || typeof p.borrowReserve !== 'string' || typeof p.collateralReserve !== 'string') continue;
+      const k = `${p.lendingMarket}:${p.borrowReserve}`;
+      out.set(k, [...(out.get(k) ?? []), p]);
+    }
+  } catch {
+    // Best-effort: without pairs there are no Kamino borrow sides, only lending.
+  }
+  return out;
+}
 
 export async function fetchKamino(fetchedAt: string): Promise<Opportunity[]> {
   const markets = await withRetry(() => fetchJson<KaminoMarket[]>(CFG.name, `${CFG.api}/v2/kamino-market`, isArrayOf<KaminoMarket>));
   const list = markets.filter((m) => typeof m?.lendingMarket === 'string').slice(0, CFG.maxMarkets);
+  const pairs = await fetchPairs();
   const reads = await mapLimit(list, CFG.concurrency, async (m) => {
     const [metrics, stats] = await Promise.all([
       withRetry(() => fetchJson<KaminoMetric[]>(CFG.name, `${CFG.api}/kamino-market/${m.lendingMarket}/reserves/metrics`, isArrayOf<KaminoMetric>)),
       withRetry(() => fetchJson<Record<string, KaminoStats>>(CFG.name, `${CFG.api}/reserves/batch/stats?market=${m.lendingMarket}`, isStats)),
     ]);
     for (const metric of metrics) reserveMarket.set(metric.reserve, m.lendingMarket);
-    return metrics.map((metric) => (stats[metric.reserve] ? kaminoReserve({ market: m, metric, stats: stats[metric.reserve] }, fetchedAt) : null));
+    const symbols = new Map(metrics.map((x) => [x.reserve, x.liquidityToken ?? null]));
+    return metrics.map((metric) => {
+      const s = stats[metric.reserve];
+      const o = s ? kaminoReserve({ market: m, metric, stats: s }, fetchedAt) : null;
+      if (!o || !s) return o;
+      const collaterals = (pairs.get(`${m.lendingMarket}:${metric.reserve}`) ?? [])
+        .filter((p) => stats[p.collateralReserve])
+        .map((p) => ({ pair: p, symbol: symbols.get(p.collateralReserve) ?? null, stats: stats[p.collateralReserve] }));
+      const borrow = kaminoBorrowSide(s, collaterals);
+      return borrow ? { ...o, borrow, notes: [...(o.notes ?? []), 'حد وثیقه‌ی هر جفت از مسیر /markets/multiply-pairs در مستندات OpenAPI کامینو، برای گروه elevation که خود جفت برمی‌گزیند.'] } : o;
+    });
   });
   const ok = reads.filter((r): r is PromiseFulfilledResult<(Opportunity | null)[]> => r.status === 'fulfilled');
   if (list.length && !ok.length) throw (reads[0] as PromiseRejectedResult).reason;

@@ -165,12 +165,26 @@ export interface BorrowSide {
   curve: SupplyCurve | null;
   /** What can be borrowed now, USD. */
   availableUsd: number | null;
-  /** Accepted collateral and its liquidation limit (LLTV, or V4 collateral factor), 0…1. */
-  collateral: { token: TokenRef; maxLtv: number; yield?: AssetYield | null; supplyPct?: number | null }[];
+  /**
+   * Accepted collateral and its liquidation limit (LLTV, or V4 collateral factor), 0…1.
+   * `borrowLtv`: where the protocol stops new borrowing, when that is below the liquidation
+   * limit (Kamino's max LTV); a loop's LTV never goes past it.
+   */
+  collateral: { token: TokenRef; maxLtv: number; borrowLtv?: number; yield?: AssetYield | null; supplyPct?: number | null; class?: 'usd' | 'eth' | 'btc' | 'sol' }[];
+  /**
+   * Set by the adapter when the symbol cannot tell (a two-token position: Fluid smart
+   * collateral «sUSDe+USDT», smart debt «USDC+USDT»): the class every token in it shares.
+   */
+  debtClass?: 'usd' | 'eth' | 'btc' | 'sol';
   /** Each protocol's own health measure. */
   metric: 'ltv' | 'hf';
   /** Aave V4: a user risk premium depending on the collateral mix is not included. */
   premiumUnknown?: boolean;
+  /**
+   * A fixed-rate reserve (Kamino): the rate holds for this many days, then the loan is
+   * renewed at whatever rate applies then. Absent on variable-rate loans.
+   */
+  fixedTermDays?: number;
 }
 
 /** A yield-bearing asset's own yield (staking, savings rate), separate from any lending rate. */
@@ -182,15 +196,17 @@ export interface AssetYield {
 
 /**
  * A loop: deposit collateral, borrow the debt asset, swap back into collateral,
- * repeat. Only pairs that move together (USD/USD, ETH/ETH, BTC/BTC) — with prices
+ * repeat. Only pairs that move together (USD/USD, ETH/ETH, BTC/BTC, SOL/SOL) — with prices
  * held constant a volatile pair's «profit» would mean nothing.
  */
 export interface LoopSpec {
   collateral: { token: TokenRef; yield: AssetYield; supplyPct?: number | null };
   debt: { token: TokenRef; side: BorrowSide };
   maxLtv: number;
-  pairClass: 'usd' | 'eth' | 'btc';
-  /** PT loops: false when the PT's dollar peg rests only on its name. */
+  /** The protocol's borrowing limit, when below `maxLtv` (see BorrowSide.collateral). */
+  borrowLtv?: number;
+  pairClass: 'usd' | 'eth' | 'btc' | 'sol';
+  /** False when the collateral's dollar peg rests only on its name (PT or not). */
   pegVerified?: boolean;
   /** PT loops: where the PT is bought (the PT market's own page). */
   entryUrl?: string | null;

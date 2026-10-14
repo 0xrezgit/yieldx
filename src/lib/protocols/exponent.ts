@@ -8,6 +8,8 @@ import { fetchSolanaTokens, type SolanaToken } from './jupiter';
 interface ExponentMarket {
   vaultAddress: string;
   tokenName: string;
+  /** The PT's own mint: what a lending market accepts as collateral (Kamino). */
+  ptMint?: string;
   platformName?: string;
   underlyingAsset?: { mint: string; ticker?: string };
   /** The unit PT redeems into and YT pays yield in; «USD» on dollar-quoted markets (ONyc). */
@@ -151,6 +153,8 @@ export class ExponentAdapter extends BaseAdapter {
         isNew: !!m.startDateUnixTs && Date.now() - m.startDateUnixTs * 1000 < NEW_WINDOW_MS,
         // Solana mints are case-sensitive: kept exactly as the API gives them.
         asset: { symbol: m.underlyingAsset?.ticker ?? m.tokenName ?? null, address: m.underlyingAsset?.mint ?? null },
+        // PT loops match a lender's collateral by this exact mint (never by name).
+        ptToken: m.ptMint ? { symbol: `PT-${m.tokenName}`, address: m.ptMint } : null,
         accountingSymbol: m.tokenName ?? null,
       };
     });

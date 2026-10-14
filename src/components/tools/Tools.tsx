@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeCheck, Calculator, Droplets, HandCoins, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Calculator, Droplets, HandCoins, Loader2, RefreshCw, Target, TrendingUp } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
@@ -17,15 +17,19 @@ import { defaultFilters, type Filters } from '../opportunities/filters';
 import { LpAnalyzer, readLpPrefill, type LpPrefill } from '../opportunities/LpAnalyzer';
 import { ytFees } from '../../lib/calculators/yt-plan';
 import { BorrowTool } from './BorrowTool';
+import { GoalTool } from './GoalTool';
 import { LpPools } from './LpPools';
+import { MultiplyTool } from './MultiplyTool';
 import { VerifiedYields } from './VerifiedYields';
 
-type Tab = 'calc' | 'lp' | 'borrow' | 'verified';
-const TABS: Tab[] = ['calc', 'lp', 'borrow', 'verified'];
+type Tab = 'goal' | 'calc' | 'lp' | 'multiply' | 'borrow' | 'verified';
+const TABS: Tab[] = ['goal', 'calc', 'lp', 'multiply', 'borrow', 'verified'];
 
 const TOOL_CHOICES: Choice<Tab>[] = [
+  { id: 'goal', icon: Target, title: 'هدف سود', text: 'سود دلاری که می‌خواهید: چه چیزی واقعاً به آن می‌رسد' },
   { id: 'calc', icon: Calculator, title: 'ماشین‌حساب', text: 'یک معامله‌ی YT، PT یا لوپ را با عددهای خودتان' },
   { id: 'lp', icon: Droplets, title: <>استخر <bdi dir="ltr">LP</bdi></>, text: 'کارمزد واقعی هر استخر و زیان ناپایدار' },
+  { id: 'multiply', icon: TrendingUp, title: 'Multiply پرنوسان', text: 'خرید اهرمی: قیمت لیکوییدشدن و شش مسیر قیمت' },
   { id: 'borrow', icon: HandCoins, title: 'هزینه‌ی وام', text: 'ارزان‌ترین وام برای وثیقه‌ی شما' },
   { id: 'verified', icon: BadgeCheck, title: 'تأییدشده', text: 'خزانه‌هایی که بازدهشان روی زنجیره چک شد' },
 ];
@@ -220,11 +224,13 @@ export default function Tools() {
           )}
         </>
       )}
+      {tab === 'goal' && <GoalTool />}
+      {tab === 'multiply' && <MultiplyTool />}
       {tab === 'borrow' && <BorrowTool />}
       {tab === 'verified' && <VerifiedYields />}
 
       {tab === 'calc' && <PendleCalculator c={st.calc} set={setCalc} markets={markets.filter((m) => !m.expired)} onPick={(m) => pick(m)} gas={gas ?? []} />}
-      {updatedAt === null && !loading && tab !== 'lp' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
+      {updatedAt === null && !loading && tab !== 'goal' && tab !== 'lp' && tab !== 'multiply' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
     </main>
   );
 }

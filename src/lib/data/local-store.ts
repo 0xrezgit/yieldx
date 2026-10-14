@@ -31,4 +31,6 @@ export const STORAGE_KEYS = {
   lpPools: 'yieldx-lp-pools-v1',
   verified: 'yieldx-verified-v1',
   collateral: 'yieldx-collateral-v1',
+  multiply: 'yieldx-multiply-v1',
+  goal: 'yieldx-goal-v1',
 } as const;

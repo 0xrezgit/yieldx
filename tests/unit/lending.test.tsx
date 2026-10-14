@@ -259,6 +259,7 @@ describe('sources fail independently', () => {
       // Not mocked here: their own failure hides nothing else.
       ['midnight', 'error'],
       ['kamino', 'error'],
+      ['fluid', 'error'],
       ['loopscale', 'error'],
       ['revert', 'error'],
     ]);
