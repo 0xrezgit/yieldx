@@ -1,13 +1,13 @@
 'use client';
 
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CalendarClock, ChevronDown, Lock, Loader2, Repeat, Scale, Sparkles, TrendingUp, Waves } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Check, ChevronDown, Lightbulb, Lock, Loader2, Repeat, Scale, Sparkles, TrendingUp, Waves } from 'lucide-react';
 import { useMarketAnalysis } from '../../hooks/useMarketAnalysis';
 import { CERTAINTY_LABEL, goalOptions, liquidationOf, requiredReturn, type Certainty, type GoalOption } from '../../lib/opportunity/goal';
 import { finishDay, MAX_SHARE, nearestPaths, type Allocation, type NearResult } from '../../lib/opportunity/goal-plan';
 import { HORIZONS, LEVERAGE_PROFILES, type HorizonDays, type LeverageProfileId } from '../../lib/opportunity/policy';
-import type { LeverageInput } from '../../lib/opportunity/leverage';
-import { estimateAt, type Evaluated } from '../../lib/market/analysis';
+import { levInput, recommend, rowsUnder, type Recommendation } from '../../lib/opportunity/goal-recommend';
+import type { Evaluated } from '../../lib/market/analysis';
 import { isPlainDollar, stepsFor, type Step } from '../../lib/market/steps';
 import { networkByKey } from '../../lib/registry/networks';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
@@ -40,7 +40,6 @@ const PATH: Record<PathId, { title: string; icon: typeof Lock; hint: string }> =
 const PROFILE_TITLE: Record<LeverageProfileId, string> = { cautious: 'محتاط', balanced: 'متعادل', aggressive: 'تهاجمی' };
 /** The fall that liquidates a loop opened at a profile's minimum health: 1 − 1 ÷ health. */
 const profileDrop = (id: LeverageProfileId) => (1 - 1 / LEVERAGE_PROFILES[id].lev.minHealth) * 100;
-const levInput = (id: LeverageProfileId): LeverageInput => ({ ...LEVERAGE_PROFILES[id].lev, pt: LEVERAGE_PROFILES[id].pt });
 
 const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2);
 const signed = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
@@ -90,10 +89,7 @@ export function GoalTool() {
   // Loops re-estimated under the chosen leverage profile (the analysis uses the cautious one).
   const rows: Evaluated[] | null = useMemo(() => {
     if (!ok) return null;
-    if (s!.leverage === 'cautious') return analysis!.rows;
-    const lev = levInput(s!.leverage);
-    const now = Date.now();
-    return analysis!.rows.map((r) => (r.o.family === 'leverage' ? { ...r, byHorizon: { ...r.byHorizon, [s!.days]: estimateAt(r.o, s!.capital, s!.days, analysis!.gas, now, lev) } } : r));
+    return rowsUnder(analysis!.rows, s!.leverage, s!.capital, s!.days, analysis!.gas, Date.now());
   }, [ok, analysis, s]);
 
   const paths = useMemo(() => {
@@ -104,6 +100,15 @@ export function GoalTool() {
   // «همه‌ی گزینه‌ها»: the best 30 of each group (by dollars for this amount and period).
   const res = useMemo(() => (rows && s ? goalOptions(rows, s.days, s.capital, s.target, 30) : null), [rows, s]);
   const near = paths?.near ?? null;
+
+  // «پیشنهاد ما»: every combination of choices, off the main thread's critical path.
+  const [rec, setRec] = useState<{ key: string; r: Recommendation | null } | null>(null);
+  const recKey = s && analysis ? `${s.capital}|${s.target}|${s.days}|${analysis.rows.length}` : '';
+  useEffect(() => {
+    if (!ok || !s || !analysis || m.lending.loading) return;
+    const id = setTimeout(() => setRec({ key: recKey, r: recommend(analysis.rows, analysis.gas, s.days, s.capital, s.target) }), 30);
+    return () => clearTimeout(id);
+  }, [recKey, ok, m.lending.loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const auto: PathId = !near || !s ? 'safe' : near.realistic.locked.total >= s.target ? 'safe' : near.blend ? 'balanced' : 'safe';
   const chosen = path && near && partsOf(near, path) ? path : auto;
@@ -138,6 +143,11 @@ export function GoalTool() {
       ) : (
         <>
           <Answer total={plan.total} target={s.target} days={s.days} finish={finishDay(plan)} rolled={s.roll && plan.parts.some((a) => a.rounds > 1)} periodPct={need.periodPct} apyPct={need.apyPct} pending={m.pending} />
+
+          <Advice rec={rec && rec.key === recKey ? rec.r : undefined} s={s} path={chosen} target={s.target} onApply={(c) => {
+            patch({ leverage: c.leverage, roll: c.roll, diversify: c.diversify });
+            setPath(c.path);
+          }} />
 
           <PathPicker near={near} value={chosen} onChange={setPath} target={s.target} loading={m.lending.loading} />
 
@@ -200,6 +210,68 @@ export function Answer({ total, target, days, finish, rolled, periodPct, apyPct,
           </>
         )}
       </p>
+    </section>
+  );
+}
+
+/** «پیشنهاد ما»: the combination to use, as a few short actions, and one tap to apply it. */
+function Advice({ rec, s, path, target, onApply }: { rec: Recommendation | null | undefined; s: Settings; path: PathId; target: number; onApply: (c: Recommendation['choice']) => void }) {
+  if (rec === undefined)
+    return (
+      <div className="rounded-xl border border-dashed border-default px-4 py-3 text-sm text-secondary flex items-center gap-2">
+        <Loader2 size={14} className="animate-spin" aria-hidden /> در حال یافتن بهترین ترکیب…
+      </div>
+    );
+  if (!rec) return null;
+  const c = rec.choice;
+  const applied = c.path === path && c.leverage === s.leverage && c.roll === s.roll && c.diversify === s.diversify;
+  const steps: React.ReactNode[] = [
+    <>مسیر «{PATH[c.path].title}»</>,
+    ...(c.leverage !== 'cautious' ? [<>اهرم {PROFILE_TITLE[c.leverage]}؛ لیکویید با افت حدود <Num>{formatPercent(profileDrop(c.leverage), 0)}</Num></>] : []),
+    ...(c.roll ? [<>تکرار تا پایان مدت (بعد از دور اول قفل نیست)</>] : []),
+    ...(!c.diversify ? [<>تمرکز بیش از نیمی از پول در یک بازار</>] : []),
+  ];
+  return (
+    <section className={`rounded-2xl border p-4 flex flex-col gap-3 ${rec.reached ? 'border-success/40 bg-success/6' : 'border-accent/40 bg-accent/6'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-semibold flex items-center gap-1.5">
+            <Lightbulb size={15} aria-hidden className="text-accent" /> پیشنهاد ما
+          </span>
+          <span className="text-xs text-secondary">{rec.reached ? 'کم‌ریسک‌ترین ترکیبی که به هدف می‌رسد' : 'بیشترین سود با ریسک قابل‌قبول؛ به هدف نمی‌رسد'}</span>
+        </div>
+        <Num className={`text-xl font-bold shrink-0 ${rec.reached ? 'text-success' : 'text-primary'}`}>{usd(rec.total)}</Num>
+      </div>
+      <ol className="flex flex-col gap-1 text-sm">
+        {steps.map((x, i) => (
+          <li key={i} className="flex items-center gap-2">
+            <span className="grid place-items-center size-5 shrink-0 rounded-full bg-accent/15 text-accent text-[11px] font-bold">
+              <Num>{formatNumber(i + 1, 0)}</Num>
+            </span>
+            <span>{x}</span>
+          </li>
+        ))}
+      </ol>
+      {rec.aggressive && (
+        <p className="text-xs text-danger flex items-start gap-1.5">
+          <AlertTriangle size={13} className="shrink-0 mt-0.5" aria-hidden /> با اهرم تهاجمی <Num>{usd(rec.aggressive.total)}</Num> می‌شود، ولی با افت حدود <Num>{formatPercent(profileDrop('aggressive'), 0)}</Num> لیکویید می‌شوید؛ پیشنهاد نمی‌کنیم.
+        </p>
+      )}
+      {!rec.reached && !rec.aggressive && target > rec.total && <p className="text-xs text-secondary">هیچ ترکیبی از بازار امروز به هدف نمی‌رسد؛ از پیشنهادهای پایین کمک بگیرید.</p>}
+      <button
+        type="button"
+        disabled={applied}
+        onClick={() => onApply(c)}
+        className="tap self-start inline-flex items-center gap-1.5 rounded-md bg-brand px-4 min-h-10 text-sm font-medium text-on-brand disabled:bg-transparent disabled:text-success disabled:px-0"
+      >
+        {applied ? (
+          <>
+            <Check size={15} aria-hidden /> اعمال شده
+          </>
+        ) : (
+          'اعمال پیشنهاد'
+        )}
+      </button>
     </section>
   );
 }

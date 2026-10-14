@@ -93,3 +93,20 @@ describe('نزدیک‌ترین راه‌های واقعی', () => {
     expect(Math.max(...free.realistic.locked.parts.map((p) => p.amount))).toBeGreaterThan(10_000 * MAX_SHARE);
   });
 });
+
+describe('«پیشنهاد ما»', () => {
+  it('the least risky combination that reaches the target; never aggressive leverage', async () => {
+    const { recommend, riskOf } = await import('../../src/lib/opportunity/goal-recommend');
+    const opps = [pt('AUSD', 16, 2_000_000), pt('BUSD', 12, 50_000_000), lend(30, 5_000_000)];
+    const a = evaluate({ opportunities: opps, merkl: null, gas: [] }, 10_000, NOW);
+    const easy = recommend(a.rows, a.gas, 90, 10_000, 1, NOW)!;
+    expect(easy.choice).toEqual({ path: 'safe', leverage: 'cautious', roll: false, diversify: true });
+    expect(riskOf(easy.choice)).toBe(0);
+    const harder = recommend(a.rows, a.gas, 90, 10_000, easy.total + 50, NOW)!;
+    expect(harder.reached).toBe(true);
+    expect(harder.risk).toBeGreaterThan(0);
+    expect(harder.choice.leverage).not.toBe('aggressive');
+    const impossible = recommend(a.rows, a.gas, 90, 10_000, 1e9, NOW)!;
+    expect(impossible.reached).toBe(false);
+  });
+});
