@@ -48,6 +48,8 @@ export interface Evaluated {
 
 export interface Analysis {
   capital: number;
+  /** Gas prices the estimates used (re-estimating at another amount uses the same). */
+  gas: GasQuote[];
   rows: Evaluated[];
   byKey: Map<string, Opportunity>;
   rowByKey: Map<string, Evaluated>;
@@ -85,6 +87,23 @@ export function searchText(o: Opportunity): string {
     .join(' ');
 }
 
+/**
+ * One protocol opportunity estimated for an amount and horizon, as the ranking does it
+ * (gas, unknown costs, leverage policy) — without Merkl rewards, which `evaluate` adds.
+ */
+export function estimateAt(o: Opportunity, capital: number, days: HorizonDays, gas: GasQuote[], now = Date.now()): Estimate {
+  const g = gasLines(o, gas);
+  return estimate(o, {
+    capital,
+    days,
+    entryCosts: g.entry,
+    exitCosts: g.exit,
+    unknownCosts: o.family === 'pt' ? [...PT_UNKNOWN_COSTS] : o.family === 'yt' ? [] : o.rewards.length ? ['گس دریافت پاداش (claim)'] : [],
+    now,
+    leverage: defaultLeverageInput,
+  });
+}
+
 /** Every opportunity estimated for this capital at every horizon. */
 export function evaluate(input: AnalysisInput, capital: number, now = Date.now()): Analysis {
   const base = dedupeOpportunities(input.opportunities);
@@ -97,18 +116,9 @@ export function evaluate(input: AnalysisInput, capital: number, now = Date.now()
   const rows: Evaluated[] = opps.map((raw) => {
     const linked = links.get(raw.key);
     const o = linked ? withoutMerklDuplicates(raw, linked) : raw;
-    const g = gasLines(o, input.gas);
     const byHorizon = {} as Record<HorizonDays, Estimate>;
     for (const days of HORIZONS) {
-      let e = estimate(o, {
-        capital,
-        days,
-        entryCosts: g.entry,
-        exitCosts: g.exit,
-        unknownCosts: o.family === 'pt' ? [...PT_UNKNOWN_COSTS] : o.family === 'yt' ? [] : o.rewards.length ? ['گس دریافت پاداش (claim)'] : [],
-        now,
-        leverage: defaultLeverageInput,
-      });
+      let e = estimateAt(o, capital, days, input.gas, now);
       if (linked && merkl) e = addMerklRewards(e, linked, merkl.ctx, perClaim);
       byHorizon[days] = e;
     }
@@ -131,7 +141,7 @@ export function evaluate(input: AnalysisInput, capital: number, now = Date.now()
     }
   }
 
-  return { capital, rows, byKey: new Map(rows.map((r) => [r.o.key, r.o])), rowByKey: new Map(rows.map((r) => [r.o.key, r])), linked: links.size, modelVersion: MODEL_VERSION, rankingVersion: RANKING_VERSION };
+  return { capital, gas: input.gas, rows, byKey: new Map(rows.map((r) => [r.o.key, r.o])), rowByKey: new Map(rows.map((r) => [r.o.key, r])), linked: links.size, modelVersion: MODEL_VERSION, rankingVersion: RANKING_VERSION };
 }
 
 export interface HorizonView {

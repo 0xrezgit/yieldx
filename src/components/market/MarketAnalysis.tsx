@@ -51,7 +51,7 @@ function restore(): Stored & { query: string } {
   };
 }
 
-function Identity({ row }: { row: Evaluated }) {
+export function Identity({ row }: { row: Pick<Evaluated, 'o'> }) {
   const { o } = row;
   const net = networkByKey(o.chain);
   const symbol = o.assets.deposit[0]?.symbol ?? o.market.name;

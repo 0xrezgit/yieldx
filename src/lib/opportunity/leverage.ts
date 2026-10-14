@@ -1,4 +1,4 @@
-import type { CostItem, DataQuality, Estimate, LeverageResult, Opportunity } from '../../types/opportunity';
+import type { CostItem, DataQuality, Estimate, LeverageResult, LoopSpec, Opportunity } from '../../types/opportunity';
 import { tokenClass } from '../merkl/vetting';
 import { maxLoopLeverage, simulateLoop } from '../calculators/trade';
 import { formatNumber, formatPercent } from '../utils/formatting';
@@ -22,7 +22,7 @@ import { afterAmmFee, afterRedeem, quoteCheck } from './pt-price';
  *   net on own money = ΔG − ΔB − costs
  *
  * Prices are held constant, so only pairs that move together are built (USD/USD,
- * ETH/ETH, BTC/BTC). Two risks are always shown apart: liquidation if the
+ * ETH/ETH, BTC/BTC, SOL/SOL on Solana). Two risks are always shown apart: liquidation if the
  * collateral falls against the debt, and a variable borrow rate that can rise.
  * The portfolio counts E + net, never G.
  */
@@ -38,7 +38,17 @@ export interface LeverageInput {
 
 export const defaultLeverageInput: LeverageInput = { ...LEVERAGE_POLICY };
 
-const CLASSES = new Set(['usd', 'eth', 'btc']);
+const CLASSES = new Set(['usd', 'eth', 'btc', 'sol']);
+
+/**
+ * A token's class for pairing. On Solana, SOL and its liquid staking tokens (JitoSOL,
+ * mSOL, JupSOL… — a stake pool share redeems for SOL) form one more class.
+ */
+const loopClass = (symbol: string, chain: string): string => {
+  const c = tokenClass({ symbol });
+  if (c !== 'other' || !chain.startsWith('solana:')) return c;
+  return /^w?sol$/i.test(symbol) || /^[a-z0-9]+sol$/i.test(symbol) ? 'sol' : c;
+};
 
 const addrKey = (chain: string, address: string | null | undefined) => (address ? `${chain}:${address.toLowerCase()}` : null);
 
@@ -50,12 +60,15 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
     const side = o.borrow;
     const debt = o.assets.deposit[0];
     if (!side || !debt?.symbol || !debt.address || side.ratePct === null) continue;
-    const debtClass = tokenClass({ symbol: debt.symbol });
+    const debtClass = side.debtClass ?? loopClass(debt.symbol, o.chain);
     if (!CLASSES.has(debtClass)) continue;
     for (const c of side.collateral) {
       if (!c.token.symbol || !c.token.address || !c.yield || !(c.yield.pct > 0)) continue;
       if (pts.has(addrKey(o.chain, c.token.address))) continue;
-      if (tokenClass({ symbol: c.token.symbol }) !== debtClass) continue;
+      // A dollar name alone (apyUSD, syrupUSDC) pairs with a dollar debt, its peg unverified.
+      const cClass = c.class ?? loopClass(c.token.symbol, o.chain);
+      const unverified = cClass === 'other' && debtClass === 'usd' && /usd/i.test(c.token.symbol);
+      if (cClass !== debtClass && !unverified) continue;
       const quality: DataQuality = side.premiumUnknown ? (o.quality === 'current' ? 'partial' : o.quality) : o.quality;
       out.push({
         ...o,
@@ -70,7 +83,7 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
         supplyCurve: null,
         book: null,
         borrow: null,
-        loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, pairClass: debtClass as 'usd' | 'eth' | 'btc' },
+        loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}), pairClass: debtClass as LoopSpec['pairClass'], ...(unverified ? { pegVerified: false } : {}) },
         quality,
         notes: [...(o.notes ?? []).filter((n) => !n.startsWith('Hub:')), ...(side.premiumUnknown ? ['Aave V4: نرخ وام پایه به کار رفت؛ صرف ریسک کاربر (User Risk Premium) که به ترکیب وثیقه‌ی شما بستگی دارد لحاظ نشده و نرخ واقعی می‌تواند بالاتر باشد.'] : [])],
         icon: null,
@@ -187,7 +200,8 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
           collateral: { token, yield: { pct: afterAmmFee(p.rate.value as number, p.ammFeeLn, 'pt'), kind: 'apy', source: p.ammFeeLn ? `Implied APY امروز ${p.protocol.name} تا سررسید، پس از کارمزد AMM` : `Implied APY امروز ${p.protocol.name} تا سررسید` } },
           debt: { token: debt, side },
           maxLtv: c.maxLtv,
-          pairClass: debtClass as 'usd' | 'eth' | 'btc',
+          ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}),
+          pairClass: debtClass as LoopSpec['pairClass'],
           pegVerified: !unverified,
           entryUrl: p.url ?? null,
         },
@@ -246,8 +260,13 @@ export function leverageEstimate(
 
   const entry = input.entryCosts ?? [];
   const E0 = Math.max(0, input.capital - entry.reduce((a, c) => a + c.usd, 0));
-  const maxSafe = maxLoopLeverage(l.maxLtv * 100, Math.max(1, lev.minHealth));
+  // The protocol stops new borrowing at `borrowLtv` (Kamino's max LTV): no further.
+  const byBorrowLimit = l.borrowLtv !== undefined && l.borrowLtv > 0 && l.borrowLtv < 1 ? 1 / (1 - l.borrowLtv) : Infinity;
+  const maxSafe = Math.min(maxLoopLeverage(l.maxLtv * 100, Math.max(1, lev.minHealth)), byBorrowLimit);
   let L = Math.min(maxSafe, lev.maxLeverage);
+  // A dollar peg known only from the name: the PT loop policy's cautious leverage.
+  const pegUnverified = l.pegVerified === false && m.state === 'open';
+  if (pegUnverified) L = Math.min(L, PT_LOOP_POLICY.cautiousLeverage);
   // A PT loop (it has a maturity): the PT loop policy picks 3× or 2.5× for this market.
   const pt = m.state === 'active' && m.days !== null ? ptLoopLeverage({ impliedPct: l.collateral.yield.pct, borrowPct: loopBorrowPct(l.debt.side) as number, days: m.days, lltvPct: l.maxLtv * 100, pegVerified: l.pegVerified !== false, feePercent: 0 }) : null;
   if (pt) L = pt.leverage;
@@ -289,6 +308,11 @@ export function leverageEstimate(
   }
 
   const r0 = loopBorrowPct(l.debt.side) as number;
+  const term = l.debt.side.fixedTermDays;
+  if (term !== undefined) {
+    if (term >= days) assumptions.push(`وام با نرخ ثابت ${formatPercent(l.debt.side.ratePct as number, 2)} برای ${formatNumber(Math.round(term), 0)} روز: بهره‌ی کل این دوره قفل است.`);
+    else unknown.push(`نرخ وام پس از ${formatNumber(Math.round(term), 0)} روز: وام نرخ ثابت تمدید می‌شود با نرخ آن روز (نامعلوم)؛ همین نرخ فرض شد.`);
+  }
   if (l.debt.side.ratePct7d != null && l.debt.side.ratePct7d > (l.debt.side.ratePct ?? 0)) assumptions.push(`بهره‌ی وام با میانگین ۷ روز (${formatPercent(l.debt.side.ratePct7d, 2)}) حساب شد، که از نرخ امروز بالاتر است.`);
   let r = r0;
   if (l.debt.side.curve) {
@@ -335,7 +359,7 @@ export function leverageEstimate(
   assumptions.push(
     pt
       ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ۳× یا ۲.۵×، سلامت دست‌کم ${formatNumber(PT_LOOP_POLICY.minHealth, 2)} و تحمل جهش ${formatNumber(PT_LOOP_POLICY.rateBufferPp, 0)} واحد درصدی نرخ PT.`
-      : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(lev.maxLeverage, 0)}×.`,
+      : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(pegUnverified ? PT_LOOP_POLICY.cautiousLeverage : lev.maxLeverage, pegUnverified ? 1 : 0)}×${pegUnverified ? ` (برابری ${l.collateral.token.symbol} با دلار فقط از نامش پیداست، تأیید نشده)` : ''}.`,
     `بازده وثیقه ${formatPercent(y, 2)} (${l.collateral.yield.source}) و نرخ وام ${formatPercent(r, 2)} برای کل دوره ثابت فرض شدند.`,
     `لیکوییدشدن اگر ارزش ${l.collateral.token.symbol} نسبت به ${l.debt.token.symbol} حدود ${formatPercent(liquidationDrop * 100, 1)} کم شود.`,
   );

@@ -1,6 +1,7 @@
 import type { Opportunity } from '../../types/opportunity';
 import { fetchAave, fetchAaveHistory, normalizeAave } from './aave';
 import { withHistory, type HistoryLoader } from './history';
+import { fetchFluid } from './fluid';
 import { fetchKamino, fetchKaminoHistory } from './kamino';
 import { fetchLoopscale } from './loopscale';
 import { fetchMidnight } from './midnight';
@@ -39,6 +40,8 @@ export const SOURCES: Source[] = [
   { id: 'midnight', name: 'Morpho Midnight', ttlMs: 2 * 60_000, load: (at) => fetchMidnight(at, new Date(at).getTime()), background: true },
   // Two requests per Kamino market; vault pages for Loopscale.
   { id: 'kamino', name: 'Kamino', ttlMs: 5 * 60_000, load: (at) => fetchKamino(at), history: { load: fetchKaminoHistory } },
+  // Fluid: fTokens and every vault type (two requests per network).
+  { id: 'fluid', name: 'Fluid', ttlMs: 2 * 60_000, load: (at) => fetchFluid(at) },
   { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at) },
   // Daily rate from Revert's API, vault state read on-chain (two RPC batches per vault).
   { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at) },
