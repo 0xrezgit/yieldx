@@ -172,3 +172,41 @@ export function goalOptions(rows: Evaluated[], days: HorizonDays, capital: numbe
     excluded,
   };
 }
+
+/**
+ * When a loop is liquidated, in numbers a user can watch:
+ *   dropPct     — the collateral's fall against the debt (LeverageResult.liquidationDrop);
+ *   ptRatePct   — for a PT, the market rate at which its price has fallen that far
+ *                 (price = 1 ÷ (1 + r)^(t ÷ 365), t the days to maturity);
+ *   borrowPct   — the average borrow rate at which interest alone reaches the limit by
+ *                 the end (collateral and its own yield unchanged);
+ *   zeroPct     — the average borrow rate above which the loop earns nothing.
+ * Null fields are out of reach (or not applicable).
+ */
+export interface LiquidationInfo {
+  leverage: number;
+  health: number;
+  dropPct: number;
+  ptRatePct: number | null;
+  borrowPct: number | null;
+  zeroPct: number | null;
+}
+
+export function liquidationOf(o: Opportunity, e: Estimate): LiquidationInfo | null {
+  const x = e.leverage;
+  if (!x || !(x.debt > 0) || !(x.gross > 0)) return null;
+  const d = e.earningDays;
+  const drop = x.liquidationDrop;
+  let ptRatePct: number | null = null;
+  if (o.maturity && o.loop && d > 0 && drop < 1) {
+    const r = o.loop.collateral.yield.pct / 100;
+    const r2 = Math.pow(Math.pow(1 + r, d / 365) / (1 - drop), 365 / d) - 1;
+    ptRatePct = Number.isFinite(r2) ? r2 * 100 : null;
+  }
+  const gG = (e.baseIncome ?? 0) / x.gross;
+  const gB = (x.maxLtv * x.gross * (1 + gG)) / x.debt - 1;
+  const borrowPct = d > 0 ? yearly(gB, d) : null;
+  const costs = e.costs.reduce((a, c) => a + c.usd, 0);
+  const zeroPct = d > 0 ? yearly(((e.baseIncome ?? 0) + (e.rewards ?? 0) - costs) / x.debt, d) : null;
+  return { leverage: x.leverage, health: x.health.value, dropPct: drop * 100, ptRatePct, borrowPct, zeroPct };
+}

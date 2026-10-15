@@ -5,7 +5,7 @@ import { formatNumber, formatPercent } from '../utils/formatting';
 import { rateAfterBorrow } from './curve';
 import { periodGrowth } from './rates';
 import { placeOf, reasonOf, worseQuality } from './estimate';
-import { LEVERAGE_POLICY, MAX_POOL_SHARE_WITHOUT_QUOTE, PT_LOOP_POLICY } from './policy';
+import { LEVERAGE_POLICY, MAX_POOL_SHARE_WITHOUT_QUOTE, PT_LOOP_POLICY, type PtLoopPolicy } from './policy';
 import { maturityState } from '../protocols/lifecycle';
 import { evmChainId } from './costs';
 import { afterAmmFee, afterRedeem, quoteCheck } from './pt-price';
@@ -34,6 +34,8 @@ export interface LeverageInput {
   minHealth: number;
   /** Upper bound on leverage whatever the health allows. */
   maxLeverage: number;
+  /** PT loops' policy under this input (default PT_LOOP_POLICY). */
+  pt?: PtLoopPolicy;
 }
 
 export const defaultLeverageInput: LeverageInput = { ...LEVERAGE_POLICY };
@@ -115,8 +117,7 @@ export const PT_LEVERAGE_REASON: Record<PtLeverageReason, string> = {
  * lowered only as far as health `minHealth` (after the entry fee) and surviving a
  * `rateBufferPp` rise of the implied rate (market-priced PT) need.
  */
-export function ptLoopLeverage(p: { impliedPct: number; borrowPct: number; days: number; lltvPct: number; pegVerified: boolean; feePercent: number }): { leverage: number; reason: PtLeverageReason } {
-  const P = PT_LOOP_POLICY;
+export function ptLoopLeverage(p: { impliedPct: number; borrowPct: number; days: number; lltvPct: number; pegVerified: boolean; feePercent: number }, P: PtLoopPolicy = PT_LOOP_POLICY): { leverage: number; reason: PtLeverageReason } {
   const spread = p.impliedPct - p.borrowPct;
   const cautious: PtLeverageReason | null = !p.pegVerified ? 'peg' : spread < P.minSpreadPp ? 'spread' : p.days > P.longDays ? 'long' : null;
   let L: number = cautious ? P.cautiousLeverage : P.maxLeverage;
@@ -265,11 +266,13 @@ export function leverageEstimate(
   const maxSafe = Math.min(maxLoopLeverage(l.maxLtv * 100, Math.max(1, lev.minHealth)), byBorrowLimit);
   let L = Math.min(maxSafe, lev.maxLeverage);
   // A dollar peg known only from the name: the PT loop policy's cautious leverage.
+  const P = lev.pt ?? PT_LOOP_POLICY;
   const pegUnverified = l.pegVerified === false && m.state === 'open';
-  if (pegUnverified) L = Math.min(L, PT_LOOP_POLICY.cautiousLeverage);
-  // A PT loop (it has a maturity): the PT loop policy picks 3× or 2.5× for this market.
-  const pt = m.state === 'active' && m.days !== null ? ptLoopLeverage({ impliedPct: l.collateral.yield.pct, borrowPct: loopBorrowPct(l.debt.side) as number, days: m.days, lltvPct: l.maxLtv * 100, pegVerified: l.pegVerified !== false, feePercent: 0 }) : null;
-  if (pt) L = pt.leverage;
+  if (pegUnverified) L = Math.min(L, P.cautiousLeverage);
+  // A PT loop (it has a maturity): the PT loop policy picks its leverage for this market,
+  // never past the protocol's borrow limit.
+  const pt = m.state === 'active' && m.days !== null ? ptLoopLeverage({ impliedPct: l.collateral.yield.pct, borrowPct: loopBorrowPct(l.debt.side) as number, days: m.days, lltvPct: l.maxLtv * 100, pegVerified: l.pegVerified !== false, feePercent: 0 }, P) : null;
+  if (pt) L = Math.min(pt.leverage, byBorrowLimit);
   if (!Number.isFinite(L) || L < 1) L = 1;
   if (!(L > 1)) return stop('needs-model', 'حد سلامت اجازه‌ی اهرم نمی‌دهد.');
 
@@ -342,7 +345,7 @@ export function leverageEstimate(
   const result: LeverageResult = {
     leverage: L,
     maxSafe,
-    policy: pt ? PT_LOOP_POLICY.version : lev.version,
+    policy: pt ? P.version : lev.version,
     ...(pt ? { reason: PT_LEVERAGE_REASON[pt.reason] } : {}),
     equity: E,
     gross: G,
@@ -358,8 +361,8 @@ export function leverageEstimate(
 
   assumptions.push(
     pt
-      ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ۳× یا ۲.۵×، سلامت دست‌کم ${formatNumber(PT_LOOP_POLICY.minHealth, 2)} و تحمل جهش ${formatNumber(PT_LOOP_POLICY.rateBufferPp, 0)} واحد درصدی نرخ PT.`
-      : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(pegUnverified ? PT_LOOP_POLICY.cautiousLeverage : lev.maxLeverage, pegUnverified ? 1 : 0)}×${pegUnverified ? ` (برابری ${l.collateral.token.symbol} با دلار فقط از نامش پیداست، تأیید نشده)` : ''}.`,
+      ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ${formatNumber(P.maxLeverage, 1)}× یا ${formatNumber(P.cautiousLeverage, 1)}×، سلامت دست‌کم ${formatNumber(P.minHealth, 2)} و تحمل جهش ${formatNumber(P.rateBufferPp, 0)} واحد درصدی نرخ PT.`
+      : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(pegUnverified ? P.cautiousLeverage : lev.maxLeverage, pegUnverified ? 1 : 0)}×${pegUnverified ? ` (برابری ${l.collateral.token.symbol} با دلار فقط از نامش پیداست، تأیید نشده)` : ''}.`,
     `بازده وثیقه ${formatPercent(y, 2)} (${l.collateral.yield.source}) و نرخ وام ${formatPercent(r, 2)} برای کل دوره ثابت فرض شدند.`,
     `لیکوییدشدن اگر ارزش ${l.collateral.token.symbol} نسبت به ${l.debt.token.symbol} حدود ${formatPercent(liquidationDrop * 100, 1)} کم شود.`,
   );

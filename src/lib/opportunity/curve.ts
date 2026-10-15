@@ -71,3 +71,40 @@ export function rateAfterBorrow(curve: SupplyCurve, amount: number, publishedPct
   if (now === null || after === null || !(now > 0)) return null;
   return publishedPct * (after / now);
 }
+
+/**
+ * The same curve with fewer points: a point is dropped when linear interpolation between
+ * the points kept around it (as `curveAt` reads it) lands within `tol` of its rate —
+ * so the curve `curveAt` returns is unchanged to `tol` (Douglas–Peucker on u → rate).
+ * Interest rate models are piecewise linear: their 101 sampled points come down to the
+ * kinks. Kept values are rounded to what the estimates can use (u to 1e-6, rate to 9
+ * significant digits).
+ */
+export function simplifyCurve(points: SupplyCurve['points'], tol?: number): SupplyCurve['points'] {
+  if (points.length <= 3) return points;
+  const scale = Math.max(...points.map((p) => Math.abs(p.rate)), 1e-12);
+  const eps = tol ?? scale * 1e-6;
+  const keep = new Array<boolean>(points.length).fill(false);
+  keep[0] = keep[points.length - 1] = true;
+  const stack: [number, number][] = [[0, points.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    let worst = -1;
+    let at = -1;
+    for (let i = a + 1; i < b; i++) {
+      const pa = points[a];
+      const pb = points[b];
+      const t = pb.u === pa.u ? 0 : (points[i].u - pa.u) / (pb.u - pa.u);
+      const d = Math.abs(points[i].rate - (pa.rate + t * (pb.rate - pa.rate)));
+      if (d > worst) {
+        worst = d;
+        at = i;
+      }
+    }
+    if (at > 0 && worst > eps) {
+      keep[at] = true;
+      stack.push([a, at], [at, b]);
+    }
+  }
+  return points.filter((_, i) => keep[i]).map((p) => ({ u: Math.round(p.u * 1e6) / 1e6, rate: Number(p.rate.toPrecision(9)) }));
+}

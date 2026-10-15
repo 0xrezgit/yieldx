@@ -33,4 +33,5 @@ export const STORAGE_KEYS = {
   collateral: 'yieldx-collateral-v1',
   multiply: 'yieldx-multiply-v1',
   goal: 'yieldx-goal-v1',
+  monthly: 'yieldx-monthly-v1',
 } as const;
