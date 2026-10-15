@@ -4,7 +4,8 @@ import { estimateAt, type Evaluated } from '../market/analysis';
 import { txCost } from '../opportunity/costs';
 import { tokenClass } from '../merkl/vetting';
 import { defaultLeverageInput, type LeverageInput } from '../opportunity/leverage';
-import { LEVERAGE_PROFILES } from '../opportunity/policy';
+import { HORIZONS, LEVERAGE_PROFILES, type HorizonDays } from '../opportunity/policy';
+import { maturityState } from '../protocols/lifecycle';
 
 /**
  * «درآمد ماهانه» — money withdrawn every month, the capital left working. Independent of
@@ -30,7 +31,13 @@ export const MONTHLY_RISK_LABEL: Record<MonthlyRisk, string> = { stable: 'پای
  * «کمی بیشتر»: between the balanced profile (health 1.12) and the aggressive one (1.05),
  * which this tool never uses. Defined here so «هدف سود» is untouched.
  */
-const BOOSTED: LeverageInput = { version: 'lev-v1-monthly-boosted', minHealth: 1.08, maxLeverage: 8 };
+const BOOSTED: LeverageInput = {
+  version: 'lev-v1-monthly-boosted',
+  minHealth: 1.08,
+  maxLeverage: 8,
+  // Its own cap for loops whose dollar peg is unverified, between balanced (4×) and aggressive (8×).
+  pt: { ...LEVERAGE_PROFILES.balanced.pt, version: 'lev-pt-v2-monthly-boosted', minHealth: 1.08, maxLeverage: 7, cautiousLeverage: 5 },
+};
 
 /** The fall of collateral against debt that liquidates a loop opened at the risk's minimum health. */
 export const riskDrop = (risk: MonthlyRisk) => (risk === 'stable' ? null : (1 - 1 / (risk === 'boosted' ? BOOSTED.minHealth : LEVERAGE_PROFILES.balanced.lev.minHealth)) * 100);
@@ -41,7 +48,8 @@ export const BAD_BORROW_PP = 2;
 export const MONTHLY_MAX_SHARE = 0.5;
 
 /** What one risk depends on: a loop's collateral token (two loops of sUSDai are one risk), else the market. */
-const exposureOf = (o: Opportunity) => (o.family === 'leverage' && o.loop ? `asset:${(o.loop.collateral.token.symbol ?? '').toUpperCase()}` : `market:${o.key}`);
+const exposureOf = (o: Opportunity) =>
+  o.family === 'leverage' && o.loop ? `asset:${(o.loop.collateral.token.symbol ?? '').toUpperCase()}` : o.family === 'pt' ? `asset:${(o.assets.deposit[0]?.symbol ?? '').toUpperCase()}` : `market:${o.key}`;
 const CHUNKS = 8;
 const CANDIDATES = 12;
 const DAYS = 30 as const;
@@ -57,6 +65,20 @@ export interface MonthlyPart {
   /** Cost of the monthly withdrawal, dollars. */
   withdrawCost: number;
   e: Estimate;
+  /** Days between withdrawals: 30, or a PT's days to maturity (its profit comes at maturity). */
+  payoutDays: number;
+  /** A dollar peg resting only on the name (opt-in). */
+  unverified: boolean;
+}
+
+export interface MonthlyOptions {
+  risk: MonthlyRisk;
+  ethereum: boolean;
+  /** Loops on a collateral whose dollar peg rests only on its name (apyUSD): opt-in, warned. */
+  unverified?: boolean;
+  /** Dollar PTs, withdrawn at maturity (every 1–4 months), shown as a monthly average. */
+  pt?: boolean;
+  now?: number;
 }
 
 export interface MonthlyPlan {
@@ -80,12 +102,20 @@ export interface MonthlyResult {
 const sum = (c: CostItem[]) => c.reduce((a, x) => a + x.usd, 0);
 const levOf = (risk: MonthlyRisk): LeverageInput => (risk === 'boosted' ? BOOSTED : risk === 'balanced' ? { ...LEVERAGE_PROFILES.balanced.lev, pt: LEVERAGE_PROFILES.balanced.pt } : defaultLeverageInput);
 
-/** Can this opportunity pay a dollar income every month? */
-export function monthlyEligible(o: Opportunity, risk: MonthlyRisk, ethereum: boolean): boolean {
+/** Can this opportunity pay a dollar income every month (or, opted in, at a PT's maturity)? */
+export function monthlyEligible(o: Opportunity, risk: MonthlyRisk, ethereum: boolean, opts: Pick<MonthlyOptions, 'unverified' | 'pt'> = {}): boolean {
   if (!ethereum && o.chain === 'eip155:1') return false;
   if (o.family === 'lend' || o.family === 'vault') return tokenClass({ symbol: o.assets.deposit[0]?.symbol ?? '' }) === 'usd';
-  if (o.family === 'leverage') return risk !== 'stable' && !o.maturity && o.loop?.pairClass === 'usd' && o.loop.pegVerified !== false;
+  if (o.family === 'leverage') return risk !== 'stable' && !o.maturity && o.loop?.pairClass === 'usd' && (o.loop.pegVerified !== false || opts.unverified === true);
+  if (o.family === 'pt') return opts.pt === true && o.ptClass?.class === 'usd' && o.ptClass.pegVerified !== false;
   return false;
+}
+
+/** A PT's estimate horizon: the shortest one its maturity fits in; null past the last. */
+function ptHorizon(o: Opportunity, now: number): HorizonDays | null {
+  const m = maturityState(o.maturity, now);
+  if (m.state !== 'active' || m.days === null) return null;
+  return HORIZONS.find((h) => h >= m.days!) ?? null;
 }
 
 interface Ctx {
@@ -99,6 +129,20 @@ interface Ctx {
 function partAt(c: Ctx, o: Opportunity, amount: number): MonthlyPart | null {
   const k = `${o.key}|${Math.round(amount)}`;
   if (c.cache.has(k)) return c.cache.get(k)!;
+  if (o.family === 'pt') {
+    // Paid at maturity: the profit of one round as a monthly average; buying, redeeming
+    // and the swap back repeat each round, so they stay inside it. The first round is
+    // locked, the bad month is the same.
+    const h = ptHorizon(o, c.now);
+    const e = h ? estimateAt(o, amount, h, c.gas, c.now) : null;
+    let r: MonthlyPart | null = null;
+    if (e && e.placement === 'ranked' && e.net !== null && e.earningDays > 0) {
+      const monthly = ((e.net - (e.rewards ?? 0)) * 30) / e.earningDays;
+      if (monthly > 0) r = { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + sum(e.costs)) : amount, monthly, bad: monthly, oneTime: 0, withdrawCost: (sum(e.costs) * 30) / e.earningDays, e, payoutDays: e.earningDays, unverified: false };
+    }
+    c.cache.set(k, r);
+    return r;
+  }
   const e = estimateAt(o, amount, DAYS, c.gas, c.now, o.family === 'leverage' ? c.lev : defaultLeverageInput);
   let r: MonthlyPart | null = null;
   if (e.placement === 'ranked' && e.net !== null && e.earningDays >= DAYS - 1) {
@@ -118,7 +162,7 @@ function partAt(c: Ctx, o: Opportunity, amount: number): MonthlyPart | null {
       const lowest = seen.length ? Math.min(...seen) : null;
       if (used && used > 0 && lowest !== null) bad = monthly * Math.min(1, lowest / used);
     }
-    r = monthly > 0 ? { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + oneTime) : amount, monthly, bad, oneTime, withdrawCost, e } : null;
+    r = monthly > 0 ? { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + oneTime) : amount, monthly, bad, oneTime, withdrawCost, e, payoutDays: DAYS, unverified: o.loop?.pegVerified === false } : null;
   }
   c.cache.set(k, r);
   return r;
@@ -162,9 +206,9 @@ function planAt(c: Ctx, candidates: Opportunity[], capital: number): MonthlyPlan
 }
 
 /** The best dollar-a-month per dollar placed, among eligible opportunities, at one chunk of an amount. */
-function pick(c: Ctx, rows: Evaluated[], risk: MonthlyRisk, ethereum: boolean, probe: number): Opportunity[] {
+function pick(c: Ctx, rows: Evaluated[], opts: MonthlyOptions, probe: number): Opportunity[] {
   return rows
-    .filter((r) => monthlyEligible(r.o, risk, ethereum))
+    .filter((r) => monthlyEligible(r.o, opts.risk, opts.ethereum, opts))
     .map((r) => ({ o: r.o, p: partAt(c, r.o, probe) }))
     .filter((x): x is { o: Opportunity; p: MonthlyPart } => x.p !== null)
     .sort((a, b) => b.p.monthly - a.p.monthly)
@@ -172,12 +216,12 @@ function pick(c: Ctx, rows: Evaluated[], risk: MonthlyRisk, ethereum: boolean, p
     .map((x) => x.o);
 }
 
-export function monthlyIncome(rows: Evaluated[], gas: GasQuote[], capital: number, target: number, opts: { risk: MonthlyRisk; ethereum: boolean; now?: number }): MonthlyResult {
+export function monthlyIncome(rows: Evaluated[], gas: GasQuote[], capital: number, target: number, opts: MonthlyOptions): MonthlyResult {
   const c: Ctx = { gas, now: opts.now ?? Date.now(), lev: levOf(opts.risk), cache: new Map() };
-  const plan = planAt(c, pick(c, rows, opts.risk, opts.ethereum, capital / CHUNKS), capital);
+  const plan = planAt(c, pick(c, rows, opts, capital / CHUNKS), capital);
   if (plan.monthly >= target || !(target > 0)) return { plan, capitalForTarget: plan.monthly >= target ? capital : null, maxMonthly: plan.monthly };
   // Capital for the target: grow until reached or the market stops taking more, then narrow down.
-  const at = (x: number) => planAt(c, pick(c, rows, opts.risk, opts.ethereum, x / CHUNKS), x);
+  const at = (x: number) => planAt(c, pick(c, rows, opts, x / CHUNKS), x);
   let lo = capital;
   let hi = capital;
   let p = plan;

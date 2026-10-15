@@ -20,8 +20,12 @@ interface Settings {
   target: number;
   risk: MonthlyRisk;
   ethereum: boolean;
+  /** Loops on a dollar asset whose peg rests only on its name (opt-in). */
+  unverified: boolean;
+  /** Dollar PTs, withdrawn at maturity. */
+  pt: boolean;
 }
-const initial: Settings = { capital: 3000, target: 300, risk: 'balanced', ethereum: false };
+const initial: Settings = { capital: 3000, target: 300, risk: 'balanced', ethereum: false, unverified: false, pt: false };
 
 const usd = (x: number) => formatUSD(Math.max(0, x), Math.abs(x) >= 100 ? 0 : 2);
 const ltr = (s: string | null | undefined) => `⁨${s ?? '—'}⁩`;
@@ -38,7 +42,7 @@ export function MonthlyIncome() {
   const [s, setS] = useState<Settings | null>(null);
   useEffect(() => {
     const v = readLocal<Partial<Settings>>(STORAGE_KEYS.monthly, {});
-    setS({ ...initial, ...v, risk: v.risk && v.risk in MONTHLY_RISK_LABEL ? v.risk : 'balanced', ethereum: v.ethereum === true });
+    setS({ ...initial, ...v, risk: v.risk && v.risk in MONTHLY_RISK_LABEL ? v.risk : 'balanced', ethereum: v.ethereum === true, unverified: v.unverified === true, pt: v.pt === true });
   }, []);
   useEffect(() => {
     if (s) writeLocal(STORAGE_KEYS.monthly, s);
@@ -46,7 +50,7 @@ export function MonthlyIncome() {
   const patch = (p: Partial<Settings>) => setS((x) => (x ? { ...x, ...p } : x));
   const m = useMarketAnalysis(s?.capital ?? 0);
   const analysis = useDeferredValue(m.analysis);
-  const res = useMemo(() => (analysis && s && s.capital > 0 ? monthlyIncome(analysis.rows, analysis.gas, s.capital, s.target, { risk: s.risk, ethereum: s.ethereum }) : null), [analysis, s]);
+  const res = useMemo(() => (analysis && s && s.capital > 0 ? monthlyIncome(analysis.rows, analysis.gas, s.capital, s.target, { risk: s.risk, ethereum: s.ethereum, unverified: s.unverified, pt: s.pt }) : null), [analysis, s]);
 
   if (!s)
     return (
@@ -90,7 +94,7 @@ export function MonthlyIncome() {
       )}
       {res && !res.plan.parts.length && <Empty>با این ریسک گزینه‌ی دلاری با برداشت ماهانه پیدا نشد.</Empty>}
 
-      {res && <p className="text-[11px] text-secondary">PT و YT اینجا نیستند: PT فقط در سررسید پول می‌دهد و YT تا سررسید صفر می‌شود.</p>}
+      {res && <p className="text-[11px] text-secondary">YT اینجا نیست: تا سررسید صفر می‌شود.</p>}
     </div>
   );
 }
@@ -121,17 +125,28 @@ function Inputs({ s, patch }: { s: Settings; patch: (p: Partial<Settings>) => vo
           )}
         </span>
       </div>
-      <label className="flex items-center justify-between gap-3 text-sm cursor-pointer pt-1 border-t border-default">
-        <span>
-          اتریوم هم باشد <span className="text-xs text-secondary">· گس بیشتر</span>
-        </span>
-        <span className="relative shrink-0">
-          <input type="checkbox" role="switch" className="peer sr-only" checked={s.ethereum} onChange={(e) => patch({ ethereum: e.target.checked })} />
-          <span className="block w-10 h-6 rounded-full bg-hover border border-default peer-checked:bg-accent peer-checked:border-accent transition-colors" />
-          <span className="absolute top-1 right-1 size-4 rounded-full bg-white shadow transition-transform peer-checked:-translate-x-4" />
-        </span>
-      </label>
+      <div className="flex flex-col divide-y divide-[var(--color-border-default)] border-t border-default">
+        <Toggle on={s.pt} onChange={(pt) => patch({ pt })} label="PT با برداشت در سررسید" note="قفل‌شده؛ برداشت در سررسید، نه هر ماه." />
+        {s.risk !== 'stable' && <Toggle on={s.unverified} onChange={(unverified) => patch({ unverified })} label="لوپ با برابری تأییدنشده" note="سود بیشتر، ریسک دی‌پگ بیشتر." danger />}
+        <Toggle on={s.ethereum} onChange={(ethereum) => patch({ ethereum })} label="اتریوم هم باشد" note="گس برداشت بیشتر." />
+      </div>
     </section>
+  );
+}
+
+function Toggle({ on, onChange, label, note, danger = false }: { on: boolean; onChange: (v: boolean) => void; label: string; note: string; danger?: boolean }) {
+  return (
+    <label className="flex items-center justify-between gap-3 cursor-pointer py-2.5">
+      <span className="flex flex-col">
+        <span className="text-sm">{label}</span>
+        <span className={`text-[11px] ${danger && on ? 'text-danger' : 'text-secondary'}`}>{note}</span>
+      </span>
+      <span className="relative shrink-0">
+        <input type="checkbox" role="switch" className="peer sr-only" checked={on} onChange={(e) => onChange(e.target.checked)} />
+        <span className={`block w-10 h-6 rounded-full bg-hover border border-default transition-colors ${danger ? 'peer-checked:bg-danger peer-checked:border-danger' : 'peer-checked:bg-accent peer-checked:border-accent'}`} />
+        <span className="absolute top-1 right-1 size-4 rounded-full bg-white shadow transition-transform peer-checked:-translate-x-4" />
+      </span>
+    </label>
   );
 }
 
@@ -177,7 +192,7 @@ function Answer({ monthly, bad, target, oneTime, need, max, loading }: { monthly
         </p>
       )}
       <p className="text-[11px] text-secondary">
-        پس از هزینه‌ی برداشت؛ اصل پول کار می‌کند. ورود یک‌باره: <Num>{usd(oneTime)}</Num>
+        پس از هزینه‌ی برداشت · ورود یک‌باره <Num>{usd(oneTime)}</Num>
         {loading && (
           <span className="text-warning">
             {' '}
@@ -194,9 +209,13 @@ function PartCard({ p, n }: { p: MonthlyPart; n: number }) {
   const q = liquidationOf(p.o, p.e);
   const start = stepsFor(p.o, p.e).filter((x) => OPEN.has(x.kind));
   const loop = p.o.family === 'leverage';
-  const monthly = loop
-    ? `کمی از وام ${ltr(p.o.loop?.debt.token.symbol)} را پس بدهید، همان‌قدر ${ltr(p.o.loop?.collateral.token.symbol)} بردارید و به USDC تبدیل کنید.`
-    : 'فقط سود را برداشت کنید؛ اصل پول بماند.';
+  const pt = p.o.family === 'pt';
+  const every = Math.ceil(p.payoutDays);
+  const monthly = pt
+    ? `روز ${formatNumber(every, 0)}: PT را بازخرید کنید، سود (حدود ${formatUSD(p.monthly * (p.payoutDays / 30), 2)}) را بردارید و اصل را در PT تازه بگذارید.`
+    : loop
+      ? `کمی از وام ${ltr(p.o.loop?.debt.token.symbol)} را پس بدهید، همان‌قدر ${ltr(p.o.loop?.collateral.token.symbol)} بردارید و به USDC تبدیل کنید.`
+      : 'فقط سود را برداشت کنید؛ اصل پول بماند.';
   return (
     <article className="sx-card p-4 flex flex-col gap-3 min-w-0 overflow-hidden">
       <header className="flex items-start justify-between gap-3">
@@ -209,7 +228,7 @@ function PartCard({ p, n }: { p: MonthlyPart; n: number }) {
         <div className="flex flex-col items-end shrink-0">
           <Num className="font-semibold text-success">{usd(p.monthly)}</Num>
           <span className="text-[11px] text-secondary">
-            در ماه · <Num>{usd(p.amount)}</Num>
+            {pt ? 'میانگین ماهانه' : 'در ماه'} · <Num>{usd(p.amount)}</Num>
           </span>
         </div>
       </header>
@@ -221,9 +240,16 @@ function PartCard({ p, n }: { p: MonthlyPart; n: number }) {
             اهرم <Num>{formatMultiplier(p.e.leverage.leverage, 1)}</Num>
           </Pill>
         )}
-        <Pill tone="warning">
-          ماه بد <Num>{usd(p.bad)}</Num>
-        </Pill>
+        {pt ? (
+          <Pill tone="success">
+            قفل‌شده · برداشت روز <Num>{formatNumber(every, 0)}</Num>
+          </Pill>
+        ) : (
+          <Pill tone="warning">
+            ماه بد <Num>{usd(p.bad)}</Num>
+          </Pill>
+        )}
+        {p.unverified && <Pill tone="danger">برابری تأییدنشده</Pill>}
       </div>
 
       {q && (
@@ -244,7 +270,7 @@ function PartCard({ p, n }: { p: MonthlyPart; n: number }) {
       <div className="rounded-lg bg-canvas border border-default px-3 py-2 text-sm flex items-start gap-2">
         <CalendarCheck size={15} className="shrink-0 mt-0.5 text-accent" aria-hidden />
         <span>
-          <span className="font-medium">هر ماه: </span>
+          <span className="font-medium">{pt ? 'در سررسید: ' : 'هر ماه: '}</span>
           {monthly}
         </span>
       </div>

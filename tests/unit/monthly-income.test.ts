@@ -47,4 +47,15 @@ describe('درآمد ماهانه', () => {
     const at = monthlyIncome(a.rows, a.gas, r.capitalForTarget as number, 300, { risk: 'stable', ethereum: false, now: NOW });
     expect(at.plan.monthly).toBeGreaterThan(0);
   });
+
+  it('PTs and loops on an unverified dollar peg come in only when asked', () => {
+    const pt = { ...lend('p', 12), family: 'pt' as const, ptClass: { class: 'usd' as const, pegVerified: true } };
+    expect(monthlyEligible(pt, 'stable', false)).toBe(false);
+    expect(monthlyEligible(pt, 'stable', false, { pt: true })).toBe(true);
+    expect(monthlyEligible({ ...pt, ptClass: { class: 'usd', pegVerified: false } }, 'stable', false, { pt: true })).toBe(false);
+    const loop = { ...lend('l', 10), family: 'leverage' as const, loop: { pairClass: 'usd', pegVerified: false } } as unknown as Opportunity;
+    expect(monthlyEligible(loop, 'balanced', false)).toBe(false);
+    expect(monthlyEligible(loop, 'balanced', false, { unverified: true })).toBe(true);
+    expect(monthlyEligible(loop, 'stable', false, { unverified: true })).toBe(false);
+  });
 });
