@@ -133,13 +133,15 @@ export function GoalTool() {
         <Segmented<`${HorizonDays}`> value={`${s.days}`} onChange={(v) => patch({ days: Number(v) as HorizonDays })} label="مدت" options={HORIZONS.map((d) => ({ id: `${d}` as `${HorizonDays}`, label: <><Num>{formatNumber(d, 0)}</Num> روز</> }))} />
       </section>
 
-      {m.loading && !analysis ? (
+      {!(s.capital > 0 && s.target > 0) ? (
+        <Empty>سرمایه و سود مورد نظر را وارد کنید.</Empty>
+      ) : m.failed && !analysis ? (
+        <Empty>داده‌ی بازارها دریافت نشد.</Empty>
+      ) : !res || !near || !plan ? (
         <div className="grid place-items-center py-12 text-secondary gap-2" aria-busy="true">
           <Loader2 className="animate-spin" aria-hidden />
-          <span className="text-sm">در حال بررسی همه‌ی بازارها…</span>
+          <span className="text-sm">{analysis ? 'در حال محاسبه‌ی مسیرها…' : 'در حال بررسی همه‌ی بازارها…'}</span>
         </div>
-      ) : !res || !near || !plan ? (
-        <Empty>{m.failed ? 'داده‌ی بازارها دریافت نشد.' : 'سرمایه و سود مورد نظر را وارد کنید.'}</Empty>
       ) : (
         <>
           <Answer total={plan.total} target={s.target} days={s.days} finish={finishDay(plan)} rolled={s.roll && plan.parts.some((a) => a.rounds > 1)} periodPct={need.periodPct} apyPct={need.apyPct} pending={m.pending} />
