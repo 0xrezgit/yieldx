@@ -632,7 +632,7 @@ function OptionLine({ x, target }: { x: GoalOption; target: number }) {
       <div className="min-w-0 flex flex-col gap-1">
         <Identity row={x} />
         <div className="flex flex-wrap gap-1.5">
-          {x.unit !== 'usd' && <Pill tone="warning">سود به {x.unit === 'other' ? 'غیر دلار' : <bdi dir="ltr">{x.unit.toUpperCase()}</bdi>}</Pill>}
+          {x.unit === 'stock' ? <Pill tone="warning">اصل سرمایه: سهم</Pill> : x.unit !== 'usd' && <Pill tone="warning">سود به {x.unit === 'other' ? 'غیر دلار' : <bdi dir="ltr">{x.unit.toUpperCase()}</bdi>}</Pill>}
           {q && (
             <Pill tone={q.dropPct < 6 ? 'danger' : q.dropPct < 15 ? 'warning' : 'muted'}>
               <Num>{formatMultiplier(q.leverage, 1)}</Num> · لیکویید با افت <Num>{formatPercent(q.dropPct, 0)}</Num>

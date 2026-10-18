@@ -41,6 +41,8 @@ const STEPS: Record<string, { entry: Step[]; exit: Step[] }> = {
   pt: { entry: ['approve', 'swap'], exit: ['withdraw'] },
   // Buy YT; at maturity claim the accrued yield.
   yt: { entry: ['approve', 'swap'], exit: ['claim'] },
+  // Pendle LP: zap in from USDC, zap out to USDC.
+  lp: { entry: ['approve', 'swap'], exit: ['swap'] },
   // Supply collateral, borrow, swap back (one flash-loan route or several rounds: the lower count is used).
   leverage: { entry: ['approve', 'deposit', 'deposit', 'swap'], exit: ['swap', 'deposit', 'withdraw'] },
 };

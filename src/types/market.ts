@@ -116,6 +116,8 @@ export interface MarketSummary extends MarketIdentityFields {
   links?: { pt?: string | null; yt?: string | null } | null;
   /** Is the market's implied APY believable (consistent with the PT price, recently traded)? */
   impliedHealth?: ImpliedHealth | null;
+  /** Pendle: the pool an LP holds — PT share by value, swap-fee and PENDLE-incentive APYs (%). */
+  pool?: { ptShare: number; swapFeePct: number; pendlePct: number } | null;
 }
 
 export type BaseHealthStatus = 'ok' | 'suspect' | 'broken';

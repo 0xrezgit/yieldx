@@ -29,6 +29,10 @@ interface PendleListItem {
   /** `feeRate`: the AMM fee, a log-rate per year. */
   extendedInfo?: { yieldRange?: { min?: number; max?: number }; feeRate?: number } | null;
   liquidity?: { usd: number } | number;
+  totalPt?: number;
+  totalSy?: number;
+  swapFeeApy?: number;
+  pendleApy?: number;
   underlyingAsset?: PendleToken;
   accountingAsset?: PendleToken;
   /** The SY token: its exchangeRate() growth is the realized base yield. */
@@ -125,13 +129,18 @@ interface PendleMarket {
  * The pool an LP holds: its PT share by value (PT at its price, SY at its rate in the
  * accounting asset), swap fees and PENDLE incentives. Null when the numbers are missing.
  */
-function lpOf(m: PendleMarket): MarketData['lp'] {
+function poolOf(m: Pick<PendleMarket, 'accountingAsset' | 'sy' | 'totalPt' | 'totalSy' | 'swapFeeApy' | 'pendleApy'> & { ptDiscount?: number }) {
   const acc = m.accountingAsset?.price?.usd;
   const sy = m.sy?.price?.usd;
-  if (!(acc && acc > 0) || !(sy && sy > 0) || !(m.totalPt && m.totalPt > 0) || !(m.totalSy && m.totalSy >= 0)) return null;
+  if (!(acc && acc > 0) || !(sy && sy > 0) || !(m.totalPt && m.totalPt > 0) || !(m.totalSy && m.totalSy >= 0) || typeof m.ptDiscount !== 'number') return null;
   const pt = m.totalPt * (1 - m.ptDiscount);
   const syValue = m.totalSy * (sy / acc);
-  return { ptShare: pt / (pt + syValue), swapFeeApyPct: toPercent(m.swapFeeApy ?? 0), rewardApyPct: toPercent(m.pendleApy ?? 0) };
+  return { ptShare: pt / (pt + syValue), swapFeePct: toPercent(m.swapFeeApy ?? 0), pendlePct: toPercent(m.pendleApy ?? 0) };
+}
+
+function lpOf(m: PendleMarket): MarketData['lp'] {
+  const p = poolOf(m);
+  return p && { ptShare: p.ptShare, swapFeeApyPct: p.swapFeePct, rewardApyPct: p.pendlePct };
 }
 
 const tokenRef = (t: PendleToken | undefined) => (t ? { symbol: t.symbol ?? null, address: t.address ?? null } : null);
@@ -216,6 +225,7 @@ export class PendleAdapter extends BaseAdapter {
       ptToken: ptRef(m.pt),
       ammFeeLn: typeof m.extendedInfo?.feeRate === 'number' && m.extendedInfo.feeRate >= 0 ? m.extendedInfo.feeRate : null,
       ptRedeemFactor: cachedRealized(chainId, m.sy?.address, addressOf(m.yt))?.redeemFactor ?? null,
+      pool: poolOf(m),
       baseHealth: healthOf(m, chainId, this.base, (m.categoryIds ?? []).map((c) => c.toLowerCase())),
       baseLevels: levelsFrom(cachedHistory(this.base, chainId, m.address), cachedRealized(chainId, m.sy?.address, addressOf(m.yt))),
       impliedHealth: assessImplied({

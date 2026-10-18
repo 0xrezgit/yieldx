@@ -24,8 +24,10 @@ interface Settings {
   unverified: boolean;
   /** Dollar PTs, withdrawn at maturity. */
   pt: boolean;
+  /** LP of tokenized-stock markets: claimable incentives as the monthly (estimated). */
+  lp: boolean;
 }
-const initial: Settings = { capital: 3000, target: 300, risk: 'balanced', ethereum: false, unverified: false, pt: false };
+const initial: Settings = { capital: 3000, target: 300, risk: 'balanced', ethereum: false, unverified: false, pt: false, lp: false };
 
 const usd = (x: number) => formatUSD(Math.max(0, x), Math.abs(x) >= 100 ? 0 : 2);
 const ltr = (s: string | null | undefined) => `⁨${s ?? '—'}⁩`;
@@ -42,7 +44,7 @@ export function MonthlyIncome() {
   const [s, setS] = useState<Settings | null>(null);
   useEffect(() => {
     const v = readLocal<Partial<Settings>>(STORAGE_KEYS.monthly, {});
-    setS({ ...initial, ...v, risk: v.risk && v.risk in MONTHLY_RISK_LABEL ? v.risk : 'balanced', ethereum: v.ethereum === true, unverified: v.unverified === true, pt: v.pt === true });
+    setS({ ...initial, ...v, risk: v.risk && v.risk in MONTHLY_RISK_LABEL ? v.risk : 'balanced', ethereum: v.ethereum === true, unverified: v.unverified === true, pt: v.pt === true, lp: v.lp === true });
   }, []);
   useEffect(() => {
     if (s) writeLocal(STORAGE_KEYS.monthly, s);
@@ -50,7 +52,7 @@ export function MonthlyIncome() {
   const patch = (p: Partial<Settings>) => setS((x) => (x ? { ...x, ...p } : x));
   const m = useMarketAnalysis(s?.capital ?? 0);
   const analysis = useDeferredValue(m.analysis);
-  const res = useMemo(() => (analysis && s && s.capital > 0 ? monthlyIncome(analysis.rows, analysis.gas, s.capital, s.target, { risk: s.risk, ethereum: s.ethereum, unverified: s.unverified, pt: s.pt }) : null), [analysis, s]);
+  const res = useMemo(() => (analysis && s && s.capital > 0 ? monthlyIncome(analysis.rows, analysis.gas, s.capital, s.target, { risk: s.risk, ethereum: s.ethereum, unverified: s.unverified, pt: s.pt, lp: s.lp, merklCtx: analysis.merklCtx }) : null), [analysis, s]);
 
   if (!s)
     return (
@@ -73,7 +75,7 @@ export function MonthlyIncome() {
             <span className="text-sm">در حال بررسی همه‌ی بازارها…</span>
           </div>
         ) : (
-          <Answer monthly={res.plan.monthly} bad={res.plan.bad} target={s.target} oneTime={res.plan.oneTime} need={res.capitalForTarget} max={res.maxMonthly} loading={m.lending.loading} />
+          <Answer monthly={res.plan.monthly} bad={res.plan.bad} incentive={res.plan.parts.reduce((a, p) => a + p.incentive, 0)} target={s.target} oneTime={res.plan.oneTime} need={res.capitalForTarget} max={res.maxMonthly} loading={m.lending.loading} />
         )}
       </div>
 
@@ -127,6 +129,7 @@ function Inputs({ s, patch }: { s: Settings; patch: (p: Partial<Settings>) => vo
       </div>
       <div className="flex flex-col divide-y divide-[var(--color-border-default)] border-t border-default">
         <Toggle on={s.pt} onChange={(pt) => patch({ pt })} label="PT با برداشت در سررسید" note="قفل‌شده؛ برداشت در سررسید، نه هر ماه." />
+        {s.risk !== 'stable' && <Toggle on={s.lp} onChange={(lp) => patch({ lp })} label="LP سهام توکنی (پاداش)" note="درآمد از پاداش، تخمینی و نه تضمینی؛ اصل سرمایه سهم است و با قیمتش بالا و پایین می‌رود." danger />}
         {s.risk !== 'stable' && <Toggle on={s.unverified} onChange={(unverified) => patch({ unverified })} label="لوپ با برابری تأییدنشده" note="سود بیشتر، ریسک دی‌پگ بیشتر." danger />}
         <Toggle on={s.ethereum} onChange={(ethereum) => patch({ ethereum })} label="اتریوم هم باشد" note="گس برداشت بیشتر." />
       </div>
@@ -150,7 +153,7 @@ function Toggle({ on, onChange, label, note, danger = false }: { on: boolean; on
   );
 }
 
-function Answer({ monthly, bad, target, oneTime, need, max, loading }: { monthly: number; bad: number; target: number; oneTime: number; need: number | null; max: number; loading: boolean }) {
+function Answer({ monthly, bad, incentive, target, oneTime, need, max, loading }: { monthly: number; bad: number; incentive: number; target: number; oneTime: number; need: number | null; max: number; loading: boolean }) {
   const reached = target > 0 && monthly >= target - 0.005;
   const p = Math.max(0, Math.min(1, target > 0 ? monthly / target : 0));
   return (
@@ -191,6 +194,11 @@ function Answer({ monthly, bad, target, oneTime, need, max, loading }: { monthly
           )}
         </p>
       )}
+      {incentive > 0.005 && (
+        <p className="text-xs text-warning">
+          از این مبلغ <Num className="font-semibold">{usd(incentive)}</Num> پاداش تخمینی LP است، نه درآمد تضمین‌شده؛ با ورود سرمایه‌ی دیگران و پایان کمپین کم می‌شود.
+        </p>
+      )}
       <p className="text-[11px] text-secondary">
         پس از هزینه‌ی برداشت · ورود یک‌باره <Num>{usd(oneTime)}</Num>
         {loading && (
@@ -210,8 +218,12 @@ function PartCard({ p, n }: { p: MonthlyPart; n: number }) {
   const start = stepsFor(p.o, p.e).filter((x) => OPEN.has(x.kind));
   const loop = p.o.family === 'leverage';
   const pt = p.o.family === 'pt';
+  const lp = p.o.family === 'lp';
   const every = Math.ceil(p.payoutDays);
-  const monthly = pt
+  const lpDays = lp && p.o.maturity ? Math.ceil((new Date(p.o.maturity).getTime() - Date.now()) / 86_400_000) : null;
+  const monthly = lp
+    ? `پاداش‌ها (Merkl و PENDLE) را claim کنید؛ نقدینگی بماند.${lpDays !== null && lpDays > 0 ? ` پاداش‌ها تا سررسید (حدود ${formatNumber(lpDays, 0)} روز دیگر) حساب شده‌اند.` : ''}`
+    : pt
     ? `روز ${formatNumber(every, 0)}: PT را بازخرید کنید، سود (حدود ${formatUSD(p.monthly * (p.payoutDays / 30), 2)}) را بردارید و اصل را در PT تازه بگذارید.`
     : loop
       ? `کمی از وام ${ltr(p.o.loop?.debt.token.symbol)} را پس بدهید، همان‌قدر ${ltr(p.o.loop?.collateral.token.symbol)} بردارید و به USDC تبدیل کنید.`
@@ -250,6 +262,8 @@ function PartCard({ p, n }: { p: MonthlyPart; n: number }) {
           </Pill>
         )}
         {p.unverified && <Pill tone="danger">برابری تأییدنشده</Pill>}
+        {p.incentive > 0 && <Pill tone="warning">تخمینی، تضمین‌شده نیست</Pill>}
+        {p.stock && <Pill tone="danger">اصل سرمایه: سهم</Pill>}
       </div>
 
       {q && (
