@@ -1,5 +1,5 @@
 import type { MarketListing } from '../../types/market';
-import type { DataQuality, Opportunity } from '../../types/opportunity';
+import type { DataQuality, Opportunity, RewardStream } from '../../types/opportunity';
 import type { ProtocolId } from '../../types/protocol';
 import { protocolIdentity } from '../registry/identity';
 import { networkByName } from '../registry/networks';
@@ -62,6 +62,69 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
     impliedHealth: m.impliedHealth ?? null,
     poolLiquidityUsd: m.liquidity !== null && Number.isFinite(m.liquidity) && m.liquidity > 0 ? m.liquidity : null,
     icon: m.icon ?? null,
+    ...(stockTagged(m) ? { notes: [STOCK_NOTE(m.name)] } : {}),
+  };
+}
+
+/** The protocol itself tags the market as a tokenized stock (Pendle: «stocks», e.g. Coinbase's GOOGLc, NVDAc). */
+export const stockTagged = (m: Pick<MarketListing, 'categories'>) => m.categories.includes('stocks');
+
+const STOCK_NOTE = (name: string) =>
+  `سود به واحد سهم ${name} حساب شده و قیمت سهم ثابت فرض شده؛ ارزش دلاری اصل سرمایه با قیمت سهم بالا و پایین می‌رود و این نوسان در سود نیامده.`;
+
+/** Above this PT share the LP's value follows PT prices (implied-rate moves), which this estimate does not model. */
+export const LP_MAX_PT_SHARE = 0.1;
+
+/**
+ * The LP of a Pendle tokenized-stock market. Its pool is almost all SY, so an LP holds the
+ * stock plus three incomes, none counted twice:
+ *   rate     PT share × implied APY + SY share × base APY + swap-fee APY (in the stock's units);
+ *   rewards  PENDLE emissions (Pendle's base, unboosted `pendleApy`) until maturity, diluted by
+ *            the user's own deposit; external campaigns (Merkl) are linked by the LP address
+ *            in the analysis — never Pendle's `lpRewardApy` or `aggregatedApy`, which already
+ *            contain them.
+ * Null when the pool is not known or its PT share is too large for this model.
+ */
+export function lpOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt: string, now = Date.now()): Opportunity | null {
+  const p = m.pool;
+  if (protocol !== 'pendle' || !p || !stockTagged(m) || !(p.ptShare >= 0 && p.ptShare <= LP_MAX_PT_SHARE) || !(m.impliedAPY >= 0)) return null;
+  const pt = ptOpportunity(protocol, m, fetchedAt, now);
+  const liq = pt.poolLiquidityUsd ?? null;
+  const base = m.baseAPY !== null && Number.isFinite(m.baseAPY) ? Math.max(0, m.baseAPY) : 0;
+  const rate = p.ptShare * m.impliedAPY + (1 - p.ptShare) * base + Math.max(0, p.swapFeePct);
+  const rewards: RewardStream[] =
+    p.pendlePct > 0 && liq !== null
+      ? [
+          {
+            key: `pendle-emission:${m.id}`,
+            source: 'protocol',
+            kind: 'token',
+            token: { symbol: 'PENDLE', address: null, chain: pt.chain },
+            aprUsd: p.pendlePct,
+            dailyUsd: (p.pendlePct / 100) * (liq / 365),
+            eligibleTvlUsd: liq,
+            endsAt: m.maturity,
+            conditional: false,
+            vesting: false,
+          },
+        ]
+      : [];
+  return {
+    ...pt,
+    key: pt.key.replace(/:pt$/, ':lp'),
+    family: 'lp',
+    market: { ...pt.market, name: `LP ${m.name}` },
+    rate: { ...pt.rate, value: Number.isFinite(rate) ? rate : null, feesIncluded: true, rewardsIncluded: false },
+    capacity: { depositRemainingUsd: null, uncapped: true, withdrawableNowUsd: null },
+    exit: { type: 'secondary', note: 'خروج: برداشت نقدینگی از استخر (سهم کوچک PT پیش از سررسید فروخته و پس از آن بازخرید می‌شود)' },
+    rewards,
+    url: listingLink(protocol, m, 'lp').url,
+    ptToken: null,
+    pendleLp: { ptShare: p.ptShare },
+    notes: [
+      ...(pt.notes ?? []),
+      `نرخ پایه‌ی LP: سهم PT (${(p.ptShare * 100).toFixed(1)}٪) × نرخ بازار + کارمزد سواپ؛ پاداش PENDLE با نرخ پایه (بدون boost) و تا سررسید؛ پاداش‌های بیرونی فقط از کمپین Merkl.`,
+    ],
   };
 }
 
@@ -74,6 +137,7 @@ export function ptOpportunity(protocol: ProtocolId, m: MarketListing, fetchedAt:
 export function ptClassOf(m: Pick<MarketListing, 'asset' | 'accountingSymbol' | 'categories' | 'name'>): Opportunity['ptClass'] {
   const a = tokenClass({ symbol: m.asset?.symbol ?? '' });
   const c = tokenClass({ symbol: m.accountingSymbol ?? '' });
+  if (stockTagged(m)) return { class: 'stock', pegVerified: true };
   if (a === 'usd' || c === 'usd' || stableTagged(m)) return { class: 'usd', pegVerified: true };
   if (a === 'eth' || a === 'btc') return { class: a, pegVerified: true };
   if (c === 'eth' || c === 'btc') return { class: c, pegVerified: true };

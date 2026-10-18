@@ -55,6 +55,8 @@ export interface Analysis {
   rowByKey: Map<string, Evaluated>;
   /** Protocol opportunities with Merkl rewards linked by exact address. */
   linked: number;
+  /** The Merkl vetting the linked rewards were priced with (re-estimating at another amount uses the same). */
+  merklCtx: VetContext | null;
   modelVersion: string;
   rankingVersion: string;
 }
@@ -141,7 +143,7 @@ export function evaluate(input: AnalysisInput, capital: number, now = Date.now()
     }
   }
 
-  return { capital, gas: input.gas, rows, byKey: new Map(rows.map((r) => [r.o.key, r.o])), rowByKey: new Map(rows.map((r) => [r.o.key, r])), linked: links.size, modelVersion: MODEL_VERSION, rankingVersion: RANKING_VERSION };
+  return { capital, gas: input.gas, rows, byKey: new Map(rows.map((r) => [r.o.key, r.o])), rowByKey: new Map(rows.map((r) => [r.o.key, r])), linked: links.size, merklCtx: merkl?.ctx ?? null, modelVersion: MODEL_VERSION, rankingVersion: RANKING_VERSION };
 }
 
 export interface HorizonView {

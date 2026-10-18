@@ -36,15 +36,18 @@ export const morphoLink = (chainId: number, kind: 'vault' | 'market', id: string
   return chain ? { url: `https://app.morpho.org/${chain}/${kind}/${id}`, exact: true } : null;
 };
 
-export function pendleLink(chainId: number, market: string, view: 'pt' | 'yt'): EntryLink {
+export function pendleLink(chainId: number, market: string, view: 'pt' | 'yt' | 'lp'): EntryLink {
   const chain = PENDLE_CHAIN[chainId];
-  return { url: `https://app.pendle.finance/trade/markets/${market.toLowerCase()}/swap?view=${view}${chain ? `&chain=${chain}` : ''}`, exact: true };
+  const q = chain ? `chain=${chain}` : '';
+  // LP: Pendle's pool page, zap in (https://app.pendle.finance/trade/pools/{market}/zap/in?chain=base).
+  if (view === 'lp') return { url: `https://app.pendle.finance/trade/pools/${market.toLowerCase()}/zap/in${q ? `?${q}` : ''}`, exact: true };
+  return { url: `https://app.pendle.finance/trade/markets/${market.toLowerCase()}/swap?view=${view}${q ? `&${q}` : ''}`, exact: true };
 }
 
 /** Where to buy this market's PT or YT. */
-export function listingLink(protocol: ProtocolId, m: Pick<MarketListing, 'id' | 'chain'> & { links?: MarketListing['links'] }, view: 'pt' | 'yt'): EntryLink {
+export function listingLink(protocol: ProtocolId, m: Pick<MarketListing, 'id' | 'chain'> & { links?: MarketListing['links'] }, view: 'pt' | 'yt' | 'lp'): EntryLink {
   // Built by the adapter from a format checked on the protocol's own app (Exponent, Spectra).
-  const own = m.links?.[view];
+  const own = view === 'lp' ? null : m.links?.[view];
   if (own) return { url: own, exact: true };
   if (protocol === 'pendle') {
     const r = /^(?:(\d+)-)?(0x[0-9a-fA-F]{40})$/.exec(m.id);

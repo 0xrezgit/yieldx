@@ -151,7 +151,7 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
     const pt = input.leverage.pt ?? PT_LOOP_POLICY;
     return leverageEstimate(o, input, o.maturity !== null ? { ...pt, pt } : input.leverage, base, now);
   }
-  if (SPECIALIST_FAMILIES.has(o.family)) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
+  if (SPECIALIST_FAMILIES.has(o.family) && !o.pendleLp) return stop('needs-model', o.family === 'lp' ? 'نقدینگی: سود به مسیر قیمت بستگی دارد.' : 'به مدل جدا نیاز دارد.');
   if (o.family === 'yt' && !o.yt) return stop('needs-model', 'YT: قیمت و بازده پایه‌ی این بازار معلوم نیست.');
   // A deposit in a non-dollar fiat currency: its dollar result is an exchange-rate bet.
   const fiat = nonUsdFiat(o.assets.deposit[0]?.symbol);
@@ -200,9 +200,13 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   if (m.state === 'invalid') return stop('insufficient', 'منبع داده تاریخ سررسید این بازار را درست نداده؛ بدون آن سود تا سررسید حساب نمی‌شود. صفحه را دوباره بارگذاری کنید.');
   if (m.state === 'matured') return stop('inactive', 'سررسید گذشته است.');
   if (m.state === 'active' && m.days !== null) {
-    if (m.days > days) return stop('needs-model', `سررسید ${formatNumber(Math.ceil(m.days), 0)} روز دیگر؛ خروج پیش از آن مدل ندارد.`);
-    earningDays = m.days;
-    if (m.days < days) assumptions.push(`سررسید روز ${formatNumber(Math.ceil(m.days), 0)}؛ پس از آن نقد و بی‌درآمد.`);
+    // A Pendle LP of an almost-all-SY pool exits early by withdrawing: only its small PT part is sold.
+    if (m.days > days && o.pendleLp) assumptions.push(`سررسید ${formatNumber(Math.ceil(m.days), 0)} روز دیگر؛ در پایان دوره نقدینگی برداشت و سهم PT فروخته می‌شود.`);
+    else if (m.days > days) return stop('needs-model', `سررسید ${formatNumber(Math.ceil(m.days), 0)} روز دیگر؛ خروج پیش از آن مدل ندارد.`);
+    else {
+      earningDays = m.days;
+      if (m.days < days) assumptions.push(`سررسید روز ${formatNumber(Math.ceil(m.days), 0)}؛ پس از آن نقد و بی‌درآمد.`);
+    }
   }
 
   // An executable quote for this amount: the PT or YT actually bought, price impact included —
@@ -222,11 +226,12 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
   }
 
   // An AMM entry without an executable quote: only for amounts small against the pool.
-  if (o.family === 'pt' || o.family === 'yt') {
+  if (o.family === 'pt' || o.family === 'yt' || o.pendleLp) {
     const liq = o.poolLiquidityUsd ?? null;
     if (liq === null || !(liq > 0)) return stop('needs-model', 'نقدینگی استخر گزارش نشده؛ بدون quote برآورد نمی‌شود.');
-    // A YT buy moves the pool by its notional (the PT sold against it), not by the capital.
-    const traded = o.family === 'yt' && o.yt ? capital / ytUnitPrice(o.yt.impliedPct, exactDays(o.maturity, now)) : capital;
+    // A YT buy moves the pool by its notional (the PT sold against it), not by the capital;
+    // an LP zap swaps only its PT part.
+    const traded = o.family === 'yt' && o.yt ? capital / ytUnitPrice(o.yt.impliedPct, exactDays(o.maturity, now)) : o.pendleLp ? capital * o.pendleLp.ptShare : capital;
     if (!(traded <= liq * MAX_POOL_SHARE_WITHOUT_QUOTE)) return stop('needs-model', NEEDS_QUOTE);
     quality = worseQuality(quality, 'partial');
   }
@@ -320,6 +325,13 @@ export function estimate(o: Opportunity, input: EstimateInput): Estimate {
 
   // Fees: only those not already inside the rate.
   const costs: CostItem[] = [...entry];
+  if (o.pendleLp) {
+    // The zap buys the PT part through the AMM, and an exit before maturity sells it back.
+    const yearsLeft = m.state === 'active' && m.days !== null ? m.days / 365 : 0;
+    const fee = allocatable * o.pendleLp.ptShare * (o.ammFeeLn ?? 0) * yearsLeft * (m.days !== null && m.days > days ? 2 : 1);
+    if (fee > 0) costs.push({ key: 'lp-amm', label: 'کارمزد AMM پندل (بخش PT)', usd: fee, basis: 'model' });
+    unknown.push('هزینه‌ی تبدیل USDC به دارایی بازار و اثر قیمت ورود و خروج LP بدون quote معلوم نیست.');
+  }
   const fees = o.rate.fees;
   if (o.rate.feesIncluded === false) {
     const perf = fees?.performancePct;

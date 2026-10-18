@@ -279,7 +279,12 @@ export interface Opportunity {
    * PT family: the class of what the PT redeems into, to pair it with a debt of the same
    * class. `pegVerified` is false when only the market's name marks it as a dollar asset.
    */
-  ptClass?: { class: 'usd' | 'eth' | 'btc'; pegVerified: boolean } | null;
+  ptClass?: { class: 'usd' | 'eth' | 'btc' | 'stock'; pegVerified: boolean } | null;
+  /**
+   * Pendle LP whose pool is almost all SY: the position is the underlying plus fees and
+   * incentives, so it is estimated like a deposit. `ptShare` is the PT part by value.
+   */
+  pendleLp?: { ptShare: number } | null;
   /** AMM depth behind a PT, USD; without an executable quote the amount must stay a small share of it. */
   poolLiquidityUsd?: number | null;
   /** PT/YT: an executable entry quote for one amount (Pendle's router), when one was asked for. */

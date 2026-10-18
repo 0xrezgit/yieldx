@@ -13,7 +13,8 @@ import { nonUsdFiat, volatileDeposit } from './policy';
  * Linking: a Merkl opportunity belongs to a protocol opportunity when both are on
  * the same chain, the Merkl protocol is the same, and Merkl's contract address
  * (explorerAddress, or the address at the start of its identifier) equals the
- * protocol opportunity's market address. Nothing fuzzy: a name or a symbol never
+ * protocol opportunity's market address — a liquidity (POOL) campaign only to an LP,
+ * any other only to a non-LP. Nothing fuzzy: a name or a symbol never
  * links. (Seen in live Merkl data: Morpho vaults link by vault address; Morpho
  * Blue market campaigns carry a 20-byte identifier that is not the market id, so
  * they do not.)
@@ -55,7 +56,9 @@ export function linkMerkl(opps: Opportunity[], merkl: MerklOpportunity[]): Map<s
     const chainId = chainIdOf(o);
     const addr = o.market.address?.toLowerCase();
     if (chainId === null || !addr) continue;
-    const hit = byAddr.get(`${o.protocol.id}:${chainId}:${addr}`);
+    // A Pendle market's address is also its LP token: a liquidity campaign (POOL) pays the
+    // LP only, never a PT or YT of the same market, and the LP gets no other campaign.
+    const hit = byAddr.get(`${o.protocol.id}:${chainId}:${addr}`)?.filter((m) => (m.action === 'POOL') === (o.family === 'lp'));
     if (hit?.length) out.set(o.key, hit);
   }
   return out;

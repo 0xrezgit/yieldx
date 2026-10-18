@@ -48,6 +48,13 @@ export function stepsFor(o: Opportunity, e: Estimate): Step[] {
   const until = o.maturity ? ` تا ${formatDate(o.maturity)}` : '';
   const hold = e.earningDays > 0 ? e.earningDays : null;
   const x = e.leverage;
+  if (o.family === 'lp' && o.pendleLp)
+    return [
+      { kind: 'deposit', short: 'ورود LP', title: `ورود به استخر ${ltr(o.market.name)} با USDC (zap) در ${name}`, href: o.url },
+      { kind: 'wait', short: hold ? days(hold) : 'نگه‌داری', title: `${hold ? `${days(hold)} نگه‌داری` : 'نگه‌داری'}${until ? ` (سررسید${until})` : ''}` },
+      ...rewardSteps(e),
+      { kind: 'withdraw', short: 'خروج', title: `برداشت نقدینگی و تبدیل به USDC (zap out) در ${name}`, href: o.url },
+    ];
   switch (o.family) {
     case 'pt':
       return [

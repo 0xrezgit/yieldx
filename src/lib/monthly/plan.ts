@@ -1,7 +1,9 @@
 import type { CostItem, Estimate, Opportunity } from '../../types/opportunity';
-import type { GasQuote } from '../merkl/types';
+import type { GasQuote, MerklOpportunity } from '../merkl/types';
+import type { VetContext } from '../merkl/vetting';
 import { estimateAt, type Evaluated } from '../market/analysis';
-import { txCost } from '../opportunity/costs';
+import { claimCost, txCost } from '../opportunity/costs';
+import { addMerklRewards } from '../opportunity/merkl-link';
 import { tokenClass } from '../merkl/vetting';
 import { defaultLeverageInput, type LeverageInput } from '../opportunity/leverage';
 import { HORIZONS, LEVERAGE_PROFILES, type HorizonDays } from '../opportunity/policy';
@@ -16,6 +18,12 @@ import { maturityState } from '../protocols/lifecycle';
  * (their profit taken out each month by repaying a little debt and withdrawing the same
  * value of collateral). A PT pays at maturity only; Merkl rewards are not a monthly income.
  * Only dollar deposits and dollar/dollar loops: the income is in dollars.
+ *
+ * Opt-in, LP of a tokenized-stock market (Pendle): its only cash is claimable incentives —
+ * the Merkl campaign linked to the LP (priced with the same vetting as the analysis) and
+ * PENDLE emissions — so they are its monthly, shown as an estimate (`incentive`), never as
+ * a guaranteed income; the bad month keeps only the Merkl part. The pool's own yield is in
+ * the stock's units and stays in the LP. The capital is the stock (`stock`).
  *
  *   monthly (typical) = 30 days of the estimate's income on the money placed, entry and
  *                       exit costs taken out (they are paid once, shown apart), minus
@@ -69,6 +77,10 @@ export interface MonthlyPart {
   payoutDays: number;
   /** A dollar peg resting only on the name (opt-in). */
   unverified: boolean;
+  /** Of `monthly`, dollars that are incentives (estimated, diluted by the pool, not guaranteed). */
+  incentive: number;
+  /** The capital is a tokenized stock: its dollar value moves with the stock's price. */
+  stock: boolean;
 }
 
 export interface MonthlyOptions {
@@ -78,6 +90,10 @@ export interface MonthlyOptions {
   unverified?: boolean;
   /** Dollar PTs, withdrawn at maturity (every 1–4 months), shown as a monthly average. */
   pt?: boolean;
+  /** LP of tokenized-stock markets, its claimable incentives as the monthly (estimated, the capital in the stock). */
+  lp?: boolean;
+  /** The analysis' Merkl vetting: without it no Merkl campaign is counted. */
+  merklCtx?: VetContext | null;
   now?: number;
 }
 
@@ -103,11 +119,12 @@ const sum = (c: CostItem[]) => c.reduce((a, x) => a + x.usd, 0);
 const levOf = (risk: MonthlyRisk): LeverageInput => (risk === 'boosted' ? BOOSTED : risk === 'balanced' ? { ...LEVERAGE_PROFILES.balanced.lev, pt: LEVERAGE_PROFILES.balanced.pt } : defaultLeverageInput);
 
 /** Can this opportunity pay a dollar income every month (or, opted in, at a PT's maturity)? */
-export function monthlyEligible(o: Opportunity, risk: MonthlyRisk, ethereum: boolean, opts: Pick<MonthlyOptions, 'unverified' | 'pt'> = {}): boolean {
+export function monthlyEligible(o: Opportunity, risk: MonthlyRisk, ethereum: boolean, opts: Pick<MonthlyOptions, 'unverified' | 'pt' | 'lp'> = {}): boolean {
   if (!ethereum && o.chain === 'eip155:1') return false;
   if (o.family === 'lend' || o.family === 'vault') return tokenClass({ symbol: o.assets.deposit[0]?.symbol ?? '' }) === 'usd';
   if (o.family === 'leverage') return risk !== 'stable' && !o.maturity && o.loop?.pairClass === 'usd' && (o.loop.pegVerified !== false || opts.unverified === true);
   if (o.family === 'pt') return opts.pt === true && o.ptClass?.class === 'usd' && o.ptClass.pegVerified !== false;
+  if (o.family === 'lp') return opts.lp === true && risk !== 'stable' && !!o.pendleLp;
   return false;
 }
 
@@ -123,6 +140,9 @@ interface Ctx {
   now: number;
   lev: LeverageInput;
   cache: Map<string, MonthlyPart | null>;
+  /** Merkl campaigns linked to each opportunity (key), and the vetting to price them. */
+  merkl: Map<string, MerklOpportunity[]>;
+  merklCtx: VetContext | null;
 }
 
 /** One opportunity at an amount, as a monthly income; null when it does not take the amount. */
@@ -138,7 +158,24 @@ function partAt(c: Ctx, o: Opportunity, amount: number): MonthlyPart | null {
     let r: MonthlyPart | null = null;
     if (e && e.placement === 'ranked' && e.net !== null && e.earningDays > 0) {
       const monthly = ((e.net - (e.rewards ?? 0)) * 30) / e.earningDays;
-      if (monthly > 0) r = { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + sum(e.costs)) : amount, monthly, bad: monthly, oneTime: 0, withdrawCost: (sum(e.costs) * 30) / e.earningDays, e, payoutDays: e.earningDays, unverified: false };
+      if (monthly > 0) r = { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + sum(e.costs)) : amount, monthly, bad: monthly, oneTime: 0, withdrawCost: (sum(e.costs) * 30) / e.earningDays, e, payoutDays: e.earningDays, unverified: false, incentive: 0, stock: false };
+    }
+    c.cache.set(k, r);
+    return r;
+  }
+  if (o.family === 'lp') {
+    let e = estimateAt(o, amount, DAYS, c.gas, c.now);
+    const linked = c.merkl.get(o.key);
+    if (linked?.length && c.merklCtx) e = addMerklRewards(e, linked, c.merklCtx, claimCost(c.gas));
+    let r: MonthlyPart | null = null;
+    if (e.placement === 'ranked' && e.net !== null && e.earningDays >= DAYS - 1) {
+      const lines = e.rewardLines.filter((l) => l.days > 0);
+      const perMonth = (src?: 'merkl') => lines.filter((l) => !src || l.source === src).reduce((a, l) => a + (l.usd * DAYS) / l.days, 0);
+      // A month of claims (one per source) at today's share of each campaign; opening and closing are paid once.
+      const withdrawCost = txCost(o.chain, ['claim'], c.gas).usd * new Set(lines.map((l) => l.source)).size;
+      const monthly = perMonth() - withdrawCost;
+      const bad = Math.max(0, perMonth('merkl') - txCost(o.chain, ['claim'], c.gas).usd);
+      r = monthly > 0 ? { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + sum(e.costs)) : amount, monthly, bad, oneTime: sum(e.costs), withdrawCost, e, payoutDays: DAYS, unverified: false, incentive: monthly, stock: o.ptClass?.class === 'stock' } : null;
     }
     c.cache.set(k, r);
     return r;
@@ -162,7 +199,7 @@ function partAt(c: Ctx, o: Opportunity, amount: number): MonthlyPart | null {
       const lowest = seen.length ? Math.min(...seen) : null;
       if (used && used > 0 && lowest !== null) bad = monthly * Math.min(1, lowest / used);
     }
-    r = monthly > 0 ? { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + oneTime) : amount, monthly, bad, oneTime, withdrawCost, e, payoutDays: DAYS, unverified: o.loop?.pegVerified === false } : null;
+    r = monthly > 0 ? { o, amount: e.allocatable > 0 ? Math.min(amount, e.allocatable + oneTime) : amount, monthly, bad, oneTime, withdrawCost, e, payoutDays: DAYS, unverified: o.loop?.pegVerified === false, incentive: 0, stock: false } : null;
   }
   c.cache.set(k, r);
   return r;
@@ -217,7 +254,7 @@ function pick(c: Ctx, rows: Evaluated[], opts: MonthlyOptions, probe: number): O
 }
 
 export function monthlyIncome(rows: Evaluated[], gas: GasQuote[], capital: number, target: number, opts: MonthlyOptions): MonthlyResult {
-  const c: Ctx = { gas, now: opts.now ?? Date.now(), lev: levOf(opts.risk), cache: new Map() };
+  const c: Ctx = { gas, now: opts.now ?? Date.now(), lev: levOf(opts.risk), cache: new Map(), merkl: new Map(rows.map((r) => [r.o.key, r.merkl])), merklCtx: opts.merklCtx ?? null };
   const plan = planAt(c, pick(c, rows, opts, capital / CHUNKS), capital);
   if (plan.monthly >= target || !(target > 0)) return { plan, capitalForTarget: plan.monthly >= target ? capital : null, maxMonthly: plan.monthly };
   // Capital for the target: grow until reached or the market stops taking more, then narrow down.

@@ -32,9 +32,11 @@ export const CERTAINTY_LABEL: Record<Certainty, string> = {
  * What an option's profit is counted in: a dollar target is met only by dollar profit.
  * An ETH loop's «net» holds ETH's price constant; in dollars it moves with ETH.
  */
-export type ProfitUnit = 'usd' | 'eth' | 'btc' | 'sol' | 'other';
+export type ProfitUnit = 'usd' | 'eth' | 'btc' | 'sol' | 'stock' | 'other';
 
 export function unitOf(o: Opportunity): ProfitUnit {
+  // A tokenized-stock market (its PT, YT or LP): the capital is the stock, whatever the reward is paid in.
+  if (o.ptClass?.class === 'stock') return 'stock';
   const c = o.family === 'pt' ? o.ptClass?.class : o.family === 'leverage' ? o.loop?.pairClass : tokenClass({ symbol: o.assets.deposit[0]?.symbol ?? '' });
   return c === 'usd' || c === 'eth' || c === 'btc' || c === 'sol' ? c : 'other';
 }
