@@ -7,6 +7,7 @@ import { fetchLoopscale } from './loopscale';
 import { fetchMidnight } from './midnight';
 import { fetchMorpho, fetchMorphoHistory, morphoHistoryAdjust, normalizeMorpho } from './morpho';
 import { fetchRevert } from './revert';
+import { fetchPendleLoops } from './pendle-loop';
 import type { LendingFeed, SourceStatus } from './types';
 
 /**
@@ -48,6 +49,8 @@ export const SOURCES: Source[] = [
   { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at), background: true },
   // Daily rate from Revert's API, vault state read on-chain (two RPC batches per vault).
   { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at), background: true },
+  // Pendle's PT-looping list: only the money markets without a source of their own (Aave V3, Euler).
+  { id: 'pendle-loop', name: 'Pendle PT looping', ttlMs: 2 * 60_000, load: (at) => fetchPendleLoops(at), background: true },
 ];
 
 interface Cached {
