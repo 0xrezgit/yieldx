@@ -15,6 +15,8 @@ export interface Step {
   short: string;
   /** One short line. */
   title: string;
+  /** Plain-words explanation under the title, for terms a newcomer would not know. */
+  note?: string;
   href?: string | null;
 }
 
@@ -40,6 +42,19 @@ function rewardSteps(e: Estimate): Step[] {
     { kind: 'claim', short: 'دریافت پاداش', title: `دریافت پاداش ${tokens.map(ltr).join('، ') || ''} در Merkl`, href: MERKL_APP },
     ...(sell.length ? [{ kind: 'sell' as const, short: 'فروش پاداش', title: `فروش ${sell.map(ltr).join('، ')} به USDC` }] : []),
   ];
+}
+
+const pct = (v: number) => formatNumber(v, v < 10 ? 1 : 0);
+
+/** «7.7× (health 1.08)» in plain words: dollars per 100 of one's own, and the fall that liquidates. */
+function leverageNote(x: NonNullable<Estimate['leverage']>): string {
+  const gross = x.leverage * 100;
+  const drop = x.liquidationDrop * 100;
+  return (
+    `یعنی این چرخه (وام، تبدیل، سپردن) چند بار تکرار می‌شود تا با هر ۱۰۰ دلار خودتان حدود ${formatNumber(gross, 0)} دلار سپرده داشته باشید ` +
+    `(${formatNumber(gross - 100, 0)} دلارش وام است)؛ سود و ضرر هم حدود ${formatNumber(x.leverage, 1)} برابر می‌شود. ` +
+    `«سلامت» فاصله تا نقد شدن است: اگر ارزش وثیقه نسبت به وام حدود ${pct(drop)}٪ افت کند، موقعیت نقد (لیکویید) می‌شود.`
+  );
 }
 
 export function stepsFor(o: Opportunity, e: Estimate): Step[] {
@@ -83,12 +98,13 @@ export function stepsFor(o: Opportunity, e: Estimate): Step[] {
       const coll = l?.collateral.token.symbol ?? asset;
       const lev = x ? `${formatNumber(x.leverage, 1)}×` : 'اهرم سیاست';
       const health = x ? ` (سلامت ${formatNumber(x.health.value, 2)})` : '';
+      const loopNote = x ? leverageNote(x) : 'این چرخه چند بار تکرار می‌شود تا اهرم به حد تعیین‌شده برسد؛ هرچه اهرم بیشتر، سود و خطر نقد شدن بیشتر.';
       if (o.maturity) {
         // PT loop: buy the PT, post it, borrow and buy more, close at maturity.
         return [
           { kind: 'buy', short: 'خرید PT', title: `خرید ${ltr(coll)} با USDC`, href: l?.entryUrl ?? null },
           { kind: 'collateral', short: 'وثیقه', title: `سپردن PT به‌عنوان وثیقه در ${name}`, href: o.url },
-          { kind: 'loop', short: `لوپ ${lev}`, title: `وام ${ltr(debt)} و خرید PT بیشتر تا ${lev}${health}` },
+          { kind: 'loop', short: `لوپ ${lev}`, title: `وام ${ltr(debt)} و خرید PT بیشتر تا ${lev}${health}`, note: loopNote },
           { kind: 'watch', short: hold ? days(hold) : 'سررسید', title: `نگه‌داری${until}${hold ? ` (${days(hold)})` : ''} و پایش سلامت` },
           { kind: 'repay', short: 'بستن', title: `سررسید: بازخرید PT، بازپرداخت ${ltr(debt)}، برداشت باقی‌مانده`, href: o.url },
           ...swapStep(debt),
@@ -96,7 +112,7 @@ export function stepsFor(o: Opportunity, e: Estimate): Step[] {
       }
       return [
         { kind: 'collateral', short: 'وثیقه', title: `سپردن ${ltr(coll)} در ${name}`, href: o.url },
-        { kind: 'loop', short: `لوپ ${lev}`, title: `وام ${ltr(debt)}، تبدیل به ${ltr(coll)} و سپردن دوباره تا ${lev}${health}` },
+        { kind: 'loop', short: `لوپ ${lev}`, title: `وام ${ltr(debt)}، تبدیل به ${ltr(coll)} و سپردن دوباره تا ${lev}${health}`, note: loopNote },
         { kind: 'watch', short: hold ? days(hold) : 'نگه‌داری', title: `${hold ? `${days(hold)} نگه‌داری` : 'نگه‌داری'} و پایش سلامت و نرخ وام` },
         { kind: 'repay', short: 'بستن', title: `بازپرداخت ${ltr(debt)} و برداشت ${ltr(coll)}`, href: o.url },
         ...swapStep(coll),

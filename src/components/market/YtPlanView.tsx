@@ -6,6 +6,7 @@ import type { Cheapness, YtPlan } from '../../lib/calculators/yt-plan';
 import { formatCompact, formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
 import { Pill, signedPct } from '../opportunities/parts';
+import { PointsWorthView, WorstCase } from './PointsWorthView';
 
 const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 const plain = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2);
@@ -42,7 +43,7 @@ const cell = 'py-2 px-2 sm:px-2.5 text-right whitespace-nowrap';
  * received in three base-yield readings, an early exit day by day, every fee, and the
  * points with their cost — and whether they are cheap next to the other points markets.
  */
-export function YtPlanView({ plan, name, days, cheap }: { plan: YtPlan; name: string; days: number; cheap?: { level: Cheapness; rank: number; of: number; basis: 'program' | 'exposure' } | null }) {
+export function YtPlanView({ plan, name, days, cheap, unitUsd, watch }: { plan: YtPlan; name: string; days: number; cheap?: { level: Cheapness; rank: number; of: number; basis: 'program' | 'exposure' } | null; unitUsd?: number | null; watch?: { id: string; name: string; impliedPct: number } }) {
   const [valuePerM, setValuePerM] = useState(0);
   const likely = plan.maturity.find((x) => x.kind === 'likely')!;
   const prog = plan.program;
@@ -53,6 +54,8 @@ export function YtPlanView({ plan, name, days, cheap }: { plan: YtPlan; name: st
       <p className="text-[15px] text-primary leading-7">
         با <b><Num>{plain(plan.capital)}</Num></b> YT <bdi dir="ltr">{name}</bdi> می‌خرید: حق بازده <b><Num>{plain(plan.entry.notionalUsd)}</Num></b> تا سررسید (<Num>{formatNumber(plan.entry.leverage, 1)}×</Num>)، <Num>{formatNumber(days, 0)}</Num> روز.
       </p>
+
+      <WorstCase plan={plan} days={days} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
@@ -198,6 +201,7 @@ export function YtPlanView({ plan, name, days, cheap }: { plan: YtPlan; name: st
             {plan.costPerKDollarDay === 0 ? <span className="text-success">صفر (رایگان)</span> : <b className="text-primary"><Num>{formatUSD(plan.costPerKDollarDay, 3)}</Num></b>}.
           </p>
         )}
+        <PointsWorthView plan={plan} days={days} unitUsd={unitUsd} watch={watch} />
       </Section>
     </div>
   );
