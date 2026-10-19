@@ -14,6 +14,8 @@ import { Num } from '../ui/num';
 import { StepList } from './ActionPlan';
 import { stepsFor } from '../../lib/market/steps';
 import { ScenarioTable } from './ScenarioTable';
+import { borrowShockUsd, pointsLadder } from '../../lib/calculators/points-worth';
+import { DEFAULT_POINTS_SETTINGS, LadderView, ZeroCard } from './PointsWorthView';
 
 export const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : Math.abs(x) >= 1 ? 2 : 4);
 
@@ -79,6 +81,31 @@ function calculatorHref(o: Opportunity): string | null {
 
 const action = 'tap inline-flex items-center gap-1.5 rounded-lg border border-control px-3 min-h-10 text-sm text-primary hover:bg-elevated';
 
+/**
+ * A loop that earns points: the result if the airdrop is zero (today's rates, and with the
+ * loan rate 2 points higher), the fall that liquidates, and how large the airdrop must be
+ * for each outcome — no point count needed.
+ */
+function LoopPoints({ e, shock }: { e: Estimate; shock: number }) {
+  const x = e.leverage!;
+  const w = pointsLadder({ capital: e.capital, days: e.earningDays, cashUsd: e.net!, lowCashUsd: e.net! - shock, points: null }, DEFAULT_POINTS_SETTINGS.safePct, DEFAULT_POINTS_SETTINGS.extraPct);
+  return (
+    <section className="flex flex-col gap-4" aria-label="پوینت این لوپ">
+      <ZeroCard
+        w={w}
+        capital={e.capital}
+        lowLabel="با نرخ وام ۲٪ بالاتر"
+        extra={
+          <p className={`mt-2.5 text-xs leading-6 ${x.liquidationDrop < 0.05 ? 'text-danger' : 'text-secondary'}`}>
+            ریسکی که در YT نیست: با افت <Num>{formatPercent(x.liquidationDrop * 100, 1)}</Num> ارزش وثیقه نسبت به وام، موقعیت نقد می‌شود و بخش بزرگی از سرمایه می‌رود.
+          </p>
+        }
+      />
+      <LadderView w={w} />
+    </section>
+  );
+}
+
 export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated; days: HorizonDays; modelVersion: string }) {
   const { o } = row;
   const e = row.byHorizon[days];
@@ -88,6 +115,9 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
   const other = e.costs.reduce((a, c) => a + c.usd, 0) - entry - principal;
   const calc = calculatorHref(o);
   const earn = earnFromOpportunity(o, 'draft');
+  // Loops: what a 2-point rise of the loan rate costs over the horizon.
+  const shock = x && e.earningDays > 0 ? borrowShockUsd(x.debt, x.borrowPct, e.earningDays) : null;
+  const pointsLoop = !!x && e.net !== null && o.rewards.some((r) => r.kind === 'points');
   return (
     <div className="flex flex-col gap-4 text-sm">
       <Horizons row={row} active={days} />
@@ -100,6 +130,7 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
           points={!!o.yt?.hasPoints}
         />
       )}
+      {pointsLoop && <LoopPoints e={e} shock={shock ?? 0} />}
       <section className="rounded-xl border border-default p-3" aria-labelledby={`steps-${o.key}`}>
         <h3 id={`steps-${o.key}`} className="text-xs text-muted mb-3">
           قدم‌به‌قدم تا سود دلاری
@@ -149,6 +180,11 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
               <Line label="افت تا لیکوییدشدن" tone={x.liquidationDrop < 0.05 ? 'danger' : undefined}>
                 <Num>{formatPercent(x.liquidationDrop * 100, 1)}</Num>
               </Line>
+              {shock !== null && shock > 0.005 && (
+                <Line label="اگر نرخ وام ۲٪ بالا برود" tone="danger">
+                  {money(-shock)}
+                </Line>
+              )}
             </>
           ) : (
             <>

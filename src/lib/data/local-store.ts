@@ -35,4 +35,5 @@ export const STORAGE_KEYS = {
   goal: 'yieldx-goal-v1',
   monthly: 'yieldx-monthly-v1',
   ytTargets: 'yieldx-yt-targets-v1',
+  seasonEnds: 'yieldx-season-ends-v1',
 } as const;

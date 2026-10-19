@@ -50,6 +50,8 @@ export interface YtPlanInput {
   txUsd: number;
   /** Assumed USD value of 1M points (0: none). */
   valuePerMillion?: number;
+  /** Days until the points season ends, when the buyer knows it: no points count after it. */
+  pointsUntilDay?: number | null;
 }
 
 /** Fee of a buy at the market rate, %, and of a sale `left` days before maturity at `exitPct`. */
@@ -156,6 +158,9 @@ export function ytPlan(m: YtPlanMarket, i: YtPlanInput): YtPlan | null {
       entryPrice: quoted ? i.entryPrice : undefined,
     });
 
+  // Points stop at the season's end even if the YT runs on (points accrue evenly over the hold).
+  const cap = i.pointsUntilDay != null && Number.isFinite(i.pointsUntilDay) ? Math.max(0, i.pointsUntilDay) : null;
+  const seasonPoints = (pts: number, h: number) => (cap !== null && h > cap ? (pts * cap) / h : pts);
   const gas = { entry: i.txUsd * 2, exit: i.txUsd, claim: i.txUsd }; // approve + buy; sell; claim at maturity
   const sc = base(D);
   const t0 = sim(D, sc.likely);
@@ -164,7 +169,7 @@ export function ytPlan(m: YtPlanMarket, i: YtPlanInput): YtPlan | null {
     const t = kind === 'likely' ? t0 : sim(D, sc[kind]);
     const gross = yieldFee < 100 ? t.yieldEarned / (1 - yieldFee / 100) : t.yieldEarned;
     const cash = t.cash - gas.entry - gas.claim;
-    const points = prog ? t.points : null;
+    const points = prog ? seasonPoints(t.points, D) : null;
     return { kind, basePct: sc[kind], yieldUsd: t.yieldEarned, yieldFeeUsd: gross - t.yieldEarned, cashUsd: cash, points, costPerMillion: points && points > 0 ? (cash >= 0 ? 0 : (-cash / points) * 1e6) : null };
   });
 
@@ -178,7 +183,7 @@ export function ytPlan(m: YtPlanMarket, i: YtPlanInput): YtPlan | null {
     const cash = t.cash - gas.entry - gas.exit;
     if (cash >= 0) freeUntil = h;
     if (cash > 0 && firstProfitDay === null) firstProfitDay = h;
-    byDay.set(h, { day: h, cashUsd: cash, breakEvenPct: t.breakEvenExitAPY, points: prog ? t.points : null });
+    byDay.set(h, { day: h, cashUsd: cash, breakEvenPct: t.breakEvenExitAPY, points: prog ? seasonPoints(t.points, h) : null });
   }
   const likely = maturity[1];
   if (likely.cashUsd >= 0) freeUntil = D;
@@ -186,7 +191,7 @@ export function ytPlan(m: YtPlanMarket, i: YtPlanInput): YtPlan | null {
   const shown = [minHold, Math.round(D / 2), Math.round((3 * D) / 4), firstProfitDay, freeUntil !== null && freeUntil < D ? freeUntil : null];
   const exits = [...new Set(shown.filter((d): d is number => d !== null && d >= minHold && d < D))].sort((a, b) => a - b).map((d) => byDay.get(d)!).filter(Boolean);
   const exposureDollarDays = t0.notional * D;
-  const pointsPerDay = prog ? t0.points / D : null;
+  const pointsPerDay = prog ? seasonPoints(t0.points, D) / D : null;
   return {
     capital: i.capital,
     feeSource: quoted ? 'quote' : fees.source,

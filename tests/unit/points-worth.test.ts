@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ytPlan, type YtPlanMarket } from '../../src/lib/calculators/yt-plan';
-import { fdvFor, holdAlternative, pointsWorth, spreadBudget } from '../../src/lib/calculators/points-worth';
+import { borrowShockUsd, fdvFor, holdAlternative, pointsLadder, pointsWorth, spreadBudget } from '../../src/lib/calculators/points-worth';
 
 const ONYC: YtPlanMarket = {
   protocol: 'exponent',
@@ -23,7 +23,9 @@ describe('points worth', () => {
     expect(w.ladder!.map((x) => x.band)).toEqual(['loss', 'small-loss', 'even', 'thin', 'good']);
     // Break-even of the cash loss is the statement's own cost per 1M points.
     expect(w.ladder![1].toPerM).toBeCloseTo(likely.costPerMillion!, 6);
-    for (let k = 1; k < w.ladder!.length; k++) expect(w.ladder![k].fromPerM).toBeGreaterThanOrEqual(w.ladder![k - 1].fromPerM);
+    for (let k = 1; k < w.ladder.length; k++) expect(w.ladder[k].fromUsd).toBeGreaterThanOrEqual(w.ladder[k - 1].fromUsd);
+    // Small loss ends where the airdrop covers the cash loss.
+    expect(w.ladder[1].toUsd).toBeCloseTo(-w.zeroUsd, 6);
     // At the «good» threshold the result equals the safe yield plus the extra asked for.
     expect(w.ladder!.at(-1)!.resultUsd).toBeCloseTo(w.safeUsd + w.extraUsd, 6);
     expect(w.realCostUsd).toBeCloseTo(w.safeUsd - w.zeroUsd, 6);
@@ -32,6 +34,30 @@ describe('points worth', () => {
   it('turns a value per 1M points into an FDV only when the program size is known', () => {
     expect(fdvFor(10, 50e9, 10)).toBeCloseTo(5e6, 0);
     expect(fdvFor(10, 0, 10)).toBeNull();
+    // A 20% dilution buffer needs a 20% higher FDV for the same value per point.
+    expect(fdvFor(10, 50e9, 10, 20)).toBeCloseTo(6e6, 0);
+  });
+
+  it('builds the ladder in airdrop dollars with no point count (Pendle, loops)', () => {
+    const w = pointsLadder({ capital: 45_000, days: 22, cashUsd: -62, lowCashUsd: -150, points: null }, 8, 5);
+    expect(w.ladder.map((x) => x.band)).toEqual(['loss', 'small-loss', 'even', 'thin', 'good']);
+    expect(w.ladder.every((x) => x.fromPerM === null)).toBe(true);
+    expect(w.ladder[2].fromUsd).toBeCloseTo(62, 6);
+    // Beating 8% a year over 22 days on $45k needs ~$275 of airdrop.
+    expect(w.ladder[3].fromUsd).toBeCloseTo(62 + w.safeUsd, 6);
+    expect(w.ladder[3].fromUsd).toBeGreaterThan(260);
+    expect(w.ladder[3].fromUsd).toBeLessThan(290);
+  });
+
+  it('a loan rate 2 points higher costs about 2% a year on the debt', () => {
+    expect(borrowShockUsd(100_000, 6, 365)).toBeCloseTo(2000, 0);
+  });
+
+  it('counts no points after the season ends', () => {
+    const full = plan(1000).maturity.find((x) => x.kind === 'likely')!;
+    const half = ytPlan(ONYC, { capital: 1000, assumedFeePct: 0.5, txUsd: 0.01, pointsUntilDay: 46 })!.maturity.find((x) => x.kind === 'likely')!;
+    expect(half.points!).toBeCloseTo(full.points! / 2, 0);
+    expect(half.cashUsd).toBe(full.cashUsd);
   });
 
   it('holding the asset earns fewer points with less at risk', () => {

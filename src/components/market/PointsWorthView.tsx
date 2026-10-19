@@ -1,9 +1,9 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { BellPlus, Check, Scale, ShieldAlert, Target } from 'lucide-react';
 import type { YtPlan } from '../../lib/calculators/yt-plan';
-import { fdvFor, holdAlternative, pointsWorth, type Band } from '../../lib/calculators/points-worth';
+import { fdvFor, holdAlternative, pointsWorth, type Band, type PointsWorth } from '../../lib/calculators/points-worth';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
 import { formatCompact, formatDate, formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { Num } from '../ui/num';
@@ -20,13 +20,36 @@ export interface PointsSettings {
 export const DEFAULT_POINTS_SETTINGS: PointsSettings = { safePct: 8, extraPct: 5 };
 export const PointsSettingsContext = createContext<PointsSettings>(DEFAULT_POINTS_SETTINGS);
 
-const BAND: Record<Band, { label: string; dot: string; note: string }> = {
-  loss: { label: 'ضرر خالص', dot: 'bg-danger', note: 'ایردراپ صفر' },
-  'small-loss': { label: 'ضرر کم', dot: 'bg-warning', note: 'ایردراپ بخشی از ضرر را می‌پوشاند' },
-  even: { label: 'سر به سر', dot: 'bg-muted', note: 'پول برمی‌گردد، ولی کمتر از جایگزین امن' },
-  thin: { label: 'سود ناچیز', dot: 'bg-info', note: 'بیشتر از جایگزین امن، کمتر از حداقل سود شما' },
-  good: { label: 'سود خوب', dot: 'bg-success', note: 'بیشتر از حداقل سودی که برایتان می‌ارزد' },
+const BAND: Record<Band, { label: string; dot: string; text: string; note: string }> = {
+  loss: { label: 'ضرر خالص', dot: 'bg-danger', text: 'text-danger', note: 'ایردراپ صفر' },
+  'small-loss': { label: 'ضرر کم', dot: 'bg-warning', text: 'text-warning', note: 'ایردراپ بخشی از ضرر را می‌پوشاند' },
+  even: { label: 'سر به سر', dot: 'bg-muted', text: 'text-secondary', note: 'پول برمی‌گردد، کمتر از جایگزین امن' },
+  thin: { label: 'سود ناچیز', dot: 'bg-accent', text: 'text-accent', note: 'کمتر از حداقل سودی که برایتان می‌ارزد' },
+  good: { label: 'سود خوب', dot: 'bg-success', text: 'text-success', note: 'بیشتر از حداقل سود شما' },
 };
+
+/** Saved per-program season ends (ISO dates), keyed by program name: no points count after them. */
+const SEASON_EVENT = 'yieldx-season-ends';
+export const readSeasonEnds = () => readLocal<Record<string, string>>(STORAGE_KEYS.seasonEnds, {});
+export function useSeasonEnds() {
+  const [map, setMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const load = () => setMap(readSeasonEnds());
+    load();
+    window.addEventListener(SEASON_EVENT, load);
+    return () => window.removeEventListener(SEASON_EVENT, load);
+  }, []);
+  return map;
+}
+function setSeasonEnd(program: string, iso: string | null) {
+  const next = { ...readSeasonEnds() };
+  if (iso) next[program] = iso;
+  else delete next[program];
+  writeLocal(STORAGE_KEYS.seasonEnds, next);
+  window.dispatchEvent(new Event(SEASON_EVENT));
+}
+/** Days from now to a season end, or null when none is set. */
+export const daysUntil = (iso: string | undefined, now = Date.now()) => (iso ? Math.max(0, Math.round((new Date(iso).getTime() - now) / 86_400_000)) : null);
 
 /** Saved exit targets: «sell when the implied rate reaches X by day Y». */
 export interface ExitTarget {
@@ -53,143 +76,177 @@ export function useTargets() {
   return list;
 }
 
-/** Top of the YT statement: what is lost if the airdrop is zero — always shown, before anything else. */
-export function WorstCase({ plan, days }: { plan: YtPlan; days: number }) {
-  const s = useContext(PointsSettingsContext);
-  const w = pointsWorth(plan, days, s.safePct, s.extraPct);
+function Stat({ label, children, cls = 'text-primary' }: { label: string; children: ReactNode; cls?: string }) {
   return (
-    <div className={`flex items-start gap-2 rounded-lg border px-3 py-2.5 leading-7 ${w.zeroUsd < 0 ? 'border-danger/40 bg-danger/[0.06]' : 'border-success/40 bg-success/[0.06]'}`}>
-      <ShieldAlert size={18} aria-hidden className={`mt-1 shrink-0 ${w.zeroUsd < 0 ? 'text-danger' : 'text-success'}`} />
-      <p className="text-secondary">
-        اگر ایردراپ <b className="text-primary">صفر</b> باشد:{' '}
-        <b className={tone(w.zeroUsd)}>
-          <Num>{usd(w.zeroUsd)}</Num> (<Num>{formatPercent((w.zeroUsd / plan.capital) * 100, 1)}</Num>)
-        </b>
-        {w.zeroLowUsd < w.zeroUsd - 0.5 && (
-          <>
-            ؛ اگر بازده پایه هم بدبینانه شود: <b className={tone(w.zeroLowUsd)}><Num>{usd(w.zeroLowUsd)}</Num></b>
-          </>
-        )}
-        . همین مبلغ در جایگزین امن (<Num>{formatPercent(s.safePct, 1)}</Num> سالانه) <Num>{plain(w.safeUsd)}</Num> سود می‌داد؛ هزینه‌ی واقعی پوینت‌ها{' '}
-        <b className={w.realCostUsd > 0 ? 'text-danger' : 'text-success'}><Num>{plain(w.realCostUsd)}</Num></b> است.
-      </p>
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className="text-[11px] text-muted">{label}</span>
+      <span className={`text-sm font-semibold ${cls}`}>{children}</span>
     </div>
   );
 }
 
 /**
- * «آیا این پوینت می‌ارزد؟»: no forecast — the value 1M points must reach for each outcome,
- * the FDV that means when the program's size is known, points per dollar at risk next to
- * simply holding the asset or LP, and an exit target that does not depend on the airdrop.
+ * «اگر ایردراپ صفر باشد»: the first thing on any points position — the result with no
+ * airdrop, a pessimistic one (`lowLabel`), and the real cost once the safe alternative counts.
+ */
+export function ZeroCard({ w, capital, lowLabel, extra }: { w: PointsWorth; capital: number; lowLabel: string; extra?: ReactNode }) {
+  const s = useContext(PointsSettingsContext);
+  const bad = w.zeroUsd < 0;
+  return (
+    <div className={`relative overflow-hidden rounded-xl border border-default bg-surface px-4 py-3 ${bad ? 'shadow-[inset_-3px_0_0_var(--c-danger)]' : 'shadow-[inset_-3px_0_0_var(--c-success)]'}`}>
+      <div className="flex items-center gap-2 text-xs text-muted">
+        <ShieldAlert size={14} aria-hidden className={bad ? 'text-danger' : 'text-success'} /> اگر ایردراپ صفر باشد
+      </div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className={`text-2xl font-bold leading-tight ${tone(w.zeroUsd)}`}><Num>{usd(w.zeroUsd)}</Num></span>
+        <span className="text-xs text-muted"><Num>{formatPercent((w.zeroUsd / capital) * 100, 1)}</Num> سرمایه</span>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-3 border-t border-default pt-2.5">
+        <Stat label={lowLabel} cls={tone(w.zeroLowUsd)}><Num>{usd(w.zeroLowUsd)}</Num></Stat>
+        <Stat label={`جایگزین امن ${formatNumber(s.safePct, 1)}٪`} cls="text-secondary"><Num>{plain(w.safeUsd)}</Num></Stat>
+        <Stat label="هزینه‌ی واقعی پوینت" cls={w.realCostUsd > 0 ? 'text-danger' : 'text-success'}><Num>{plain(w.realCostUsd)}</Num></Stat>
+      </div>
+      {extra}
+    </div>
+  );
+}
+
+/** Top of the YT statement. */
+export function WorstCase({ plan, days }: { plan: YtPlan; days: number }) {
+  const s = useContext(PointsSettingsContext);
+  return <ZeroCard w={pointsWorth(plan, days, s.safePct, s.extraPct)} capital={plan.capital} lowLabel="با بازده پایه‌ی بدبینانه" />;
+}
+
+/**
+ * The outcome ladder — no forecast: how large the buyer's whole airdrop must be for each
+ * outcome; per 1M points and the token's FDV beside it when the points are known.
+ */
+export function LadderView({ w, program }: { w: PointsWorth; program?: string | null }) {
+  const [total, setTotal] = useState(0);
+  const [alloc, setAlloc] = useState(0);
+  const [buffer, setBuffer] = useState(20);
+  const perM = w.points !== null && w.points > 0;
+  const fdv = (v: number | null) => (v === null ? null : fdvFor(v, total, alloc, buffer));
+  const showFdv = perM && fdv(1) !== null;
+  const seasons = useSeasonEnds();
+  const season = program ? seasons[program] : undefined;
+  const bound = (a: number, b: number | null, f: (x: number) => string) => (b === null ? <>≥ <Num>{f(a)}</Num></> : <><Num>{f(a)}</Num> – <Num>{f(b)}</Num></>);
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <h5 className="text-sm font-semibold text-primary flex items-center gap-2">
+          <Scale size={15} aria-hidden className="text-accent" /> ایردراپ شما باید چقدر شود؟
+        </h5>
+        <span className="text-[11px] text-muted">پیش‌بینی نیست</span>
+      </div>
+
+      <div className="flex h-1.5 overflow-hidden rounded-full gap-0.5" aria-hidden>
+        {w.ladder.map((r) => (
+          <span key={r.band} className={`flex-1 ${BAND[r.band].dot} ${r.band === 'even' ? 'opacity-50' : 'opacity-80'}`} />
+        ))}
+      </div>
+
+      <ul className="flex flex-col divide-y divide-default rounded-xl border border-default bg-surface">
+        {w.ladder.map((r) => (
+          <li key={r.band} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5">
+            <span className="flex items-start gap-2.5 min-w-0">
+              <span className={`mt-1.5 size-2 shrink-0 rounded-full ${BAND[r.band].dot}`} aria-hidden />
+              <span className="min-w-0">
+                <span className={`block text-sm font-medium ${BAND[r.band].text}`}>{BAND[r.band].label}</span>
+                <span className="block text-[11px] text-muted leading-5">{BAND[r.band].note}</span>
+              </span>
+            </span>
+            <span className="flex flex-col items-end text-left">
+              <span className="text-sm text-primary whitespace-nowrap">{r.band === 'loss' ? <Num>{plain(0)}</Num> : bound(r.fromUsd, r.toUsd, plain)}</span>
+              {perM && r.band !== 'loss' && r.fromPerM !== null && (
+                <span className="text-[11px] text-muted whitespace-nowrap">
+                  هر ۱M پوینت {bound(r.fromPerM, r.toPerM, plain)}
+                  {showFdv && <> · FDV {bound(fdv(r.fromPerM)!, fdv(r.toPerM), (x) => formatUSDCompact(x))}</>}
+                </span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="text-[11px] text-muted leading-5">
+        ایردراپ خوبِ یک پروژه چیزی درباره‌ی پروژه‌ی دیگر یا فصل بعد نمی‌گوید؛ این‌جا فقط شرط هر نتیجه آمده و قضاوت با شماست.
+      </p>
+
+      {(perM || program) && (
+        <details className="group rounded-xl border border-default bg-surface px-3 py-2 text-xs text-secondary">
+          <summary className="cursor-pointer select-none text-secondary">فصل، کل پوینت‌ها و FDV</summary>
+          <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5">
+            {program && (
+              <label className="flex flex-col gap-1 sm:col-span-2">
+                <span>پایان فصل <bdi dir="ltr">{program}</bdi> — پوینت بعد از آن شمرده نمی‌شود</span>
+                <span className="flex items-center gap-2">
+                  <input type="date" value={season ? season.slice(0, 10) : ''} onChange={(e) => setSeasonEnd(program, e.target.value ? new Date(e.target.value).toISOString() : null)} className="px-2 text-sm !min-h-9" aria-label="تاریخ پایان فصل" />
+                  {season && <span className="text-muted"><Num>{formatNumber(daysUntil(season) ?? 0, 0)}</Num> روز دیگر</span>}
+                </span>
+              </label>
+            )}
+            {perM && (
+              <>
+                <label className="flex flex-col gap-1">
+                  کل پوینت‌های برنامه در پایان فصل
+                  <input type="number" min={0} value={total || ''} placeholder="50000000000" onChange={(e) => setTotal(Math.max(0, e.target.valueAsNumber || 0))} className="px-2 text-sm !min-h-9" aria-label="کل پوینت‌های برنامه" />
+                </label>
+                <label className="flex flex-col gap-1">
+                  سهم ایردراپ از کل توکن ٪
+                  <input type="number" min={0} max={100} value={alloc || ''} placeholder="3.5" onChange={(e) => setAlloc(Math.min(100, Math.max(0, e.target.valueAsNumber || 0)))} className="px-2 text-sm !min-h-9" aria-label="درصد ایردراپ" />
+                </label>
+                <label className="flex flex-col gap-1 sm:col-span-2">
+                  حاشیه‌ی رقیق‌شدن ٪ — کل پوینت‌ها معمولاً از پیش‌بینی امروز بیشتر می‌شود
+                  <input type="number" min={0} value={buffer} onChange={(e) => setBuffer(Math.max(0, e.target.valueAsNumber || 0))} className="px-2 text-sm !min-h-9 sm:w-32" aria-label="حاشیه‌ی رقیق‌شدن" />
+                </label>
+                {total > 0 && w.points !== null && (
+                  <p className="sm:col-span-2 text-muted">
+                    سهم شما از کل: <Num>{formatPercent((w.points / (total * (1 + buffer / 100))) * 100, 4)}</Num>
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/**
+ * «آیا این پوینت می‌ارزد؟» under the YT statement: the ladder, points per dollar at risk
+ * next to simply holding the asset or LP, and an exit target that does not need the airdrop.
  */
 export function PointsWorthView({ plan, days, unitUsd, watch }: { plan: YtPlan; days: number; unitUsd?: number | null; watch?: { id: string; name: string; impliedPct: number } }) {
   const s = useContext(PointsSettingsContext);
   const w = pointsWorth(plan, days, s.safePct, s.extraPct);
-  const [total, setTotal] = useState(0);
-  const [alloc, setAlloc] = useState(0);
   const alt = holdAlternative(plan, days, s.safePct, unitUsd ?? 1);
-  const fdv = (perM: number) => fdvFor(perM, total, alloc);
-  const range = (a: number, b: number | null) =>
-    b === null ? <>≥ <Num>{plain(a)}</Num></> : a === b ? <Num>{plain(a)}</Num> : <><Num>{plain(a)}</Num> تا <Num>{plain(b)}</Num></>;
   return (
-    <div className="flex flex-col gap-4">
-      {w.ladder && (
-        <section className="flex flex-col gap-2">
-          <h5 className="text-sm font-semibold text-primary flex items-center gap-2">
-            <Scale size={15} aria-hidden className="text-accent" /> پله‌های نتیجه — پیش‌بینی نیست
-          </h5>
-          <p className="text-xs text-muted leading-6">
-            ایردراپ خوبِ یک پروژه چیزی درباره‌ی پروژه‌ی دیگر یا فصل بعد نمی‌گوید. این جدول فقط نشان می‌دهد هر ۱M پوینت چقدر باید بیرزد تا به هر نتیجه برسید؛ واقع‌بینانه بودنش با شماست.
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-default">
-            <table className="w-full text-xs sm:text-sm">
-              <thead className="bg-canvas text-xs text-muted">
-                <tr>
-                  <th className="py-2 px-2 text-right font-medium">نتیجه</th>
-                  <th className="py-2 px-2 text-right font-medium">ارزش هر ۱M پوینت</th>
-                  {fdv(1) !== null && <th className="py-2 px-2 text-right font-medium">یعنی FDV توکن</th>}
-                  <th className="py-2 px-2 text-right font-medium">نتیجه‌ی دلاری از</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {w.ladder.map((r) => (
-                  <tr key={r.band}>
-                    <td className="py-2 px-2 whitespace-nowrap">
-                      <span className="flex items-center gap-1.5 text-primary">
-                        <span className={`size-2 rounded-full ${BAND[r.band].dot}`} aria-hidden /> {BAND[r.band].label}
-                      </span>
-                      <span className="block text-[11px] text-muted whitespace-normal">{BAND[r.band].note}</span>
-                    </td>
-                    <td className="py-2 px-2 whitespace-nowrap">{r.band === 'loss' ? <Num>{plain(0)}</Num> : range(r.fromPerM, r.toPerM)}</td>
-                    {fdv(1) !== null && (
-                      <td className="py-2 px-2 whitespace-nowrap">
-                        {r.band === 'loss' ? '—' : r.toPerM === null ? <>≥ <Num>{formatUSDCompact(fdv(r.fromPerM)!)}</Num></> : <><Num>{formatUSDCompact(fdv(r.fromPerM)!)}</Num> تا <Num>{formatUSDCompact(fdv(r.toPerM)!)}</Num></>}
-                      </td>
-                    )}
-                    <td className={`py-2 px-2 whitespace-nowrap ${tone(r.resultUsd)}`}><Num>{usd(r.resultUsd)}</Num></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-secondary">
-            <span>برای تبدیل به FDV:</span>
-            <label className="flex items-center gap-1.5">
-              کل پوینت برنامه
-              <input type="number" min={0} value={total || ''} placeholder="مثلاً 50000000000" onChange={(e) => setTotal(Math.max(0, e.target.valueAsNumber || 0))} className="w-36 px-2 text-sm !min-h-9" aria-label="کل پوینت‌های برنامه" />
-            </label>
-            <label className="flex items-center gap-1.5">
-              سهم ایردراپ
-              <input type="number" min={0} max={100} value={alloc || ''} placeholder="10" onChange={(e) => setAlloc(Math.min(100, Math.max(0, e.target.valueAsNumber || 0)))} className="w-16 px-2 text-sm !min-h-9" aria-label="درصد ایردراپ از کل توکن" />
-              ٪
-            </label>
-            {total > 0 && w.points !== null && (
-              <span>
-                سهم شما از کل پوینت‌ها: <Num>{formatPercent((w.points / total) * 100, 4)}</Num> — اگر امتیاز روزانه‌ی کل برنامه بالا برود، این سهم کم می‌شود.
-              </span>
-            )}
-          </div>
-        </section>
-      )}
+    <div className="flex flex-col gap-5">
+      <LadderView w={w} program={plan.program?.name ?? null} />
 
       {alt && w.points !== null && (
         <section className="flex flex-col gap-2">
           <h5 className="text-sm font-semibold text-primary">پوینت به ازای هر دلار ریسک</h5>
-          <div className="overflow-x-auto rounded-lg border border-default">
-            <table className="w-full text-xs sm:text-sm">
-              <thead className="bg-canvas text-xs text-muted">
-                <tr>
-                  <th className="py-2 px-2 text-right font-medium">با <Num>{plain(plan.capital)}</Num></th>
-                  <th className="py-2 px-2 text-right font-medium">پوینت تا سررسید</th>
-                  <th className="py-2 px-2 text-right font-medium whitespace-normal">ضرر اگر ایردراپ صفر</th>
-                  <th className="py-2 px-2 text-right font-medium">پوینت هر ۱ دلار ریسک</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {[
-                  { k: 'خرید YT', p: w.points, r: w.riskUsd, per: w.pointsPerRiskUsd },
-                  { k: 'نگه داشتن خود دارایی', p: alt.hold.points, r: alt.hold.riskUsd, per: alt.hold.pointsPerRiskUsd },
-                ].map((x) => (
-                  <tr key={x.k}>
-                    <td className="py-2 px-2 text-primary whitespace-nowrap">{x.k}</td>
-                    <td className="py-2 px-2"><Num>{formatCompact(x.p)}</Num></td>
-                    <td className="py-2 px-2 text-danger"><Num>{plain(x.r)}</Num></td>
-                    <td className="py-2 px-2 font-medium">{x.per === null ? '—' : x.per === Infinity ? <span className="text-success">بدون ریسک دلاری</span> : <Num>{formatCompact(x.per)}</Num>}</td>
-                  </tr>
-                ))}
-                {alt.lp && (
-                  <tr>
-                    <td className="py-2 px-2 text-primary whitespace-nowrap">LP (ضریب <Num>{formatNumber(alt.lp.multiplier, 1)}×</Num>)</td>
-                    <td className="py-2 px-2">تا <Num>{formatCompact(alt.lp.points)}</Num></td>
-                    <td className="py-2 px-2 text-muted" colSpan={2}>معمولاً کم؛ برآورد نمی‌شود</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-xs text-muted leading-6">
-            ریسک = آنچه نسبت به جایگزین امن از دست می‌رود اگر ایردراپ صفر و بازده پایه بدبینانه باشد. ریسک جدا شدن دارایی از دلار (depeg) در هر سه هست و حساب نشده. پوینت LP سقف است: معمولاً فقط سهم SY استخر پوینت می‌گیرد.
-          </p>
+          <ul className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              { k: 'خرید YT', p: w.points, r: w.riskUsd, per: w.pointsPerRiskUsd as number | null, accent: true },
+              { k: 'نگه داشتن دارایی', p: alt.hold.points, r: alt.hold.riskUsd, per: alt.hold.pointsPerRiskUsd as number | null, accent: false },
+              ...(alt.lp ? [{ k: `LP (ضریب ${formatNumber(alt.lp.multiplier, 1)}×)`, p: alt.lp.points, r: null as number | null, per: null as number | null, accent: false }] : []),
+            ].map((x) => (
+              <li key={x.k} className={`rounded-xl border bg-surface px-3 py-2.5 ${x.accent ? 'border-accent/40' : 'border-default'}`}>
+                <div className="text-xs text-muted">{x.k}</div>
+                <div className="mt-1 text-base font-semibold text-primary">
+                  {x.per === null ? <span className="text-sm text-muted">ریسک برآورد نمی‌شود</span> : x.per === Infinity ? <span className="text-success text-sm">بدون ریسک دلاری</span> : <><Num>{formatCompact(x.per)}</Num> <span className="text-xs font-normal text-muted">در هر دلار</span></>}
+                </div>
+                <div className="text-[11px] text-muted">
+                  {x.r === null ? 'تا ' : ''}<Num>{formatCompact(x.p)}</Num> پوینت{x.r !== null && <> · ریسک <Num>{plain(x.r)}</Num></>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted leading-5">ریسک = آنچه نسبت به جایگزین امن از دست می‌رود اگر ایردراپ صفر و بازده پایه بدبینانه باشد. ریسک جدا شدن از دلار در همه هست. پوینت LP سقف است: معمولاً فقط سهم SY استخر پوینت می‌گیرد.</p>
         </section>
       )}
 
@@ -213,17 +270,21 @@ function ExitGoal({ plan, watch }: { plan: YtPlan; watch: { id: string; name: st
       { id: watch.id, name: watch.name, targetPct: mid.breakEvenPct, by, impliedAtSave: watch.impliedPct, savedAt: new Date().toISOString() },
     ]);
   return (
-    <section className="flex flex-col gap-2 rounded-lg border border-default bg-surface px-3 py-2.5">
+    <section className="flex flex-col gap-2 rounded-xl border border-default bg-surface px-4 py-3">
       <h5 className="text-sm font-semibold text-primary flex items-center gap-2">
         <Target size={15} aria-hidden className="text-accent" /> هدف خروج، مستقل از ایردراپ
       </h5>
-      <p className="text-secondary leading-7">
-        اگر نرخ ضمنی تا روز <Num>{formatNumber(mid.day, 0)}</Num> ({formatDate(by)}) به <b className="text-primary"><Num>{formatPercent(mid.breakEvenPct, 2)}</Num></b> یا بیشتر برسد (الان <Num>{formatPercent(watch.impliedPct, 2)}</Num>)، با فروش YT پولتان برمی‌گردد و
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl font-bold text-accent"><Num>{formatPercent(mid.breakEvenPct, 2)}</Num></span>
+        <span className="text-xs text-muted">تا روز <Num>{formatNumber(mid.day, 0)}</Num> ({formatDate(by)}) · الان <Num>{formatPercent(watch.impliedPct, 2)}</Num></span>
+      </div>
+      <p className="text-xs text-secondary leading-6">
+        اگر نرخ ضمنی به این عدد یا بیشتر برسد، با فروش YT پولتان برمی‌گردد و
         {mid.points !== null ? <> <Num>{formatCompact(mid.points)}</Num> پوینتِ</> : ' پوینت‌های'} جمع‌شده رایگان می‌شود.
       </p>
       <div>
-        <button type="button" onClick={save} disabled={saved} className="tap inline-flex items-center gap-1.5 rounded-md border border-control px-2.5 min-h-9 text-xs text-secondary hover:text-primary hover:bg-elevated disabled:opacity-70">
-          {saved ? <Check size={14} aria-hidden /> : <BellPlus size={14} aria-hidden />} {saved ? 'در «اهداف خروج من» است' : 'پیگیری این هدف'}
+        <button type="button" onClick={save} disabled={saved} className="tap inline-flex items-center gap-1.5 rounded-full border border-control px-3 min-h-8 text-xs text-secondary hover:text-primary hover:bg-elevated disabled:opacity-70">
+          {saved ? <Check size={14} aria-hidden className="text-success" /> : <BellPlus size={14} aria-hidden />} {saved ? 'در «اهداف خروج من»' : 'پیگیری این هدف'}
         </button>
       </div>
     </section>
