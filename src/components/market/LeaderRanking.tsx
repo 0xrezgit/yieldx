@@ -10,6 +10,9 @@ import { MAX_POOL_SHARE_ESTIMATE, MAX_QUOTES_PER_SIDE } from '../../lib/opportun
 import { Confidence } from './Confidence';
 import { YtPlanView, CHEAP } from './YtPlanView';
 import { pointsCheapness, ytPlan, type Cheapness, type YtPlan } from '../../lib/calculators/yt-plan';
+import { spreadBudget } from '../../lib/calculators/points-worth';
+import { DEFAULT_POINTS_SETTINGS, PointsSettingsContext } from './PointsWorthView';
+import { BudgetPanel, MyRecord, TargetsPanel } from './PointsTools';
 import { txCost } from '../../lib/opportunity/costs';
 import { networkByName } from '../../lib/registry/networks';
 import { useMerkl } from '../../hooks/useMerkl';
@@ -206,7 +209,7 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
       </div>
       {open && (
         <div className="mt-3 rounded-xl border border-default bg-canvas p-3 sm:p-4 flex flex-col gap-4">
-          {plan && <YtPlanView plan={plan} name={m.name} days={m.daysToMaturity} cheap={cheap ?? null} />}
+          {plan && <YtPlanView plan={plan} name={m.name} days={m.daysToMaturity} cheap={cheap ?? null} unitUsd={m.unitUsd} watch={{ id: `${m.protocol}-${m.id}`, name: m.name, impliedPct: m.impliedAPY }} />}
           <StepList steps={steps} />
         </div>
       )}
@@ -303,6 +306,11 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   const [goal, setGoal] = useState<YtGoal>('profit');
   const [pointsOnly, setPointsOnly] = useState(false);
   const [hurdle, setHurdle] = useState(8);
+  // Points yardsticks: the safe alternative, the extra profit worth the time (% a year), and the loss budget.
+  const [safePct, setSafePct] = useState(DEFAULT_POINTS_SETTINGS.safePct);
+  const [extraPct, setExtraPct] = useState(DEFAULT_POINTS_SETTINGS.extraPct);
+  const [budget, setBudget] = useState(200);
+  const pointsSettings = useMemo(() => ({ safePct: Number.isFinite(safePct) ? safePct : 0, extraPct: Number.isFinite(extraPct) ? extraPct : 0 }), [safePct, extraPct]);
   const s = useMemo(() => ({ ...defaultScreenSettings, feePercent: Number.isFinite(fee) ? Math.max(0, fee) : 0 }), [fee]);
   const lendingOpps = lending?.opportunities ?? null;
   // Executable quotes (Pendle's router; rounded amounts, cached on the server) for rows too
@@ -326,18 +334,36 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   const planCtx = useMemo(() => {
     if (strategy !== 'yt') return null;
     const plans = new Map<string, YtPlan>();
-    for (const r of rows) {
+    // Another amount drops the executable quote (it speaks for `capital` only).
+    const planAt = (r: LeaderRow, amount: number) => {
       const { basePct, capPct } = ytBaseOf(r.m);
-      const plan = ytPlan(
+      return ytPlan(
         { protocol: r.m.protocol, impliedPct: r.m.impliedAPY, basePct, capPct, daysToMaturity: r.m.daysToMaturity, baseLevels: r.m.baseLevels, ammFeeLn: r.m.ammFeeLn, points: r.m.points, hasPoints: r.m.hasPoints, unitUsd: r.m.unitUsd },
-        { capital, assumedFeePct: s.feePercent, entryPrice: r.entryPrice, txUsd: txCost(networkByName(r.m.chain).key, ['swap'], gas ?? []).usd },
+        { capital: amount, assumedFeePct: s.feePercent, entryPrice: amount === capital ? r.entryPrice : undefined, txUsd: txCost(networkByName(r.m.chain).key, ['swap'], gas ?? []).usd },
       );
+    };
+    for (const r of rows) {
+      const plan = planAt(r, capital);
       if (plan) plans.set(rowId(r), plan);
     }
     const cheap = pointsCheapness(rows.filter((r) => r.m.hasPoints && plans.has(rowId(r))).map((r) => ({ id: rowId(r), plan: plans.get(rowId(r))! })));
-    return { plans, cheap };
+    return { plans, cheap, planAt };
   }, [strategy, rows, capital, s.feePercent, gas]);
   const waiting = useMemo(() => all.filter((r) => r.needsQuote), [all]);
+  const marketById = useMemo(() => new Map(markets.map((m) => [`${m.protocol}-${m.id}`, m])), [markets]);
+  // «بودجه‌ی بلیت»: never on a doubtful input, a temporary base boost, or a row too big for its pool.
+  const picks = useMemo(() => {
+    if (!planCtx) return [];
+    const ok = rows.filter((r) => r.m.hasPoints && !r.tooBig && r.confidence !== 'suspect' && !temporaryBase(r.m));
+    const byId = new Map(ok.map((r) => [rowId(r), r]));
+    const cands = ok.flatMap((r) => {
+      const plan = planCtx.plans.get(rowId(r));
+      const P = plan?.maturity.find((x) => x.kind === 'likely')?.points;
+      return plan?.program && P && P > 0 ? [{ id: rowId(r), program: plan.program.name, plan }] : [];
+    });
+    const picked = spreadBudget(cands, Number.isFinite(budget) ? budget : 0, capital, (id, amount) => planCtx.planAt(byId.get(id)!, amount));
+    return picked.map((p) => ({ ...p, id: `${byId.get(p.id)!.m.protocol}-${byId.get(p.id)!.m.id}` }));
+  }, [planCtx, rows, budget, capital]);
   const excluded = useMemo(() => (strategy === 'yt' ? ytExcluded(markets, s) : null), [strategy, markets, s]);
   useEffect(() => {
     // At most MAX_QUOTES_PER_SIDE quotes per amount: the router's quota is small.
@@ -376,6 +402,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   }
   return (
     <PlanContext.Provider value={planCtx}>
+    <PointsSettingsContext.Provider value={pointsSettings}>
     <div className="flex flex-col gap-4">
       <section className="sx-card p-4 flex flex-col gap-3">
         <div className="grid grid-cols-1 sm:grid-cols-[10rem_minmax(0,1fr)_auto] gap-3 items-end">
@@ -388,6 +415,13 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
             </label>
           )}
         </div>
+        {strategy === 'yt' && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <NumberField label="بازده جایگزین امن" value={safePct} onChange={setSafePct} suffix="%" help="سالانه؛ مثلاً PT یا وام‌دهی دلاری. هزینه‌ی واقعی پوینت = سود از دست‌رفته‌ی این + ضرر نقدی." />
+            <NumberField label="حداقل سود اضافه که می‌ارزد" value={extraPct} onChange={setExtraPct} suffix="%" help="سالانه، بالاتر از جایگزین امن؛ کمتر از این «سود ناچیز» است." />
+            <NumberField label="بودجه‌ی ضرر پوینت" value={budget} onChange={setBudget} suffix="$" help="اگر همه‌ی ایردراپ‌ها صفر شوند، حداکثر ضرری که می‌پذیرید." />
+          </div>
+        )}
         {strategy === 'loop' && (
           <div className="grid grid-cols-1 sm:grid-cols-[12rem_minmax(0,1fr)] gap-3 items-end">
             <NumberField label="حداقل بازده سالانه" value={hurdle} onChange={setHurdle} suffix="%" />
@@ -445,6 +479,9 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
             ]}
           />
           <p className="text-xs text-secondary leading-6">{GOAL_NOTE[goal]}</p>
+          <TargetsPanel markets={marketById} />
+          {goal !== 'profit' && <BudgetPanel picks={picks} budget={budget} markets={marketById} />}
+          {goal !== 'profit' && <MyRecord />}
           <Bucket title={GOAL_TITLE[goal]} icon={goal === 'profit' ? <TrendingUp size={18} aria-hidden /> : <Sparkles size={18} aria-hidden />} cls={goal === 'paid' ? 'text-warning' : 'text-success'} rows={goalRows} strategy={strategy} capital={capital} />
         </>
       ) : (
@@ -468,6 +505,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       {board && board.broken.length > 0 && <Excluded title="نرخ بازار PT قابل اتکا نیست" note="قیمت PT و نرخ اعلامی نمی‌خوانند." list={board.broken} strategy={strategy} />}
       {excluded && excluded.broken.length > 0 && <Excluded title="داده‌ی بازار خراب" note="بازده یا نرخ اعلامی با داده‌ی خود پروتکل نمی‌خواند." list={excluded.broken} strategy={strategy} />}
     </div>
+    </PointsSettingsContext.Provider>
     </PlanContext.Provider>
   );
 }
