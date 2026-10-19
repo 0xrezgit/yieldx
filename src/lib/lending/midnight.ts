@@ -1,3 +1,4 @@
+import { morphoFixedLink } from '../market/links';
 import lending from '../../config/lending.json';
 import type { BookLevel, Opportunity, OrderBook } from '../../types/opportunity';
 import { networkByChainId } from '../registry/networks';
@@ -126,7 +127,7 @@ export function midnightOpportunity(b: RawBook, tokens: Map<string, TokenInfo>, 
       ...(lltvs.length ? [`حداکثر نسبت وام به وثیقه‌ی وام‌گیرندگان (LLTV): ${lltvs.map((x) => formatPercent(x * 100, 1)).join('، ')}.`] : []),
       ...(book === null ? ['اطلاعات توکن وام (نماد، اعشار یا قیمت) دریافت نشد.'] : []),
     ],
-    url: CFG.app,
+    url: morphoFixedLink(b.chain_id, b.market_id)?.url ?? CFG.app,
     icon: loan?.logoURI ?? null,
   };
 }

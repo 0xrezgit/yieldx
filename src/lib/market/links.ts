@@ -7,7 +7,7 @@ import { networkByName } from '../registry/networks';
  *
  * Verified formats (from live Merkl `depositUrl` values, which the protocols supply):
  * - Pendle:  https://app.pendle.finance/trade/markets/{market}/swap?view=yt&chain=ethereum
- * - Morpho:  https://app.morpho.org/{chain}/vault/{address}, …/{chain}/market/{marketId}
+ * - Morpho:  https://app.morpho.org/{chain}/vault/{address}, …/{chain}/variable/{marketId} (the old /market/ path redirects there)
  * Chain names are each app's own: Pendle's `nameId` and Morpho's `chainIdentifier` from
  * the chain tables in their app bundles (read 2026-10-01), cross-checked against Merkl.
  * Exponent: https://app.exponent.finance/en/market/{farm|fixed}/{name}-{DDMONYY} and Spectra:
@@ -33,8 +33,17 @@ const MORPHO_CHAIN: Record<number, string> = {
 
 export const morphoLink = (chainId: number, kind: 'vault' | 'market', id: string): EntryLink | null => {
   const chain = MORPHO_CHAIN[chainId];
-  return chain ? { url: `https://app.morpho.org/${chain}/${kind}/${id}`, exact: true } : null;
+  return chain ? { url: `https://app.morpho.org/${chain}/${kind === 'market' ? 'variable' : kind}/${id}`, exact: true } : null;
 };
+
+/** Morpho's fixed-rate market page (Midnight): /fixed/{chain}/{market id}, from its app's own route. */
+export const morphoFixedLink = (chainId: number, id: string): EntryLink | null => {
+  const chain = MORPHO_CHAIN[chainId];
+  return chain ? { url: `https://markets.morpho.org/fixed/${chain}/${id}`, exact: true } : null;
+};
+
+/** Lower case, every run of other characters «-» — the slug rule fluid.io and Aave Pro use in their paths. */
+export const pathSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 export function pendleLink(chainId: number, market: string, view: 'pt' | 'yt' | 'lp'): EntryLink {
   const chain = PENDLE_CHAIN[chainId];

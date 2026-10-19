@@ -1,3 +1,4 @@
+import { pathSlug } from '../market/links';
 import lending from '../../config/lending.json';
 import type { AssetYield, Opportunity } from '../../types/opportunity';
 import { fetchJson, isArrayOf, isObject, mapLimit, withRetry } from '../protocols/base';
@@ -78,6 +79,8 @@ const units = (raw: unknown, decimals: unknown) => {
 };
 const chainKey = (id: number) => `eip155:${id}`;
 const app = (id: number) => `${CFG.app}/${id}`;
+/** fluid.io's own token slug in /{chain}/lending/{slug}. */
+const slug = pathSlug;
 
 /** One fToken as a lending opportunity; null when unreadable or below the size floor. */
 export function fluidLending(t: FluidFToken, chainId: number, fetchedAt: string): Opportunity | null {
@@ -104,7 +107,7 @@ export function fluidLending(t: FluidFToken, chainId: number, fetchedAt: string)
     quality: 'partial',
     sources: [{ name: 'Fluid API', url: CFG.api, fetchedAt, sourceUpdatedAt: null }],
     notes: ['منبع Fluid: API عمومی fluid.io؛ واحدها (bps) با پاسخ زنده بررسی شد، طرح رسمی منتشر نشده.', ...(reward > 0 ? [`پاداش fToken (${formatPercent(reward, 2)}) در نرخ حساب نشده است.`] : [])],
-    url: `${app(chainId)}/lending`,
+    url: `${app(chainId)}/lending/${slug(t.asset.symbol)}`,
     icon: t.asset.logoUrl ?? null,
   };
 }
@@ -256,7 +259,8 @@ export function fluidVault(v: FluidVault, chainId: number, fetchedAt: string): O
       ...(smartC ? ['وثیقه موقعیت DEX دوتوکنی است: کارمزد معامله متغیر است و سهم هر توکن با معامله‌ها عوض می‌شود.'] : []),
       ...(smartD ? ['بدهی موقعیت DEX دوتوکنی است: کارمزد معامله هزینه‌ی وام را کم می‌کند و متغیر است؛ مقدار قابل وام گزارش نشده.'] : []),
     ],
-    url: `${app(chainId)}/borrowing/multiply`,
+    // The vault's own page (route in fluid.io's app: /{chain}/borrowing/vaults/{id}).
+    url: `${app(chainId)}/borrowing/vaults/${v.id}`,
     icon: d0.logoUrl ?? null,
   };
 }

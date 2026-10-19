@@ -1,3 +1,4 @@
+import { pathSlug } from '../market/links';
 import lending from '../../config/lending.json';
 import type { Opportunity, RewardStream } from '../../types/opportunity';
 import { networkByChainId } from '../registry/networks';
@@ -204,7 +205,10 @@ export function aaveReserve(r: RawAaveReserve, fetchedAt: string): Opportunity |
     quality: rate === null ? 'insufficient' : 'current',
     sources: [{ name: 'AaveKit API', url: CFG.graphql, fetchedAt, sourceUpdatedAt: null }],
     notes,
-    url: CFG.app,
+    // The reserve's own page on Aave Pro (its app's getReservePath): /explore/reserve/{chain}/{hub}/{spoke}/{symbol}.
+    url: r.asset.hub?.name && r.asset.underlying.info?.symbol
+      ? `${CFG.app}/explore/reserve/${pathSlug(r.chain.name)}/${pathSlug(r.asset.hub.name)}/${pathSlug(r.spoke.name)}/${encodeURIComponent(r.asset.underlying.info.symbol.trim().replace(/\s+/g, '-'))}`
+      : CFG.app,
     icon: r.asset.underlying.info?.icon ?? null,
   };
 }
