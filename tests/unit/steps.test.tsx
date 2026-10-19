@@ -65,4 +65,19 @@ describe('step-by-step guide', () => {
     expect(isPlainDollar('usdt0')).toBe(true);
     expect(isPlainDollar('sUSDe')).toBe(false);
   });
+
+  it('loop note: the user\'s own amounts, where to stop, about how many rounds, the fall that liquidates', () => {
+    const lev = { leverage: 7.71, equity: 1500, gross: 11_565, debt: 10_065, liquidationDrop: 0.074, health: { metric: 'hf', value: 1.08, min: 1.05 } } as Estimate['leverage'];
+    const s = stepsFor(o({ family: 'leverage', maturity: null, assets: { deposit: [{ symbol: 'USDai+USDC', address: '0x5' }], debt: [{ symbol: 'USDC+USDT', address: '0x6' }] } } as Partial<Opportunity>), e({ leverage: lev }));
+    const note = s.find((x) => x.kind === 'loop')!.note!;
+    const lines = note.split('\n');
+    expect(lines).toHaveLength(4);
+    expect(note).toContain('۱۱٬۵۶۵');
+    expect(note).toContain('۱۰٬۰۶۵');
+    expect(note).toContain('بایستید');
+    expect(note).toContain('۷.۴٪');
+    // 87% a round needs ~22 rounds to reach 95% of the loan: the one-click way comes first.
+    expect(lines[2]).toContain('۲۲ دور');
+    expect(note).not.toContain('NaN');
+  });
 });
