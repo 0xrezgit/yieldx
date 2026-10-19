@@ -13,15 +13,18 @@ export type Band = 'loss' | 'small-loss' | 'even' | 'thin' | 'good';
 
 export interface LadderStep {
   band: Band;
-  /** Value of 1M points, USD: the band starts here (inclusive) and ends at `toPerM` (null: no end). */
-  fromPerM: number;
+  /** Total airdrop to the buyer, USD: the band starts here (inclusive) and ends at `toUsd` (null: no end). */
+  fromUsd: number;
+  toUsd: number | null;
+  /** The same per 1M points, when the points are known. */
+  fromPerM: number | null;
   toPerM: number | null;
-  /** Cash result to maturity at the band's start, USD (likely base yield, airdrop at `fromPerM`). */
+  /** Cash result at the band's start, USD (likely base yield, airdrop at `fromUsd`). */
   resultUsd: number;
 }
 
 export interface PointsWorth {
-  /** Airdrop zero, likely base yield; and airdrop zero with the pessimistic base. USD. */
+  /** Airdrop zero: the likely result and a pessimistic one. USD. */
   zeroUsd: number;
   zeroLowUsd: number;
   /** What the same capital earns in the safe alternative over the same days, USD. */
@@ -31,41 +34,45 @@ export interface PointsWorth {
   /** Real cost of the points: the safe yield given up plus any cash loss (0 or more), USD. */
   realCostUsd: number;
   points: number | null;
-  ladder: LadderStep[] | null;
-  /** Points per dollar that can be lost against the safe alternative when the airdrop is zero (pessimistic base). */
+  /** Always there: thresholds in airdrop dollars need no point count. */
+  ladder: LadderStep[];
+  /** Points per dollar that can be lost against the safe alternative when the airdrop is zero (pessimistic). */
   pointsPerRiskUsd: number | null;
   riskUsd: number;
 }
 
 const growth = (pct: number, days: number) => Math.pow(1 + pct / 100, days / 365) - 1;
 
-export function pointsWorth(plan: YtPlan, days: number, safePct: number, extraPct: number): PointsWorth {
-  const D = Math.max(1, Math.round(days));
-  const likely = plan.maturity.find((x) => x.kind === 'likely')!;
-  const low = plan.maturity.find((x) => x.kind === 'low')!;
-  const safeUsd = plan.capital * growth(Math.max(0, safePct), D);
-  const extraUsd = plan.capital * growth(Math.max(0, extraPct), D);
-  const cash = likely.cashUsd;
-  const P = likely.points;
-  const riskUsd = Math.max(0, safeUsd - low.cashUsd);
-  let ladder: LadderStep[] | null = null;
-  if (P !== null && P > 0) {
-    const perM = (usd: number) => Math.max(0, usd) / P * 1e6;
-    const v0 = perM(-cash);
-    const v1 = Math.max(v0, perM(safeUsd - cash));
-    const v2 = Math.max(v1, perM(safeUsd + extraUsd - cash));
-    const at = (v: number) => cash + (P * v) / 1e6;
-    const steps: LadderStep[] = [];
-    if (cash < 0) steps.push({ band: 'loss', fromPerM: 0, toPerM: 0, resultUsd: cash });
-    if (v0 > 0) steps.push({ band: 'small-loss', fromPerM: 0, toPerM: v0, resultUsd: cash });
-    if (v1 > v0 || cash >= 0) steps.push({ band: 'even', fromPerM: v0, toPerM: v1, resultUsd: at(v0) });
-    if (v2 > v1) steps.push({ band: 'thin', fromPerM: v1, toPerM: v2, resultUsd: at(v1) });
-    steps.push({ band: 'good', fromPerM: v2, toPerM: null, resultUsd: at(v2) });
-    ladder = steps;
-  }
+/** Any position that earns points: its cash result to the end with no airdrop (likely and pessimistic) and its points. */
+export interface PointsPosition {
+  capital: number;
+  days: number;
+  cashUsd: number;
+  lowCashUsd: number;
+  points: number | null;
+}
+
+export function pointsLadder(x: PointsPosition, safePct: number, extraPct: number): PointsWorth {
+  const D = Math.max(1, Math.round(x.days));
+  const safeUsd = x.capital * growth(Math.max(0, safePct), D);
+  const extraUsd = x.capital * growth(Math.max(0, extraPct), D);
+  const cash = x.cashUsd;
+  const P = x.points;
+  const riskUsd = Math.max(0, safeUsd - x.lowCashUsd);
+  const a0 = Math.max(0, -cash);
+  const a1 = Math.max(a0, safeUsd - cash);
+  const a2 = Math.max(a1, safeUsd + extraUsd - cash);
+  const perM = (usd: number | null) => (usd === null || P === null || !(P > 0) ? null : (usd / P) * 1e6);
+  const step = (band: Band, from: number, to: number | null): LadderStep => ({ band, fromUsd: from, toUsd: to, fromPerM: perM(from), toPerM: perM(to), resultUsd: cash + from });
+  const ladder: LadderStep[] = [];
+  if (cash < 0) ladder.push(step('loss', 0, 0));
+  if (a0 > 0) ladder.push(step('small-loss', 0, a0));
+  if (a1 > a0 || cash >= 0) ladder.push(step('even', a0, a1));
+  if (a2 > a1) ladder.push(step('thin', a1, a2));
+  ladder.push(step('good', a2, null));
   return {
     zeroUsd: cash,
-    zeroLowUsd: low.cashUsd,
+    zeroLowUsd: x.lowCashUsd,
     safeUsd,
     extraUsd,
     realCostUsd: Math.max(0, safeUsd - cash),
@@ -76,10 +83,31 @@ export function pointsWorth(plan: YtPlan, days: number, safePct: number, extraPc
   };
 }
 
-/** FDV the token needs for 1M points to be worth `perM`, given the program's total points and the airdrop share (%). */
-export function fdvFor(perM: number, totalPoints: number, airdropPct: number): number | null {
+/**
+ * A YT statement as a points position. `pointsOverride`: the points the buyer reads on the
+ * project's own dashboard when the protocol publishes no rate (Pendle, Spectra).
+ */
+export function pointsWorth(plan: YtPlan, days: number, safePct: number, extraPct: number, pointsOverride?: number | null): PointsWorth {
+  const likely = plan.maturity.find((x) => x.kind === 'likely')!;
+  const low = plan.maturity.find((x) => x.kind === 'low')!;
+  const points = likely.points ?? (pointsOverride && pointsOverride > 0 ? pointsOverride : null);
+  return pointsLadder({ capital: plan.capital, days, cashUsd: likely.cashUsd, lowCashUsd: low.cashUsd, points }, safePct, extraPct);
+}
+
+/**
+ * FDV the token needs for 1M points to be worth `perM`: the program's total points at the
+ * season's end (raised by a dilution buffer, %, since totals usually end above today's
+ * projection) and the airdrop share of the supply (%).
+ */
+export function fdvFor(perM: number, totalPoints: number, airdropPct: number, bufferPct = 0): number | null {
   if (!(totalPoints > 0) || !(airdropPct > 0)) return null;
-  return (perM / 1e6) * totalPoints / (airdropPct / 100);
+  return ((perM / 1e6) * totalPoints * (1 + Math.max(0, bufferPct) / 100)) / (airdropPct / 100);
+}
+
+/** Extra borrow interest over `days` if the loan rate rises by `plusPct` points, USD. */
+export function borrowShockUsd(debtUsd: number, borrowPct: number, days: number, plusPct = 2): number {
+  const D = Math.max(1, Math.round(days));
+  return Math.max(0, debtUsd * (growth(borrowPct + plusPct, D) - growth(borrowPct, D)));
 }
 
 export interface HoldAlternative {

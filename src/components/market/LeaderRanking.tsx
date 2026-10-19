@@ -11,7 +11,7 @@ import { Confidence } from './Confidence';
 import { YtPlanView, CHEAP } from './YtPlanView';
 import { pointsCheapness, ytPlan, type Cheapness, type YtPlan } from '../../lib/calculators/yt-plan';
 import { spreadBudget } from '../../lib/calculators/points-worth';
-import { DEFAULT_POINTS_SETTINGS, PointsSettingsContext } from './PointsWorthView';
+import { daysUntil, DEFAULT_POINTS_SETTINGS, PointsSettingsContext, useSeasonEnds } from './PointsWorthView';
 import { BudgetPanel, MyRecord, TargetsPanel } from './PointsTools';
 import { txCost } from '../../lib/opportunity/costs';
 import { networkByName } from '../../lib/registry/networks';
@@ -331,6 +331,8 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
   const rows = useMemo(() => all.filter((r) => !r.needsQuote), [all]);
   // The YT statement of every row (its own fee, the chain's gas), and how its points compare.
   const gas = useMerkl().feed?.gas;
+  // Season ends the buyer entered, by program: points stop counting there.
+  const seasons = useSeasonEnds();
   const planCtx = useMemo(() => {
     if (strategy !== 'yt') return null;
     const plans = new Map<string, YtPlan>();
@@ -339,7 +341,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
       const { basePct, capPct } = ytBaseOf(r.m);
       return ytPlan(
         { protocol: r.m.protocol, impliedPct: r.m.impliedAPY, basePct, capPct, daysToMaturity: r.m.daysToMaturity, baseLevels: r.m.baseLevels, ammFeeLn: r.m.ammFeeLn, points: r.m.points, hasPoints: r.m.hasPoints, unitUsd: r.m.unitUsd },
-        { capital: amount, assumedFeePct: s.feePercent, entryPrice: amount === capital ? r.entryPrice : undefined, txUsd: txCost(networkByName(r.m.chain).key, ['swap'], gas ?? []).usd },
+        { capital: amount, assumedFeePct: s.feePercent, entryPrice: amount === capital ? r.entryPrice : undefined, txUsd: txCost(networkByName(r.m.chain).key, ['swap'], gas ?? []).usd, pointsUntilDay: daysUntil(r.m.points ? seasons[r.m.points.name] : undefined) },
       );
     };
     for (const r of rows) {
@@ -348,7 +350,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
     }
     const cheap = pointsCheapness(rows.filter((r) => r.m.hasPoints && plans.has(rowId(r))).map((r) => ({ id: rowId(r), plan: plans.get(rowId(r))! })));
     return { plans, cheap, planAt };
-  }, [strategy, rows, capital, s.feePercent, gas]);
+  }, [strategy, rows, capital, s.feePercent, gas, seasons]);
   const waiting = useMemo(() => all.filter((r) => r.needsQuote), [all]);
   const marketById = useMemo(() => new Map(markets.map((m) => [`${m.protocol}-${m.id}`, m])), [markets]);
   // «بودجه‌ی بلیت»: never on a doubtful input, a temporary base boost, or a row too big for its pool.
