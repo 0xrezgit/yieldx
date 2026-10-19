@@ -419,7 +419,7 @@ export function LeaderRanking({ markets, capital, strategy, lending }: { markets
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
             <NumberField label="بازده جایگزین امن" value={safePct} onChange={setSafePct} suffix="%" help="سالانه؛ مثلاً PT یا وام‌دهی دلاری. هزینه‌ی واقعی پوینت = سود از دست‌رفته‌ی این + ضرر نقدی." />
             <NumberField label="حداقل سود اضافه که می‌ارزد" value={extraPct} onChange={setExtraPct} suffix="%" help="سالانه، بالاتر از جایگزین امن؛ کمتر از این «سود ناچیز» است." />
-            <NumberField label="بودجه‌ی ضرر پوینت" value={budget} onChange={setBudget} suffix="$" help="اگر همه‌ی ایردراپ‌ها صفر شوند، حداکثر ضرری که می‌پذیرید." />
+            <NumberField label="بودجه‌ی ضرر پوینت" value={budget} onChange={setBudget} suffix="دلار" help="اگر همه‌ی ایردراپ‌ها صفر شوند، حداکثر ضرری که می‌پذیرید." />
           </div>
         )}
         {strategy === 'loop' && (
