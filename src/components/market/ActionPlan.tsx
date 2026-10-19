@@ -47,13 +47,16 @@ export function StepList({ steps }: { steps: Step[] }) {
         const Icon = ICON[s.kind];
         const last = i === steps.length - 1;
         return (
-          <li key={i} className="relative grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2.5">
+          <li key={i} className="relative grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-2.5">
             {!last && <span className="absolute top-7 bottom-[-0.75rem] right-[0.8125rem] w-px bg-default" aria-hidden />}
             <span className={`relative z-[1] grid place-items-center size-7 rounded-full ${s.kind === 'wait' || s.kind === 'watch' ? 'bg-warning/12 text-warning' : 'bg-accent/12 text-accent'}`}>
               <Icon size={14} aria-hidden />
               <span className="sr-only">{formatNumber(i + 1, 0)}</span>
             </span>
-            <span className="text-sm text-primary leading-6 min-w-0">{s.title}</span>
+            <span className="text-sm text-primary leading-6 min-w-0">
+              {s.title}
+              {s.note && <span className="block mt-0.5 text-xs text-secondary leading-5">{s.note}</span>}
+            </span>
             {s.href ? (
               <a href={s.href} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1 rounded-md border border-control px-2 min-h-8 text-xs text-secondary hover:text-primary hover:bg-elevated" aria-label={`رفتن: ${s.title}`}>
                 <ExternalLink size={12} aria-hidden /> برو
