@@ -1,5 +1,5 @@
 import type { Estimate, Opportunity } from '../../types/opportunity';
-import { formatDate, formatNumber } from '../utils/formatting';
+import { formatDate, formatNumber, formatUSD } from '../utils/formatting';
 
 /**
  * «What to do, step by step» for one opportunity: where to go, what to do there, how
@@ -46,15 +46,26 @@ function rewardSteps(e: Estimate): Step[] {
 
 const pct = (v: number) => formatNumber(v, v < 10 ? 1 : 0);
 
-/** «7.7× (health 1.08)» in plain words: dollars per 100 of one's own, and the fall that liquidates. */
-function leverageNote(x: NonNullable<Estimate['leverage']>): string {
-  const gross = x.leverage * 100;
-  const drop = x.liquidationDrop * 100;
-  return (
-    `یعنی این چرخه (وام، تبدیل، سپردن) چند بار تکرار می‌شود تا با هر ۱۰۰ دلار خودتان حدود ${formatNumber(gross, 0)} دلار سپرده داشته باشید ` +
-    `(${formatNumber(gross - 100, 0)} دلارش وام است)؛ سود و ضرر هم حدود ${formatNumber(x.leverage, 1)} برابر می‌شود. ` +
-    `«سلامت» فاصله تا نقد شدن است: اگر ارزش وثیقه نسبت به وام حدود ${pct(drop)}٪ افت کند، موقعیت نقد (لیکویید) می‌شود.`
-  );
+const dollars = (v: number) => formatUSD(v, 0);
+
+/**
+ * «7.7× (health 1.08)» as instructions with the user's own amounts: where to end up
+ * (total deposit and total loan), the one-click way, the manual way — how much each round
+ * borrows and about how many rounds, with a clear place to stop — and the fall that
+ * liquidates. Lines are separated by «\n».
+ */
+function leverageNote(x: NonNullable<Estimate['leverage']>, coll: string, debt: string, name: string, pt: boolean): string {
+  const r = x.gross > 0 ? x.debt / x.gross : 0; // each round borrows this share of what was just deposited
+  // Rounds until 95% of the target loan: E·r(1−rⁿ)/(1−r) ≥ 0.95 · E·r/(1−r).
+  const rounds = r > 0 && r < 1 ? Math.max(1, Math.ceil(Math.log(0.05) / Math.log(r))) : 1;
+  const add = pt ? `با آن ${coll} بیشتر بخرید و بسپارید` : `آن را به ${coll} تبدیل کنید و بسپارید`;
+  return [
+    `مقصد: با ${dollars(x.equity)} خودتان، جمع سپرده‌ی ${coll} حدود ${dollars(x.gross)} و جمع وام ${debt} حدود ${dollars(x.debt)} شود — یعنی ${formatNumber(x.leverage, 1)} برابر پول خودتان کار می‌کند و سود و ضرر هم همین‌قدر بزرگ می‌شود.`,
+    `راه ساده: اگر صفحه‌ی ${name} گزینه‌ی اهرم یک‌کلیکی (Leverage یا Multiply) دارد، آن را روی ${formatNumber(x.leverage, 1)}× بگذارید تا همه‌ی دورها یک‌جا انجام شود.`,
+    `راه دستی: هر دور حدود ${formatNumber(r * 100, 0)}٪ مبلغی را که تازه سپردید وام بگیرید و ${add} (دور اول حدود ${dollars(x.equity * r)}، دور دوم ${dollars(x.equity * r * r)}، و هر دور کمتر). ` +
+      `حدود ${formatNumber(rounds, 0)} دور طول می‌کشد${rounds > 6 ? '؛ با کارمزد هر دور، دستی به‌صرفه نیست' : ''}. وقتی جمع وام به حدود ${dollars(x.debt)} رسید بایستید و بیشتر وام نگیرید.`,
+    `خطر: اگر ${coll} نسبت به ${debt} حدود ${pct(x.liquidationDrop * 100)}٪ افت کند، کل موقعیت نقد (لیکویید) می‌شود. «سلامت ${formatNumber(x.health.value, 2)}» یعنی همین فاصله؛ هر وام اضافه کمترش می‌کند.`,
+  ].join('\n');
 }
 
 export function stepsFor(o: Opportunity, e: Estimate): Step[] {
@@ -98,13 +109,14 @@ export function stepsFor(o: Opportunity, e: Estimate): Step[] {
       const coll = l?.collateral.token.symbol ?? asset;
       const lev = x ? `${formatNumber(x.leverage, 1)}×` : 'اهرم سیاست';
       const health = x ? ` (سلامت ${formatNumber(x.health.value, 2)})` : '';
-      const loopNote = x ? leverageNote(x) : 'این چرخه چند بار تکرار می‌شود تا اهرم به حد تعیین‌شده برسد؛ هرچه اهرم بیشتر، سود و خطر نقد شدن بیشتر.';
+      const loopNote = (pt: boolean) =>
+        x && x.gross > 0 && x.equity > 0 ? leverageNote(x, `⁨${coll ?? '—'}⁩`, `⁨${debt ?? '—'}⁩`, name, pt) : 'این چرخه چند بار تکرار می‌شود تا اهرم به حد تعیین‌شده برسد؛ هرچه اهرم بیشتر، سود و خطر نقد شدن بیشتر.';
       if (o.maturity) {
         // PT loop: buy the PT, post it, borrow and buy more, close at maturity.
         return [
           { kind: 'buy', short: 'خرید PT', title: `خرید ${ltr(coll)} با USDC`, href: l?.entryUrl ?? null },
           { kind: 'collateral', short: 'وثیقه', title: `سپردن PT به‌عنوان وثیقه در ${name}`, href: o.url },
-          { kind: 'loop', short: `لوپ ${lev}`, title: `وام ${ltr(debt)} و خرید PT بیشتر تا ${lev}${health}`, note: loopNote },
+          { kind: 'loop', short: `لوپ ${lev}`, title: `اهرم ${lev}: وام ${ltr(debt)} و خرید PT بیشتر، چند دور${health}`, note: loopNote(true) },
           { kind: 'watch', short: hold ? days(hold) : 'سررسید', title: `نگه‌داری${until}${hold ? ` (${days(hold)})` : ''} و پایش سلامت` },
           { kind: 'repay', short: 'بستن', title: `سررسید: بازخرید PT، بازپرداخت ${ltr(debt)}، برداشت باقی‌مانده`, href: o.url },
           ...swapStep(debt),
@@ -112,7 +124,7 @@ export function stepsFor(o: Opportunity, e: Estimate): Step[] {
       }
       return [
         { kind: 'collateral', short: 'وثیقه', title: `سپردن ${ltr(coll)} در ${name}`, href: o.url },
-        { kind: 'loop', short: `لوپ ${lev}`, title: `وام ${ltr(debt)}، تبدیل به ${ltr(coll)} و سپردن دوباره تا ${lev}${health}`, note: loopNote },
+        { kind: 'loop', short: `لوپ ${lev}`, title: `اهرم ${lev}: وام ${ltr(debt)}، تبدیل به ${ltr(coll)} و سپردن دوباره، چند دور${health}`, note: loopNote(false) },
         { kind: 'watch', short: hold ? days(hold) : 'نگه‌داری', title: `${hold ? `${days(hold)} نگه‌داری` : 'نگه‌داری'} و پایش سلامت و نرخ وام` },
         { kind: 'repay', short: 'بستن', title: `بازپرداخت ${ltr(debt)} و برداشت ${ltr(coll)}`, href: o.url },
         ...swapStep(coll),

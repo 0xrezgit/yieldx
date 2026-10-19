@@ -55,7 +55,13 @@ export function StepList({ steps }: { steps: Step[] }) {
             </span>
             <span className="text-sm text-primary leading-6 min-w-0">
               {s.title}
-              {s.note && <span className="block mt-0.5 text-xs text-secondary leading-5">{s.note}</span>}
+              {s.note && (
+                <span className="mt-1.5 flex flex-col gap-1.5 text-xs text-secondary leading-5">
+                  {s.note.split('\n').map((line, k) => (
+                    <span key={k} className="block">{line}</span>
+                  ))}
+                </span>
+              )}
             </span>
             {s.href ? (
               <a href={s.href} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1 rounded-md border border-control px-2 min-h-8 text-xs text-secondary hover:text-primary hover:bg-elevated" aria-label={`رفتن: ${s.title}`}>
