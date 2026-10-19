@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { iconSrc } from '../../lib/market/icon-proxy';
 
 /** Muted hues for monograms: readable white text (≥ 4.5:1), never a brand's colour. */
 const PALETTE = ['#4C5A73', '#4F5B8A', '#5A4F84', '#4E6B6B', '#6B5A4E', '#5E6A4C', '#6A4E62', '#4E5F7A'];
@@ -29,7 +30,7 @@ export function TokenLogo({ src, name, size = 40, square = false }: { src?: stri
       // eslint-disable-next-line @next/next/no-img-element -- remote and local logos, fixed size; no optimisation needed
       <img
         key={src}
-        src={src}
+        src={iconSrc(src)}
         alt=""
         width={size}
         height={size}
