@@ -141,7 +141,8 @@ export function kaminoReserve(r: KaminoReserveInput, fetchedAt: string): Opportu
     quality: 'partial',
     sources: [{ name: 'Kamino API', url: CFG.api, fetchedAt, sourceUpdatedAt: null }],
     notes: ['منبع Kamino: API عمومی؛ معنای فیلدها از کلاینت شخص ثالث، نه مستندات رسمی.'],
-    url: CFG.app,
+    // The reserve's own page (route in kamino.com's app: /borrow/reserve/{market}/{reserve}); supply and borrow are both there.
+    url: `${new URL(CFG.app).origin}/borrow/reserve/${market.lendingMarket}/${metric.reserve}`,
     unofficialSource: true,
   };
 }
