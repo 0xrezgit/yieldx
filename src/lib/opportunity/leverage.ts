@@ -85,7 +85,7 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
         supplyCurve: null,
         book: null,
         borrow: null,
-        loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}), pairClass: debtClass as LoopSpec['pairClass'], ...(unverified ? { pegVerified: false } : {}) },
+        loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}), ...(c.oracleFactor !== undefined ? { oracleFactor: c.oracleFactor } : {}), pairClass: debtClass as LoopSpec['pairClass'], ...(unverified ? { pegVerified: false } : {}) },
         quality,
         notes: [...(o.notes ?? []).filter((n) => !n.startsWith('Hub:')), ...(side.premiumUnknown ? ['Aave V4: نرخ وام پایه به کار رفت؛ صرف ریسک کاربر (User Risk Premium) که به ترکیب وثیقه‌ی شما بستگی دارد لحاظ نشده و نرخ واقعی می‌تواند بالاتر باشد.'] : [])],
         icon: null,
@@ -202,6 +202,7 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
           debt: { token: debt, side },
           maxLtv: c.maxLtv,
           ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}),
+          ...(c.oracleFactor !== undefined ? { oracleFactor: c.oracleFactor } : {}),
           pairClass: debtClass as LoopSpec['pairClass'],
           pegVerified: !unverified,
           entryUrl: p.url ?? null,
@@ -259,11 +260,16 @@ export function leverageEstimate(
     if (m.days < input.days) assumptions.push(`لوپ در سررسید روز ${formatNumber(Math.ceil(m.days), 0)} بسته می‌شود؛ پس از آن نقد و بی‌درآمد.`);
   }
 
+  // Liquidation reads the oracle: below the market price, the limit on market value is lower.
+  const f = l.oracleFactor !== undefined && l.oracleFactor > 0 && l.oracleFactor < 1 ? l.oracleFactor : 1;
+  const lltv = l.maxLtv * f;
+  if (f < 1) assumptions.push(`اوراکل بازار وام ${l.collateral.token.symbol} را ${formatPercent((1 - f) * 100, 1)} زیر قیمت بازار می‌خواند؛ سلامت و اهرم با قیمت اوراکل حساب شد.`);
+
   const entry = input.entryCosts ?? [];
   const E0 = Math.max(0, input.capital - entry.reduce((a, c) => a + c.usd, 0));
   // The protocol stops new borrowing at `borrowLtv` (Kamino's max LTV): no further.
   const byBorrowLimit = l.borrowLtv !== undefined && l.borrowLtv > 0 && l.borrowLtv < 1 ? 1 / (1 - l.borrowLtv) : Infinity;
-  const maxSafe = Math.min(maxLoopLeverage(l.maxLtv * 100, Math.max(1, lev.minHealth)), byBorrowLimit);
+  const maxSafe = Math.min(maxLoopLeverage(lltv * 100, Math.max(1, lev.minHealth)), byBorrowLimit);
   let L = Math.min(maxSafe, lev.maxLeverage);
   // A dollar peg known only from the name: the PT loop policy's cautious leverage.
   const P = lev.pt ?? PT_LOOP_POLICY;
@@ -271,7 +277,7 @@ export function leverageEstimate(
   if (pegUnverified) L = Math.min(L, P.cautiousLeverage);
   // A PT loop (it has a maturity): the PT loop policy picks its leverage for this market,
   // never past the protocol's borrow limit.
-  const pt = m.state === 'active' && m.days !== null ? ptLoopLeverage({ impliedPct: l.collateral.yield.pct, borrowPct: loopBorrowPct(l.debt.side) as number, days: m.days, lltvPct: l.maxLtv * 100, pegVerified: l.pegVerified !== false, feePercent: 0 }, P) : null;
+  const pt = m.state === 'active' && m.days !== null ? ptLoopLeverage({ impliedPct: l.collateral.yield.pct, borrowPct: loopBorrowPct(l.debt.side) as number, days: m.days, lltvPct: lltv * 100, pegVerified: l.pegVerified !== false, feePercent: 0 }, P) : null;
   if (pt) L = Math.min(pt.leverage, byBorrowLimit);
   if (!Number.isFinite(L) || L < 1) L = 1;
   if (!(L > 1)) return stop('needs-model', 'حد سلامت اجازه‌ی اهرم نمی‌دهد.');
@@ -337,9 +343,9 @@ export function leverageEstimate(
   const costs = [...entry, ...(input.exitCosts ?? [])];
   // Entry costs already reduced E; they are still money spent, so they stay in the sum.
   const net = dG - dB - costs.reduce((a, c) => a + c.usd, 0);
-  const ltv = G > 0 ? B / G : 0;
+  const ltv = G > 0 ? B / (G * f) : 0;
   const health = healthOf(l.debt.side.metric, ltv, l.maxLtv);
-  const liquidationDrop = G > 0 && B > 0 ? Math.max(0, 1 - B / (G * l.maxLtv)) : 1;
+  const liquidationDrop = G > 0 && B > 0 ? Math.max(0, 1 - B / (G * lltv)) : 1;
   const carryPct = L * y - (L - 1) * r;
 
   const result: LeverageResult = {
@@ -354,6 +360,7 @@ export function leverageEstimate(
     borrowPct: r,
     ltv,
     maxLtv: l.maxLtv,
+    ...(f < 1 ? { oracleFactor: f } : {}),
     health: { metric: l.debt.side.metric, value: health, min: lev.minHealth },
     liquidationDrop,
     carryPct,

@@ -1,0 +1,108 @@
+[
+ {
+  "boxId": "0xb18597f29afebc9b42947da558fc09a48ea7cbc950a5052a6f0b69c7c3ddf053",
+  "chainId": 1,
+  "kind": "pt",
+  "ptAddress": "0x079c3469143804af5d0d645a878c371dbe8d038e",
+  "ptSymbol": "PT-fxSAVE-29OCT2026",
+  "protocol": "Morpho",
+  "moneyMarketAddress": "0x8fc5f14ff891f59851c5c53d00f6227b6838c5b0",
+  "moneyMarketName": "Morpho",
+  "url": "https://app.morpho.org",
+  "marketUrl": "https://app.morpho.org/ethereum/variable/0xae992849c5f544a32dfdfcc74c0695b73b8732f449727827af6ce3768e968382",
+  "debtAsset": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  "debtSymbol": "USDC",
+  "isDepegged": false,
+  "data": {
+   "lltv": 0.915,
+   "borrowApy": 0.04270649288326839,
+   "borrowApy7dAvg": 0.05873957674675277,
+   "liquidityUsd": 117216.72685253827,
+   "totalSupplyUsd": 1174344.2689707994,
+   "utilization": 0.8902403394093583,
+   "borrowRateCurve": [
+    {
+     "utilization": 0,
+     "borrowApy": 0.010596052128212359
+    },
+    {
+     "utilization": 0.060000000000000005,
+     "borrowApy": 0.012728697822851425
+    },
+    {
+     "utilization": 0.12000000000000001,
+     "borrowApy": 0.014865844007720272
+    },
+    {
+     "utilization": 0.18000000000000002,
+     "borrowApy": 0.017007500180135953
+    }
+   ]
+  }
+ },
+ {
+  "boxId": "0x8a3f65418f8deb32e8bfffc14c934ebc90549dcd84edc5468be4f5e3b8a4e316",
+  "chainId": 1,
+  "kind": "pt",
+  "ptAddress": "0x59bc9fae5d62b19d4f8d07d758047acb9ee19d34",
+  "ptSymbol": "PT-srUSDe-22OCT2026",
+  "protocol": "Aave",
+  "moneyMarketAddress": "0xf37c776aa41af4891404ec3ffa6a5c6d9d059918",
+  "moneyMarketName": "Aave V3",
+  "url": "https://app.aave.com",
+  "marketUrl": "https://app.aave.com/reserve-overview/?underlyingAsset=0x4c9edd5852cd905f086c759e8383e09bff1e68b3&marketName=proto_mainnet_v3",
+  "debtAsset": "0x4c9edd5852cd905f086c759e8383e09bff1e68b3",
+  "debtSymbol": "USDe",
+  "isDepegged": false,
+  "data": {
+   "lltv": 0.94,
+   "borrowApy": 0.068362904924319,
+   "borrowApy7dAvg": 0.06837902725196202,
+   "liquidityUsd": 8326888.171856913,
+   "totalSupplyUsd": 10787910.185530068,
+   "utilization": 0.048051300050252356,
+   "borrowRateCurve": [
+    {
+     "utilization": 0,
+     "borrowApy": 0.06822671716599332
+    },
+    {
+     "utilization": 0.05999999999999999,
+     "borrowApy": 0.06840476978949411
+    },
+    {
+     "utilization": 0.11999999999999998,
+     "borrowApy": 0.06858285209090527
+    },
+    {
+     "utilization": 0.18,
+     "borrowApy": 0.06876096407517347
+    }
+   ]
+  }
+ },
+ {
+  "boxId": "0xd273138cea981a095450939e1f72e9ba6ed10f5d8141c2f486c5fc1ed31e717b",
+  "chainId": 1,
+  "kind": "pt",
+  "ptAddress": "0xecfafdc7741323a945a163ed068b5a3c43483957",
+  "ptSymbol": "PT-reUSD-10DEC2026",
+  "protocol": "Euler",
+  "moneyMarketAddress": "0x52200d3ef4535ed838587bfcfe08b83a87cdcb8b",
+  "moneyMarketName": "Euler",
+  "url": "https://app.euler.finance/",
+  "marketUrl": "https://app.euler.finance/borrow/0x6876374E4AC054bfCA389109570Ae15b4d25e279/0xD5b786E64eB320940eEfB1570Fa4C82EC54dBf72?network=1&tab=multiply",
+  "debtAsset": "0x00000000efe302beaa2b3e6e1b18d08d69a9012a",
+  "debtSymbol": "AUSD",
+  "isDepegged": false,
+  "data": {
+   "lltv": 0.94,
+   "borrowApy": 0.15108391920545675,
+   "borrowApy7dAvg": 0.1407518705477867,
+   "liquidityUsd": 28.27700083583004,
+   "totalSupplyUsd": 96619.63978367209,
+   "utilization": null,
+   "borrowRateCurve": []
+  }
+ }
+]
