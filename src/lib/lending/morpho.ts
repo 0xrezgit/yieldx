@@ -27,6 +27,9 @@ import type { HistoryPoints } from './history';
  * - Market `state.weeklyBorrowApy`: the borrow APY averaged over 7 days (loops use the
  *   higher of it and today's, so one cheap moment does not make a loop look good).
  * - A market is identified by `marketId` (the on-chain id) and filtered with `listed`.
+ * - Market `state.price`: the market oracle's collateral price in loan units, scaled by
+ *   1e36 × 10^(loan decimals − collateral decimals) — what liquidation actually reads.
+ *   Asset `price.usd`: the market price (the deprecated `priceUsd` is not used).
  *
  * Schema renames seen live on 2026-10-01 (the old names now fail validation):
  * `uniqueKey` → `marketId`, filter `whitelisted` → `listed`, vault state
@@ -46,6 +49,8 @@ const isoFromUnix = (s: unknown): string | null => {
 interface RawAsset {
   address: string;
   symbol: string;
+  decimals?: number;
+  price?: { usd: number | null } | null;
   logoURI?: string | null;
   /** The asset's own yield (APR, fraction), e.g. staking; null when none. */
   yield?: { apr: number } | null;
@@ -78,6 +83,8 @@ export interface RawMorphoMarket {
     fee: number;
     timestamp: string | number;
     rewards: RawReward[];
+    /** Oracle price, see the header; a string (it overflows a float's integer range). */
+    price?: string | null;
   } | null;
 }
 interface RawPoint {
@@ -124,16 +131,17 @@ export interface MorphoData {
 const ASSET = 'address symbol logoURI chain { id } yield { apr }';
 const REWARD_FIELDS = `asset { ${ASSET} } supplyApr`;
 const REWARD = `rewards { ${REWARD_FIELDS} }`;
+const PRICED = `${ASSET} decimals price { usd }`;
 
 export const MORPHO_QUERY = `query YieldXLending($chains: [Int!], $minUsd: Float, $first: Int, $skip: Int) {
   markets(first: $first, skip: $skip, orderBy: SupplyAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, supplyAssetsUsd_gte: $minUsd }) {
     items {
       marketId lltv
-      loanAsset { ${ASSET} }
-      collateralAsset { ${ASSET} }
+      loanAsset { ${PRICED} }
+      collateralAsset { ${PRICED} }
       warnings { type level }
       currentIrmCurve { utilization supplyApy borrowApy }
-      state { supplyApy dailySupplyApy weeklySupplyApy borrowApy weeklyBorrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp ${REWARD} }
+      state { supplyApy dailySupplyApy weeklySupplyApy borrowApy weeklyBorrowApy supplyAssetsUsd borrowAssetsUsd liquidityAssetsUsd fee timestamp price ${REWARD} }
     }
   }
   vaults(first: $first, skip: $skip, orderBy: TotalAssetsUsd, orderDirection: Desc, where: { chainId_in: $chains, listed: true, totalAssetsUsd_gte: $minUsd }) {
@@ -201,6 +209,26 @@ function rewards(list: RawReward[] | undefined, owner: string, chainId: number):
     }));
 }
 
+/**
+ * The oracle's collateral price ÷ its market price (both in loan units), at most 1: below 1
+ * the market values the collateral under its market price (a PT on a fixed linear discount,
+ * a feed taking the lower of two prices), so liquidation comes sooner than market prices
+ * say. Above 1 is cut to 1 — a higher oracle price is not counted on. Null when a price is
+ * missing or the ratio is implausible (outside 0.5…1.5: units the formula does not cover).
+ */
+export function oracleFactor(m: Pick<RawMorphoMarket, 'loanAsset' | 'collateralAsset' | 'state'>): number | null {
+  const l = m.loanAsset;
+  const c = m.collateralAsset;
+  const raw = m.state?.price;
+  if (!c || typeof raw !== 'string' || !/^\d+$/.test(raw) || typeof l?.decimals !== 'number' || typeof c.decimals !== 'number') return null;
+  const lu = finite(l.price?.usd);
+  const cu = finite(c.price?.usd);
+  if (!(lu !== null && lu > 0 && cu !== null && cu > 0)) return null;
+  const oracle = Number(BigInt(raw)) / 10 ** (36 + l.decimals - c.decimals);
+  const ratio = oracle / (cu / lu);
+  return Number.isFinite(ratio) && ratio >= 0.5 && ratio <= 1.5 ? Math.min(1, ratio) : null;
+}
+
 const warningQuality = (w: RawWarning[] | undefined): { quality: DataQuality | null; notes: string[] } => {
   const red = (w ?? []).filter((x) => x.level === 'RED');
   const yellow = (w ?? []).filter((x) => x.level === 'YELLOW');
@@ -224,6 +252,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
   const at = fetchedAt;
   const collateral = m.collateralAsset?.symbol ?? '—';
   const lltv = Number(m.lltv) / 1e18;
+  const of = oracleFactor(m);
   return {
     key: `morpho:${network.key}:${m.marketId.toLowerCase()}:supply`,
     family: 'lend',
@@ -251,7 +280,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
                 ? { suppliedUsd: supplied, borrowedUsd: borrowed, points: curve.map((p) => ({ u: p.utilization, rate: p.borrowApy as number })), source: 'منحنی IRM گزارش‌شده‌ی Morpho' }
                 : null,
             availableUsd: finite(s.liquidityAssetsUsd),
-            collateral: [{ token: { symbol: m.collateralAsset.symbol ?? null, address: m.collateralAsset.address }, maxLtv: lltv, yield: assetYield(m.collateralAsset) }],
+            collateral: [{ token: { symbol: m.collateralAsset.symbol ?? null, address: m.collateralAsset.address }, maxLtv: lltv, yield: assetYield(m.collateralAsset), ...(of !== null && of < 1 ? { oracleFactor: of } : {}) }],
             metric: 'ltv',
           }
         : null,

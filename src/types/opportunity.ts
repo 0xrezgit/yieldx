@@ -169,8 +169,10 @@ export interface BorrowSide {
    * Accepted collateral and its liquidation limit (LLTV, or V4 collateral factor), 0…1.
    * `borrowLtv`: where the protocol stops new borrowing, when that is below the liquidation
    * limit (Kamino's max LTV); a loop's LTV never goes past it.
+   * `oracleFactor`: the market's oracle price ÷ the collateral's market price, when under 1
+   * (Morpho) — the limit applies to the oracle's value, not the market's.
    */
-  collateral: { token: TokenRef; maxLtv: number; borrowLtv?: number; yield?: AssetYield | null; supplyPct?: number | null; class?: 'usd' | 'eth' | 'btc' | 'sol' }[];
+  collateral: { token: TokenRef; maxLtv: number; borrowLtv?: number; oracleFactor?: number; yield?: AssetYield | null; supplyPct?: number | null; class?: 'usd' | 'eth' | 'btc' | 'sol' }[];
   /**
    * Set by the adapter when the symbol cannot tell (a two-token position: Fluid smart
    * collateral «sUSDe+USDT», smart debt «USDC+USDT»): the class every token in it shares.
@@ -205,6 +207,8 @@ export interface LoopSpec {
   maxLtv: number;
   /** The protocol's borrowing limit, when below `maxLtv` (see BorrowSide.collateral). */
   borrowLtv?: number;
+  /** Oracle price ÷ market price of the collateral, under 1 (see BorrowSide.collateral). */
+  oracleFactor?: number;
   pairClass: 'usd' | 'eth' | 'btc' | 'sol';
   /** False when the collateral's dollar peg rests only on its name (PT or not). */
   pegVerified?: boolean;
@@ -414,9 +418,11 @@ export interface LeverageResult {
   /** Collateral yield and borrow rate used (after the user's own borrow), % per year. */
   yieldPct: number;
   borrowPct: number;
-  /** LTV now and at liquidation; the protocol's own health value. */
+  /** LTV now (at the oracle's price, as the protocol reads it) and at liquidation; the protocol's own health value. */
   ltv: number;
   maxLtv: number;
+  /** Oracle price ÷ market price of the collateral, when under 1: the gross is valued at it. */
+  oracleFactor?: number;
   health: { metric: 'ltv' | 'hf'; value: number; min: number };
   /** Relative fall of collateral against debt that reaches liquidation, 0…1. */
   liquidationDrop: number;

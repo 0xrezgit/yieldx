@@ -206,7 +206,7 @@ export function liquidationOf(o: Opportunity, e: Estimate): LiquidationInfo | nu
     ptRatePct = Number.isFinite(r2) ? r2 * 100 : null;
   }
   const gG = (e.baseIncome ?? 0) / x.gross;
-  const gB = (x.maxLtv * x.gross * (1 + gG)) / x.debt - 1;
+  const gB = (x.maxLtv * (x.oracleFactor ?? 1) * x.gross * (1 + gG)) / x.debt - 1;
   const borrowPct = d > 0 ? yearly(gB, d) : null;
   const costs = e.costs.reduce((a, c) => a + c.usd, 0);
   const zeroPct = d > 0 ? yearly(((e.baseIncome ?? 0) + (e.rewards ?? 0) - costs) / x.debt, d) : null;

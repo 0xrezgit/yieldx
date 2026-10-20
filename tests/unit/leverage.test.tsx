@@ -183,6 +183,44 @@ describe('adapters feed loops', () => {
     expect(buildLoops([o])).toHaveLength(1);
   });
 
+  it('Morpho: an oracle under the market price lowers the limit on market value (fixed-discount PT oracle)', () => {
+    // Oracle price 0.95 USDC per PT (both 6 decimals: scale 1e36), market price 0.978.
+    const m = (price: string | null, collateralUsd: number | null): RawMorphoMarket => ({
+      marketId: '0xPT',
+      lltv: '860000000000000000',
+      loanAsset: { address: '0xUSDC', symbol: 'USDC', decimals: 6, price: { usd: 1 }, chain: { id: 1 }, yield: null },
+      collateralAsset: { address: '0xPT', symbol: 'PT-X', decimals: 6, price: { usd: collateralUsd }, chain: { id: 1 }, yield: { apr: 0.15 } },
+      warnings: [],
+      currentIrmCurve: null,
+      state: { supplyApy: 0.06, borrowApy: 0.07, supplyAssetsUsd: 1e7, borrowAssetsUsd: 8e6, liquidityAssetsUsd: 2e6, fee: 0, timestamp: String(NOW / 1000), rewards: [], price },
+    });
+    const low = morphoMarket(m('950000000000000000000000000000000000', 0.978), AT)!;
+    expect(low.borrow!.collateral[0].oracleFactor).toBeCloseTo(0.95 / 0.978, 12);
+    // Above the market price, missing prices, implausible units: not counted.
+    expect(morphoMarket(m('990000000000000000000000000000000000', 0.978), AT)!.borrow!.collateral[0].oracleFactor).toBeUndefined();
+    expect(morphoMarket(m(null, 0.978), AT)!.borrow!.collateral[0].oracleFactor).toBeUndefined();
+    expect(morphoMarket(m('950000000000000000000000000000000000', null), AT)!.borrow!.collateral[0].oracleFactor).toBeUndefined();
+    expect(morphoMarket(m('950000000000000000000000000000000000000000', 0.978), AT)!.borrow!.collateral[0].oracleFactor).toBeUndefined();
+
+    // The same loop, with and without the factor: health and LTV at the oracle's price.
+    const f = 0.95 / 0.978;
+    const [plain] = buildLoops([market()]);
+    const [read] = buildLoops([market({ borrow: side({ collateral: [{ token: { symbol: 'sUSDe', address: '0xsusde' }, maxLtv: 0.86, oracleFactor: f, yield: { pct: 8, kind: 'apy', source: 'آزمون' } }] }) })]);
+    expect(read.loop!.oracleFactor).toBeCloseTo(f, 12);
+    const fixed = pol(1.05, 3);
+    const a = estimate(plain, input(fixed)).leverage!;
+    const b = estimate(read, input(fixed)).leverage!;
+    expect(b.leverage).toBe(a.leverage);
+    expect(b.ltv).toBeCloseTo(b.debt / (b.gross * f), 12);
+    expect(b.health.value).toBeCloseTo(a.health.value * f, 12);
+    expect(b.oracleFactor).toBeCloseTo(f, 12);
+    // Leverage chosen by health: the highest that keeps it at the minimum on the oracle's value.
+    const byHealth = estimate(read, input(pol(1.3))).leverage!;
+    expect(byHealth.leverage).toBeCloseTo(maxLoopLeverage(86 * f, 1.3), 9);
+    expect(byHealth.health.value).toBeCloseTo(1.3, 9);
+    expect(byHealth.leverage).toBeLessThan(estimate(plain, input(pol(1.3))).leverage!.leverage);
+  });
+
   it('Aave V4: a borrowable reserve accepts the Spoke’s collateral reserves; the risk premium is flagged', () => {
     const amount = (v: number) => ({ amount: { value: String(v) }, exchange: { value: String(v) } });
     const reserve = (sym: string, addr: string, over: Partial<RawAaveReserve> = {}): RawAaveReserve => ({
