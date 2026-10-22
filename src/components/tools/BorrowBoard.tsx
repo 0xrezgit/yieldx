@@ -6,6 +6,7 @@ import { networkByKey } from '../../lib/registry/networks';
 import { formatNumber, formatPercent, formatUSD } from '../../lib/utils/formatting';
 import { Collapsible } from '../ui/card';
 import { Num } from '../ui/num';
+import { LogoWithNetwork } from '../ui/asset-identity';
 import { Empty, Pill } from '../opportunities/parts';
 
 const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : Math.abs(x) >= 1 ? 2 : 4);
@@ -17,6 +18,7 @@ function Row({ r, rank }: { r: BorrowRow; rank?: number }) {
     <li className="py-3 px-1 flex flex-col gap-1.5">
       <div className="flex items-start gap-3">
         {rank !== undefined && <span className="grid place-items-center size-7 rounded-full bg-elevated text-xs font-semibold text-secondary shrink-0 num">{formatNumber(rank, 0)}</span>}
+        <LogoWithNetwork icon={r.o.icon} name={asset} chain={net.name} size={32} />
         <div className="min-w-0 flex-1 flex flex-col gap-1">
           <span className="text-[15px] font-semibold text-primary">
             وام <bdi dir="ltr">{asset}</bdi> · <bdi dir="ltr" className="font-normal text-secondary">{r.o.protocol.name}</bdi>

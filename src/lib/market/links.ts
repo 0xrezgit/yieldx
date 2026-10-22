@@ -31,6 +31,15 @@ const MORPHO_CHAIN: Record<number, string> = {
   4217: 'tempo', 4663: 'robinhood-chain', 5042: 'arc', 8453: 'base', 42161: 'arbitrum', 98866: 'plume', 747474: 'katana',
 };
 
+/**
+ * A PendleLoop box (app route trade/loop/:boxId/deposit). The app looks the box up by its id
+ * and the network named in `?chain=`: without it the page says «This looping box is not available».
+ */
+export const pendleLoopLink = (chainId: number, boxId: string): EntryLink => {
+  const chain = PENDLE_CHAIN[chainId];
+  return chain ? { url: `https://app.pendle.finance/trade/loop/${boxId}/deposit?chain=${chain}`, exact: true } : { url: 'https://app.pendle.finance/trade/loop', exact: false };
+};
+
 export const morphoLink = (chainId: number, kind: 'vault' | 'market', id: string): EntryLink | null => {
   const chain = MORPHO_CHAIN[chainId];
   return chain ? { url: `https://app.morpho.org/${chain}/${kind === 'market' ? 'variable' : kind}/${id}`, exact: true } : null;

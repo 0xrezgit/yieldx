@@ -262,6 +262,8 @@ describe('sources fail independently', () => {
       ['fluid', 'error'],
       ['loopscale', 'error'],
       ['revert', 'error'],
+      ['euler', 'error'],
+      ['upshift', 'error'],
       ['pendle-loop', 'error'],
     ]);
   });

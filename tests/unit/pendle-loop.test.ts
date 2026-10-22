@@ -73,7 +73,8 @@ describe('Morpho markets PendleLoop also lists', () => {
   it('marks the same market, collateral and debt with the box\'s PendleLoop page', () => {
     const [o] = markPendleLoops([morphoMarket(marketId)], morphoListing(boxes as PendleLoopBox[]));
     expect(o.borrow!.collateral[0].pendleLoop).toBe(pendleLoopUrl(morpho));
-    expect(pendleLoopUrl(morpho)).toBe(`https://app.pendle.finance/trade/loop/${morpho.boxId}`);
+    // PendleLoop finds a box by its id and the network: without ?chain= it says «This looping box is not available».
+    expect(pendleLoopUrl(morpho)).toBe(`https://app.pendle.finance/trade/loop/${morpho.boxId}/deposit?chain=ethereum`);
   });
 
   it('reads the id when a name follows it, so a twin market (same pair and LLTV) stays unmarked', () => {

@@ -280,7 +280,7 @@ export function morphoMarket(m: RawMorphoMarket, fetchedAt: string): Opportunity
                 ? { suppliedUsd: supplied, borrowedUsd: borrowed, points: curve.map((p) => ({ u: p.utilization, rate: p.borrowApy as number })), source: 'منحنی IRM گزارش‌شده‌ی Morpho' }
                 : null,
             availableUsd: finite(s.liquidityAssetsUsd),
-            collateral: [{ token: { symbol: m.collateralAsset.symbol ?? null, address: m.collateralAsset.address }, maxLtv: lltv, yield: assetYield(m.collateralAsset), ...(of !== null && of < 1 ? { oracleFactor: of } : {}) }],
+            collateral: [{ token: { symbol: m.collateralAsset.symbol ?? null, address: m.collateralAsset.address }, maxLtv: lltv, yield: assetYield(m.collateralAsset), ...(of !== null && of < 1 ? { oracleFactor: of } : {}), ...(m.collateralAsset.logoURI ? { logo: m.collateralAsset.logoURI } : {}) }],
             metric: 'ltv',
           }
         : null,

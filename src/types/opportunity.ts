@@ -173,8 +173,9 @@ export interface BorrowSide {
    * (Morpho) — the limit applies to the oracle's value, not the market's.
    * `pendleLoop`: this collateral and debt on this market is in Pendle's own loop list
    * (PendleLoop) — its page there, where the loop opens in one click.
+   * `logo`: the collateral's logo when the source gives it (a loop's row shows its collateral).
    */
-  collateral: { token: TokenRef; maxLtv: number; borrowLtv?: number; oracleFactor?: number; yield?: AssetYield | null; supplyPct?: number | null; class?: 'usd' | 'eth' | 'btc' | 'sol'; pendleLoop?: string }[];
+  collateral: { token: TokenRef; maxLtv: number; borrowLtv?: number; oracleFactor?: number; yield?: AssetYield | null; supplyPct?: number | null; class?: 'usd' | 'eth' | 'btc' | 'sol'; pendleLoop?: string; logo?: string }[];
   /**
    * Set by the adapter when the symbol cannot tell (a two-token position: Fluid smart
    * collateral «sUSDe+USDT», smart debt «USDC+USDT»): the class every token in it shares.
