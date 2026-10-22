@@ -171,8 +171,10 @@ export interface BorrowSide {
    * limit (Kamino's max LTV); a loop's LTV never goes past it.
    * `oracleFactor`: the market's oracle price ÷ the collateral's market price, when under 1
    * (Morpho) — the limit applies to the oracle's value, not the market's.
+   * `pendleLoop`: this collateral and debt on this market is in Pendle's own loop list
+   * (PendleLoop) — its page there, where the loop opens in one click.
    */
-  collateral: { token: TokenRef; maxLtv: number; borrowLtv?: number; oracleFactor?: number; yield?: AssetYield | null; supplyPct?: number | null; class?: 'usd' | 'eth' | 'btc' | 'sol' }[];
+  collateral: { token: TokenRef; maxLtv: number; borrowLtv?: number; oracleFactor?: number; yield?: AssetYield | null; supplyPct?: number | null; class?: 'usd' | 'eth' | 'btc' | 'sol'; pendleLoop?: string }[];
   /**
    * Set by the adapter when the symbol cannot tell (a two-token position: Fluid smart
    * collateral «sUSDe+USDT», smart debt «USDC+USDT»): the class every token in it shares.
@@ -214,6 +216,8 @@ export interface LoopSpec {
   pegVerified?: boolean;
   /** PT loops: where the PT is bought (the PT market's own page). */
   entryUrl?: string | null;
+  /** The same loop in PendleLoop, one click (see BorrowSide.collateral). */
+  pendleLoop?: string;
 }
 
 /** What an amount of the chain's USDC buys of a PT or YT right now, from the protocol's router. */

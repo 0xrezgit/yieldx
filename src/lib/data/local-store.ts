@@ -32,6 +32,7 @@ export const STORAGE_KEYS = {
   verified: 'yieldx-verified-v1',
   collateral: 'yieldx-collateral-v1',
   multiply: 'yieldx-multiply-v1',
+  longShort: 'yieldx-longshort-v1',
   goal: 'yieldx-goal-v1',
   monthly: 'yieldx-monthly-v1',
   ytTargets: 'yieldx-yt-targets-v1',

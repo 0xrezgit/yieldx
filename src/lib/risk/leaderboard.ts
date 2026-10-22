@@ -117,6 +117,8 @@ export interface LoopLender {
   rateModelled: boolean;
   lltvPct: number;
   availableUsd: number | null;
+  /** The same loop in PendleLoop (one click), when Pendle lists this market. */
+  pendleLoop: string | null;
 }
 
 export interface LoopBoard {
@@ -239,6 +241,7 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
           rateModelled: after !== null,
           lltvPct: lltv,
           availableUsd: side.availableUsd,
+          pendleLoop: collateral.pendleLoop ?? null,
         },
       });
     }
