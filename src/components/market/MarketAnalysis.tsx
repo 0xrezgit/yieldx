@@ -117,6 +117,11 @@ export function RankingRow({ row, rank, days, open, onToggle, modelVersion }: { 
               <ExternalLink size={14} aria-hidden /> ورود
             </a>
           )}
+          {row.o.loop?.pendleLoop && (
+            <a href={row.o.loop.pendleLoop} target="_blank" rel="noopener noreferrer" className={ghostAction} aria-label="همین لوپ با یک کلیک در PendleLoop">
+              <Repeat size={14} aria-hidden /> PendleLoop
+            </a>
+          )}
           <button type="button" onClick={onToggle} aria-expanded={open} className={`${ghostAction} ${row.o.url ? '' : 'grow'}`}>
             جزئیات
             <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />

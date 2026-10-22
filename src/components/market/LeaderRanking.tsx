@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowDownRight, ArrowUpRight, Calculator, ChevronDown, ExternalLink, Landmark, ListOrdered, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Calculator, ChevronDown, ExternalLink, Landmark, ListOrdered, Repeat, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytBaseOf, ytExcluded, ytGoalRows, type YtGoal, type LeaderRow, type LeaderStrategy, type LoopBoard, type RankBy, type Verdict } from '../../lib/risk/leaderboard';
 import type { ExecQuote, Opportunity } from '../../types/opportunity';
 import { fetchQuote } from '../../lib/market/quotes';
@@ -167,6 +167,7 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
             {strategy === 'yt' && temporaryBase(m) && <Pill tone="warning">بازده پایه احتمالاً موقت</Pill>}
             {!isStable(m) && <Pill>وابسته به قیمت دارایی</Pill>}
             {row.pegVerified === false && <Pill tone="warning">برابری با دلار تأیید نشده</Pill>}
+            {row.lender?.pendleLoop && <Pill tone="accent">در PendleLoop هم هست</Pill>}
           </Tags>
         </div>
 
@@ -196,6 +197,11 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
           {row.lender?.url && (
             <a href={row.lender.url} target="_blank" rel="noopener noreferrer" className={secondaryAction} aria-label={`بازار وام ${row.lender.protocol}`}>
               <Landmark size={15} aria-hidden /> وام
+            </a>
+          )}
+          {row.lender?.pendleLoop && (
+            <a href={row.lender.pendleLoop} target="_blank" rel="noopener noreferrer" className={secondaryAction} aria-label="همین لوپ با یک کلیک در PendleLoop">
+              <Repeat size={15} aria-hidden /> PendleLoop
             </a>
           )}
           <Link href={calcHref(m, strategy)} className={secondaryAction} aria-label="ماشین‌حساب">

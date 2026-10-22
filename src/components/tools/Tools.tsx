@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BadgeCheck, Calculator, CalendarCheck, Droplets, HandCoins, Loader2, RefreshCw, Target, TrendingUp } from 'lucide-react';
+import { ArrowRight, ArrowUpDown, BadgeCheck, Calculator, CalendarCheck, Droplets, HandCoins, Loader2, RefreshCw, Target, TrendingUp } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
@@ -21,10 +21,11 @@ import { GoalTool } from './GoalTool';
 import { MonthlyIncome } from './MonthlyIncome';
 import { LpPools } from './LpPools';
 import { MultiplyTool } from './MultiplyTool';
+import { LongShortTool } from './LongShortTool';
 import { VerifiedYields } from './VerifiedYields';
 
-type Tab = 'goal' | 'monthly' | 'calc' | 'lp' | 'multiply' | 'borrow' | 'verified';
-const TABS: Tab[] = ['goal', 'monthly', 'calc', 'lp', 'multiply', 'borrow', 'verified'];
+type Tab = 'goal' | 'monthly' | 'calc' | 'lp' | 'multiply' | 'longshort' | 'borrow' | 'verified';
+const TABS: Tab[] = ['goal', 'monthly', 'calc', 'lp', 'multiply', 'longshort', 'borrow', 'verified'];
 
 const TOOL_CHOICES: Choice<Tab>[] = [
   { id: 'goal', icon: Target, title: 'هدف سود', text: 'سود دلاری که می‌خواهید: چه چیزی واقعاً به آن می‌رسد' },
@@ -32,6 +33,7 @@ const TOOL_CHOICES: Choice<Tab>[] = [
   { id: 'calc', icon: Calculator, title: 'ماشین‌حساب', text: 'یک معامله‌ی YT، PT یا لوپ را با عددهای خودتان' },
   { id: 'lp', icon: Droplets, title: <>استخر <bdi dir="ltr">LP</bdi></>, text: 'کارمزد واقعی هر استخر و زیان ناپایدار' },
   { id: 'multiply', icon: TrendingUp, title: 'Multiply پرنوسان', text: 'خرید اهرمی: قیمت لیکوییدشدن و شش مسیر قیمت' },
+  { id: 'longshort', icon: ArrowUpDown, title: 'Long/Short', text: 'PendleLoop روی کریپتو و سهام: لیکوییدشدن، هزینه و مقایسه با پرپ' },
   { id: 'borrow', icon: HandCoins, title: 'هزینه‌ی وام', text: 'ارزان‌ترین وام برای وثیقه‌ی شما' },
   { id: 'verified', icon: BadgeCheck, title: 'تأییدشده', text: 'خزانه‌هایی که بازدهشان روی زنجیره چک شد' },
 ];
@@ -229,11 +231,12 @@ export default function Tools() {
       {tab === 'goal' && <GoalTool />}
       {tab === 'monthly' && <MonthlyIncome />}
       {tab === 'multiply' && <MultiplyTool />}
+      {tab === 'longshort' && <LongShortTool />}
       {tab === 'borrow' && <BorrowTool />}
       {tab === 'verified' && <VerifiedYields />}
 
       {tab === 'calc' && <PendleCalculator c={st.calc} set={setCalc} markets={markets.filter((m) => !m.expired)} onPick={(m) => pick(m)} gas={gas ?? []} />}
-      {updatedAt === null && !loading && tab !== 'goal' && tab !== 'monthly' && tab !== 'lp' && tab !== 'multiply' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
+      {updatedAt === null && !loading && tab !== 'goal' && tab !== 'monthly' && tab !== 'lp' && tab !== 'multiply' && tab !== 'longshort' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
     </main>
   );
 }

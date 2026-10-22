@@ -7,7 +7,7 @@ import { fetchLoopscale } from './loopscale';
 import { fetchMidnight } from './midnight';
 import { fetchMorpho, fetchMorphoHistory, morphoHistoryAdjust, normalizeMorpho } from './morpho';
 import { fetchRevert } from './revert';
-import { fetchPendleLoops } from './pendle-loop';
+import { fetchPendleLoops, markPendleLoops } from './pendle-loop';
 import type { LendingFeed, SourceStatus } from './types';
 
 /**
@@ -49,8 +49,9 @@ export const SOURCES: Source[] = [
   { id: 'loopscale', name: 'Loopscale', ttlMs: 5 * 60_000, load: (at) => fetchLoopscale(at), background: true },
   // Daily rate from Revert's API, vault state read on-chain (two RPC batches per vault).
   { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at), background: true },
-  // Pendle's PT-looping list: only the money markets without a source of their own (Aave V3, Euler).
-  { id: 'pendle-loop', name: 'Pendle PT looping', ttlMs: 2 * 60_000, load: (at) => fetchPendleLoops(at), background: true },
+  // PendleLoop's list: lenders only for the money markets without a source of their own (Aave V3, Euler);
+  // Morpho's markets that it lists are marked with its page (markPendleLoops, when served).
+  { id: 'pendle-loop', name: 'PendleLoop', ttlMs: 2 * 60_000, load: (at) => fetchPendleLoops(at), background: true },
 ];
 
 interface Cached {
@@ -107,7 +108,8 @@ export async function getLendingFeed(now = Date.now()): Promise<LendingFeed> {
   return {
     opportunities: results.flatMap((r, i) => {
       const h = SOURCES[i].history;
-      return h ? withHistory(SOURCES[i].id, r.list, h.load, h.adjust, now) : r.list;
+      const list = SOURCES[i].id === 'morpho' ? markPendleLoops(r.list) : r.list;
+      return h ? withHistory(SOURCES[i].id, list, h.load, h.adjust, now) : list;
     }),
     sources: results.map((r) => r.status),
     fetchedAt: new Date(now).toISOString(),

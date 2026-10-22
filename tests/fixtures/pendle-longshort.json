@@ -1,0 +1,156 @@
+[
+ {
+  "boxId": "0x8364504571dce23a3b32f80a200d39c7c2207e62c9e0868f3ddcf929ab38604b",
+  "chainId": 1,
+  "kind": "vanilla",
+  "ptAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+  "ptSymbol": "USDC",
+  "protocol": "Aave",
+  "moneyMarketAddress": "0xf37c776aa41af4891404ec3ffa6a5c6d9d059918",
+  "moneyMarketName": "Aave V3",
+  "url": "https://app.aave.com",
+  "marketUrl": "https://app.aave.com/reserve-overview/?underlyingAsset=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2&marketName=proto_mainnet_v3",
+  "debtAsset": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  "debtSymbol": "WETH",
+  "isDepegged": false,
+  "side": "short",
+  "categoryIds": [
+   "crypto"
+  ],
+  "baseAsset": {
+   "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+   "symbol": "WETH",
+   "decimals": 18
+  },
+  "basePriceUsd": 2402.74846955,
+  "basePriceChange24h": -0.025982862834618904,
+  "baseMarketHours": [],
+  "risks": {
+   "overall": {
+    "label": "Overall Medium Risk",
+    "level": "low"
+   },
+   "description": "<p>[custom-syntax-1]</p>\n<p>The oracle prices the WETH you borrow with the Chainlink ETH/USD feed and the USDC you post through a capped Chainlink USDC/USD feed.</p>\n<h2 id=\"assetprice\">Asset Price</h2>\n<p>[color:safe] Low Risk</p>\n<p>Direct feed. The Chainlink ETH/USD feed prices the WETH you are short, so your debt tracks the ETH price exactly.</p>\n<h2 id=\"stablecoinprice\">Stablecoin Price</h2>\n<p>[color:safe] Low Risk</p>\n<p>A USDC depeg lowers your health factor, because USDC is your collateral. Aave reads a live Chainlink USDC/USD feed for it, capped only above 1.04, so a fall passes through in full.</p>\n<h2 id=\"priceupdates\">Price Updates</h2>\n<p>[color:safe] Standard</p>\n<p>ETH/USD updates on a 0.5% move or at least every hour, around the clock. Aave checks no feed age and has no fallback oracle, so a zero price reverts instead of degrading.</p>\n<h2 id=\"upgradability\">Upgradability</h2>\n<p>[color:warning] Medium Risk</p>\n<p>The Aave DAO can change the liquidation threshold and the price source through a vote and a one-day timelock. A 2-of-2 Risk Council can move the threshold and the USDC price cap in small steps, with cooldowns and no timelock.</p>"
+  },
+  "data": {
+   "lltv": 0.78,
+   "borrowApy": 0.01948455126830857,
+   "borrowApySpot": 0.019470714757058357,
+   "borrowApy7dAvg": 0.019580144068441687,
+   "liquidityUsd": 443739169.97720325,
+   "utilization": 0.8064257943547133,
+   "optimalUtilization": 0.92,
+   "collateralYieldApy": 0,
+   "collateralSupplyApy": 0.03874805121476478,
+   "maxLeverage": 3.6787128377397207,
+   "serviceFeeRate": 0
+  }
+ },
+ {
+  "boxId": "0x76aa4903bbf7c7d1e145d6d7ab24cf584fd8b62c13c1cdb01c2cf02c59f227a4",
+  "chainId": 8453,
+  "kind": "vanilla",
+  "ptAddress": "0x4200000000000000000000000000000000000006",
+  "ptSymbol": "WETH",
+  "protocol": "Morpho",
+  "moneyMarketAddress": "0x8fc5f14ff891f59851c5c53d00f6227b6838c5b0",
+  "moneyMarketName": "Morpho",
+  "url": "https://app.morpho.org",
+  "marketUrl": "https://app.morpho.org/base/variable/0x8793cf302b8ffd655ab97bd1c695dbd967807e8367a65cb2f4edaf1380ba1bda",
+  "debtAsset": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+  "debtSymbol": "USDC",
+  "isDepegged": false,
+  "side": "long",
+  "categoryIds": [
+   "crypto"
+  ],
+  "baseAsset": {
+   "address": "0x4200000000000000000000000000000000000006",
+   "symbol": "WETH",
+   "decimals": 18
+  },
+  "basePriceUsd": 2402.74846955,
+  "basePriceChange24h": -0.025982862834618904,
+  "baseMarketHours": [],
+  "risks": {
+   "overall": {
+    "label": "Overall Medium Risk",
+    "level": "low"
+   },
+   "description": "<p>[custom-syntax-1]</p>\n<p>This oracle divides two Chainlink feeds, ETH/USD for the WETH you posted and USDC/USD for the USDC you borrowed, giving the WETH price in USDC.</p>\n<h2 id=\"assetprice\">Asset Price</h2>\n<p>[color:safe] Low Risk</p>\n<p>Direct feed. The Chainlink ETH/USD feed prices the WETH you posted, so your collateral tracks the ETH price exactly. Only Chainlink can swap that feed, with no delay.</p>\n<h2 id=\"stablecoinprice\">Stablecoin Price</h2>\n<p>[color:safe] Low Risk</p>\n<p>USDC is your debt and is read through a live Chainlink USDC/USD feed. A USDC depeg makes your debt worth less in dollars, so it raises your health factor.</p>\n<h2 id=\"priceupdates\">Price Updates</h2>\n<p>[color:safe] Standard</p>\n<p>Both feeds run around the clock. ETH/USD updates on a 0.15% move or every 20 minutes, USDC/USD on a 0.3% move or every 24 hours. Morpho never checks staleness, so a stalled feed's last price stays in use.</p>\n<h2 id=\"upgradability\">Upgradability</h2>\n<p>[color:safe] Low Risk</p>\n<p>Immutable. The 86% liquidation threshold and both price feeds were fixed when the market was created, and no key can change them.</p>"
+  },
+  "data": {
+   "lltv": 0.86,
+   "borrowApy": 0.05254434971255387,
+   "borrowApySpot": 0.05157350789065548,
+   "borrowApy7dAvg": 0.05223567541086048,
+   "liquidityUsd": 10719908.557079168,
+   "utilization": 0.9007496110589096,
+   "optimalUtilization": 0.9,
+   "collateralYieldApy": null,
+   "collateralSupplyApy": 0,
+   "maxLeverage": 6.031363088057899,
+   "serviceFeeRate": 0
+  }
+ },
+ {
+  "boxId": "0xe30ab2483e37a5406bd5c2c84252438ca1e022854dfa0b7604dc92a6a45dd8ee",
+  "chainId": 8453,
+  "kind": "vanilla",
+  "ptAddress": "0xb200000000000000000000c2e324d24d7eecd1fb",
+  "ptSymbol": "AAPLc",
+  "protocol": "Aave",
+  "moneyMarketAddress": "0xca7c724e86209b7f4c9f8fc1f0960601cee7beec",
+  "moneyMarketName": "Aave V4",
+  "url": "https://pro.aave.com/",
+  "marketUrl": "https://pro.aave.com/explore/reserve/ODQ1Mzo6MHgxNzkwNURiMGU0QTM1MTQ0Njc1Mzk5NTZjMDg0MTgwNjE2QUU3QjhEOjow",
+  "debtAsset": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+  "debtSymbol": "USDC",
+  "isDepegged": false,
+  "side": "long",
+  "categoryIds": [
+   "stocks"
+  ],
+  "baseAsset": {
+   "address": "0xb200000000000000000000c2e324d24d7eecd1fb",
+   "symbol": "AAPLc",
+   "decimals": 8
+  },
+  "basePriceUsd": 343.821950783367,
+  "basePriceChange24h": 0.01627129052354574,
+  "baseMarketHours": [
+   {
+    "open": 1791763200,
+    "close": 1792180800
+   },
+   {
+    "open": 1792368000,
+    "close": 1792785600
+   },
+   {
+    "open": 1792972800,
+    "close": 1793390400
+   }
+  ],
+  "risks": {
+   "overall": {
+    "label": "Overall Medium Risk",
+    "level": "medium"
+   },
+   "description": "<p>[custom-syntax-1]</p>\n<p>The oracle reads Chainlink's Coinbase AAPL feed, the Apple share price times the token's multiplier, for the AAPLc you posted. It prices the USDC you borrowed through a capped Chainlink USDC/USD feed.</p>\n<h2 id=\"assetprice\">Asset Price</h2>\n<p>[color:warning] Medium Risk</p>\n<p>Share price. The feed reads the Apple share price times the token's multiplier, which carries dividends. Nothing reads the token's own market or backing, so if AAPLc trades below the share, your health factor does not fall with it.</p>\n<h2 id=\"stablecoinprice\">Stablecoin Price</h2>\n<p>[color:safe] Low Risk</p>\n<p>Your USDC debt is priced by Chainlink's live USDC/USD feed, with a cap on the upside. A USDC depeg lowers the value of your debt and raises your health factor.</p>\n<h2 id=\"priceupdates\">Price Updates</h2>\n<p>[color:warning] Requires Attention</p>\n<p>The feed trades around the clock on weekdays and holds its last price over weekends and holidays, so Apple can gap when trading resumes and liquidate you with no chance to act. It updates on a 0.5% move or every 24 hours.</p>\n<h2 id=\"upgradability\">Upgradability</h2>\n<p>[color:safe] Low Risk</p>\n<p>A 5-of-8 multisig can change the price source, the collateral factor and the Spoke code with no delay. Aave governance can do the same after one day. A risk council can move the collateral factor only within set bounds.</p>"
+  },
+  "data": {
+   "lltv": 0.78,
+   "borrowApy": 0.03712413849990887,
+   "borrowApySpot": 0.03695146640963909,
+   "borrowApy7dAvg": 0.039018644285555334,
+   "liquidityUsd": 1119877.8684007465,
+   "utilization": 0.8165062201100085,
+   "optimalUtilization": 0.9,
+   "collateralYieldApy": null,
+   "collateralSupplyApy": 0,
+   "maxLeverage": 4.108463434675432,
+   "serviceFeeRate": 0
+  }
+ }
+]
