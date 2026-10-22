@@ -232,13 +232,15 @@ export async function fetchKamino(fetchedAt: string): Promise<Opportunity[]> {
   const ok = reads.filter((r): r is PromiseFulfilledResult<(Opportunity | null)[]> => r.status === 'fulfilled');
   if (list.length && !ok.length) throw (reads[0] as PromiseRejectedResult).reason;
   const rows = ok.flatMap((r) => r.value).filter((o): o is Opportunity => o !== null);
-  // Kamino's API has no logos: Jupiter's token list by mint (100 a request; best-effort).
-  const mints = [...new Set(rows.map((o) => o.assets.deposit[0]?.address).filter((a): a is string => !!a))];
+  // Kamino's API has no logos: Jupiter's token list by mint (100 a request; best-effort),
+  // for the deposits and for the collaterals (a loop's row shows its collateral).
+  const mints = [...new Set(rows.flatMap((o) => [o.assets.deposit[0]?.address, ...(o.borrow?.collateral ?? []).map((c) => c.token.address)]).filter((a): a is string => !!a))];
   const tokens = new Map<string, SolanaToken>();
   for (let i = 0; i < mints.length; i += 100) for (const [k, v] of await fetchSolanaTokens(mints.slice(i, i + 100))) tokens.set(k, v);
   return rows.map((o) => {
     const icon = tokens.get(o.assets.deposit[0]?.address ?? '')?.icon;
-    return icon ? { ...o, icon } : o;
+    const borrow = o.borrow && { ...o.borrow, collateral: o.borrow.collateral.map((c) => { const logo = c.token.address ? tokens.get(c.token.address)?.icon : undefined; return logo ? { ...c, logo } : c; }) };
+    return { ...o, ...(icon ? { icon } : {}), ...(borrow ? { borrow } : {}) };
   });
 }
 

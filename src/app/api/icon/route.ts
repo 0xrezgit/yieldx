@@ -17,7 +17,12 @@ export async function GET(request: NextRequest) {
   // Re-check after parsing: no «..», credentials or another host slipping past the prefix.
   if (!isProxiedIcon(url.href) || url.username || url.password || url.pathname.includes('..')) return new NextResponse(null, { status: 400 });
   try {
-    const res = await fetch(url.href, { signal: AbortSignal.timeout(8000), redirect: 'error' });
+    let res = await fetch(url.href, { signal: AbortSignal.timeout(8000), redirect: 'error' });
+    // A host that limits bursts (Euler's images: 403) usually answers the same request a moment later.
+    if (res.status === 403 || res.status === 429) {
+      await new Promise((r) => setTimeout(r, 600));
+      res = await fetch(url.href, { signal: AbortSignal.timeout(8000), redirect: 'error' });
+    }
     const type = res.headers.get('content-type') ?? '';
     if (!res.ok || !type.startsWith('image/')) return new NextResponse(null, { status: 502 });
     const body = await res.arrayBuffer();

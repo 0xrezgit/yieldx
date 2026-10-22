@@ -8,6 +8,8 @@ import { fetchMidnight } from './midnight';
 import { fetchMorpho, fetchMorphoHistory, morphoHistoryAdjust, normalizeMorpho } from './morpho';
 import { fetchRevert } from './revert';
 import { fetchPendleLoops, markPendleLoops } from './pendle-loop';
+import { fetchEuler } from './euler';
+import { fetchUpshift } from './upshift';
 import type { LendingFeed, SourceStatus } from './types';
 
 /**
@@ -32,6 +34,14 @@ interface Source {
    * now: one slow or timing-out API — Morpho's took 15 s — held the whole answer).
    */
   background?: boolean;
+  /** How long a past-TTL copy is still served while it refreshes behind it (default GRACE_MS). */
+  graceMs?: number;
+  /**
+   * A slow source with nothing cached yet: wait this long for its first answer, then answer
+   * without it (its list is empty, flagged) while the fetch goes on and fills the cache.
+   * Without it, its first fetch would hold the whole feed — every other source's markets too.
+   */
+  coldWaitMs?: number;
   /** Daily rate history for the robust rate (robust-rate.ts), attached each time the list is served. */
   history?: { load: HistoryLoader; adjust?: (o: Opportunity, pct: number) => number };
 }
@@ -51,6 +61,10 @@ export const SOURCES: Source[] = [
   { id: 'revert', name: 'Revert Lend', ttlMs: 60_000, load: (at) => fetchRevert(at), background: true },
   // PendleLoop's list: lenders only for the money markets without a source of their own (Aave V3, Euler);
   // Morpho's markets that it lists are marked with its page (markPendleLoops, when served).
+  // Euler EVK vaults: lend side and Borrow / Multiply collaterals (a request per borrowable vault, ~7 s).
+  { id: 'euler', name: 'Euler', ttlMs: 5 * 60_000, load: (at) => fetchEuler(at), background: true, coldWaitMs: 15_000 },
+  // Upshift vaults: realised 30-day rates; the list is large (~13 MB, ~45 s) and moves daily.
+  { id: 'upshift', name: 'Upshift', ttlMs: 30 * 60_000, load: (at) => fetchUpshift(at), background: true, graceMs: 6 * 3_600_000, coldWaitMs: 8_000 },
   { id: 'pendle-loop', name: 'PendleLoop', ttlMs: 2 * 60_000, load: (at) => fetchPendleLoops(at), background: true },
 ];
 
@@ -82,16 +96,25 @@ async function one(s: Source, now: number): Promise<{ list: Opportunity[]; statu
   if (hit && now - hit.at < s.ttlMs) return { list: hit.list, status: { id: s.id, name: s.name, state: 'ok', fetchedAt: hit.fetchedAt, count: hit.list.length, error: null } };
   // Past its TTL but recent: serve the copy now and refresh behind it, so one slow source
   // (Midnight pages through hundreds of books) never holds up the whole feed.
-  if (hit && s.background && now - hit.at < GRACE_MS) {
+  if (hit && s.background && now - hit.at < (s.graceMs ?? GRACE_MS)) {
     void refresh(s, now).catch(() => {});
     return { list: hit.list, status: { id: s.id, name: s.name, state: 'ok', fetchedAt: hit.fetchedAt, count: hit.list.length, error: null } };
   }
   try {
-    const c = await refresh(s, now);
+    const pending = refresh(s, now);
+    if (!hit && s.coldWaitMs !== undefined) {
+      const late = Symbol('late');
+      const first = await Promise.race([pending, new Promise<typeof late>((r) => setTimeout(() => r(late), s.coldWaitMs))]);
+      if (first === late) {
+        pending.catch(() => {});
+        return { list: [], status: { id: s.id, name: s.name, state: 'error', fetchedAt: null, count: 0, error: 'در حال دریافت؛ در به‌روزرسانی بعدی می‌آید.' } };
+      }
+    }
+    const c = await pending;
     return { list: c.list, status: { id: s.id, name: s.name, state: 'ok', fetchedAt: c.fetchedAt, count: c.list.length, error: null } };
   } catch (e) {
     const error = e instanceof Error ? e.message : 'unknown error';
-    if (hit && now - hit.at < GRACE_MS) {
+    if (hit && now - hit.at < (s.graceMs ?? GRACE_MS)) {
       // One failed refresh does not make minutes-old rates stale; the fetch time stays visible.
       return { list: hit.list, status: { id: s.id, name: s.name, state: 'ok', fetchedAt: hit.fetchedAt, count: hit.list.length, error } };
     }

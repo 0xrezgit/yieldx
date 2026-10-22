@@ -246,6 +246,8 @@ export function fluidVault(v: FluidVault, chainId: number, fetchedAt: string): O
           yield: yieldPct > 0 && yieldPct < 100 ? { pct: yieldPct, kind: 'apr', source: `Fluid (${parts})` } : null,
           supplyPct,
           ...(cClass ? { class: cClass } : {}),
+          // A smart collateral (two tokens) shows its first token.
+          ...(c0.logoUrl ? { logo: c0.logoUrl } : {}),
         },
       ],
       metric: 'ltv',

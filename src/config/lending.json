@@ -90,5 +90,27 @@
         "rpc": "https://base-rpc.publicnode.com"
       }
     ]
+  },
+  "euler": {
+    "name": "Euler",
+    "api": "https://v3.euler.finance/v3",
+    "app": "https://app.euler.finance",
+    "_note": "Euler Data API v3 (public, documented at /v3/openapi.json; 1000 requests a minute without a key). EVK vaults: lend side and their accepted collaterals (Borrow / Multiply).",
+    "chains": [1, 42161, 8453, 143, 999, 56, 130, 9745, 43114],
+    "minSupplyUsd": 100000,
+    "concurrency": 6
+  },
+  "upshift": {
+    "name": "Upshift",
+    "api": "https://api.upshift.finance/api/v1",
+    "app": "https://app.upshift.finance",
+    "_note": "The vault list (rates realised from the share price over 1/7/30 days) has no deposit asset: it is read from each vault (ERC-4626 asset()).",
+    "minTvlUsd": 100000,
+    "rpc": {
+      "1": "https://ethereum-rpc.publicnode.com",
+      "8453": "https://base-rpc.publicnode.com",
+      "143": "https://rpc.monad.xyz",
+      "999": "https://rpc.hyperliquid.xyz/evm"
+    }
   }
 }

@@ -14,6 +14,16 @@ describe('Pendle icons through the server', () => {
     expect(iconSrc('https://assets.coingecko.com/x.png')).toBe('https://assets.coingecko.com/x.png');
   });
 
+  it('also takes Euler\'s token images and Upshift\'s logos (403 to a burst of requests)', () => {
+    const euler = 'https://v3.euler.finance/v3/images/tokens/1/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+    const upshift = 'https://imagedelivery.net/JKqfgGWnlUbSJb3LhpWg6w/token-logo/sentusd-dark.svg/public';
+    expect(iconSrc(euler)).toBe(`/api/icon?u=${encodeURIComponent(euler)}`);
+    expect(iconSrc(upshift)).toBe(`/api/icon?u=${encodeURIComponent(upshift)}`);
+    // Only Euler's token images and Upshift's own account, not the rest of either host.
+    expect(iconSrc('https://v3.euler.finance/v3/evk/vaults')).toBe('https://v3.euler.finance/v3/evk/vaults');
+    expect(iconSrc('https://imagedelivery.net/other-account/x/public')).toBe('https://imagedelivery.net/other-account/x/public');
+  });
+
   it('is never an open proxy', async () => {
     for (const u of ['https://example.com/x.svg', 'https://storage.googleapis.com/other-bucket/x.svg', 'https://storage.googleapis.com/prod-pendle-bucket-a/../other/x.svg', 'not a url']) {
       expect((await GET(req(u))).status).toBe(400);

@@ -54,9 +54,28 @@ const loopClass = (symbol: string, chain: string): string => {
 
 const addrKey = (chain: string, address: string | null | undefined) => (address ? `${chain}:${address.toLowerCase()}` : null);
 
+/**
+ * A token's logo on its network, from the lending rows that take it as a deposit (their icon
+ * is the asset's own) or as a collateral with a logo. A loop's row shows its collateral, which
+ * some sources (PendleLoop's Aave V3 boxes) give no logo for.
+ */
+export function tokenIcons(opps: Opportunity[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const o of opps) {
+    const key = addrKey(o.chain, o.assets.deposit[0]?.address);
+    if (key && o.icon && (o.family === 'lend' || o.family === 'borrow') && !out.has(key)) out.set(key, o.icon);
+    for (const c of o.borrow?.collateral ?? []) {
+      const k = addrKey(o.chain, c.token.address);
+      if (k && c.logo && !out.has(k)) out.set(k, c.logo);
+    }
+  }
+  return out;
+}
+
 /** Loops that can be built from the lending markets' borrow sides (PT collaterals are left to `buildPtLoops`). */
 export function buildLoops(opps: Opportunity[]): Opportunity[] {
   const out: Opportunity[] = [];
+  const icons = tokenIcons(opps);
   const pts = new Set(opps.filter((o) => o.family === 'pt').map((o) => addrKey(o.chain, o.ptToken?.address)).filter(Boolean));
   for (const o of opps) {
     const side = o.borrow;
@@ -88,7 +107,7 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
         loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}), ...(c.oracleFactor !== undefined ? { oracleFactor: c.oracleFactor } : {}), pairClass: debtClass as LoopSpec['pairClass'], ...(unverified ? { pegVerified: false } : {}), ...(c.pendleLoop ? { pendleLoop: c.pendleLoop } : {}) },
         quality,
         notes: [...(o.notes ?? []).filter((n) => !n.startsWith('Hub:')), ...(side.premiumUnknown ? ['Aave V4: نرخ وام پایه به کار رفت؛ صرف ریسک کاربر (User Risk Premium) که به ترکیب وثیقه‌ی شما بستگی دارد لحاظ نشده و نرخ واقعی می‌تواند بالاتر باشد.'] : [])],
-        icon: null,
+        icon: c.logo ?? icons.get(addrKey(o.chain, c.token.address) ?? '') ?? null,
       });
     }
   }

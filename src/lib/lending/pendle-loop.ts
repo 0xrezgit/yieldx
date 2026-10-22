@@ -1,6 +1,7 @@
 import protocols from '../../config/protocols.json';
 import type { Opportunity } from '../../types/opportunity';
 import { fetchJson, isArrayOf } from '../protocols/base';
+import { pendleLoopLink } from '../market/links';
 
 /**
  * Pendle's own loop list (PendleLoop, app.pendle.finance/trade/loop), from its public API
@@ -53,8 +54,8 @@ export interface PendleLoopBox {
 /** Money markets with their own source in YieldX: their boxes would only repeat them. */
 const OWN_SOURCE = new Set(['morpho']);
 
-/** The box's own page in PendleLoop (app route trade/loop/:boxId). */
-export const pendleLoopUrl = (b: Pick<PendleLoopBox, 'boxId'>) => `https://app.pendle.finance/trade/loop/${b.boxId}`;
+/** The box's own page in PendleLoop (see pendleLoopLink). */
+export const pendleLoopUrl = (b: Pick<PendleLoopBox, 'boxId' | 'chainId'>) => pendleLoopLink(b.chainId, b.boxId).url;
 
 const fin = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 const isAddr = (x: unknown): x is string => typeof x === 'string' && /^0x[0-9a-fA-F]{40}$/.test(x);
