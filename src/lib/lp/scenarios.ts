@@ -30,6 +30,12 @@ export interface LpInput {
   /** Rewards over the period, USD (e.g. Merkl engine), or null → use `rewardAprPct`. */
   rewardUsd: number | null;
   rewardAprPct: number | null;
+  /**
+   * 'fixed' (default): `rewardAprPct` on the capital, whatever the price does.
+   * 'in-range': the position's own rate while in range, paid like fees (a staked
+   * Aero position: the gauge pays only in-range liquidity).
+   */
+  rewardBasis?: 'fixed' | 'in-range';
   /** Entry + exit costs counted, USD. */
   costsUsd: number;
 }
@@ -106,7 +112,9 @@ export function scenario(input: LpInput, move: number): LpScenario {
   // Fees accrue on the position's value; average of start and end is used over the path.
   const apr = positionFeeApr(input);
   const feesUsd = apr === null ? null : ((input.capital + position) / 2) * (apr / 100) * t * share;
-  const rewardsUsd = input.rewardUsd ?? (input.rewardAprPct ? input.capital * (input.rewardAprPct / 100) * t : 0);
+  const rewardsUsd =
+    input.rewardUsd ??
+    (!input.rewardAprPct ? 0 : input.rewardBasis === 'in-range' ? ((input.capital + position) / 2) * (input.rewardAprPct / 100) * t * share : input.capital * (input.rewardAprPct / 100) * t);
   const ilUsd = position - hodl;
   return {
     move,

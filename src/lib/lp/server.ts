@@ -5,10 +5,12 @@ import { FEE_WINDOW_DAYS, historyCandidates, UNSTAKED_FEE_VENUES, vetPools, type
 import { realLpStats, type RawRevertPosition, type RealLpStats } from './revert';
 
 /**
- * Server-side vfat client (public data API, no key). Two fixed list queries: the
- * focus chain (Robinhood Chain) by TVL, and every chain by last week's fees. Then
- * the daily history of each concentrated pool that passed every other rule, for
- * its fee rate per unit of liquidity.
+ * Server-side vfat client (public data API, no key). Three fixed list queries: the
+ * focus chain (Robinhood Chain) by TVL, every chain by last week's fees, and Aero's
+ * pools by TVL (new since 2026-10-22: most have no week of fees yet, so the fee
+ * list misses them). Then the daily history of each concentrated pool that passed
+ * every other rule, for its fee rate per unit of liquidity, and for Aero gauges
+ * the staked liquidity in range, read on-chain, for the AERO rate.
  *
  * History is slow upstream (~2 s a pool) and changes daily, so it is kept here per
  * pool and filled in the background: a request waits a few seconds at most, and a
@@ -25,6 +27,8 @@ const HISTORY_CONCURRENCY = 2;
 const WAIT_MS = 6_000;
 /** A failed history is asked again after this long. */
 const RETRY_MS = 10 * 60_000;
+/** An Aero gauge's staked liquidity moves with every deposit; read again after this long. */
+const STAKED_REVALIDATE_S = 600;
 
 export class LpUpstreamError extends Error {}
 
@@ -56,14 +60,18 @@ const inFlight = new Set<string>();
 
 const fresh = (id: string, now: number) => {
   const h = histories.get(id);
-  return !!h && now - h.at < (h.value?.history ? CFG.historyRevalidateS * 1000 : RETRY_MS);
+  if (!h) return false;
+  // An Aero gauge's staked liquidity changes with every deposit: its data is kept for minutes, not hours.
+  const keep = !h.value?.history ? RETRY_MS : h.value.stakedLiquidity !== undefined ? STAKED_REVALIDATE_S * 1000 : CFG.historyRevalidateS * 1000;
+  return now - h.at < keep;
 };
 
 const UNSTAKED_FEE = '0xb64cc67b'; // unstakedFee() — hundredths of a basis point (50000 = 5%)
-const RPC = config.unstakedFeeRpc as Record<string, string>;
+const STAKED_LIQUIDITY = '0x3ab04b20'; // stakedLiquidity() — staked liquidity in range, raw units
+const RPC = config.rpc as Record<string, string>;
 
-/** Aerodrome Slipstream: the share of an unstaked LP's fees the pool keeps; null when it cannot be read. */
-async function unstakedFee(it: RawItem): Promise<number | null> {
+/** One uint256 view of the pool; null when it cannot be read. */
+async function readPool(it: RawItem, selector: string, revalidate: number): Promise<bigint | null> {
   const rpc = RPC[String(it.chainId)];
   const pool = it.pool?.address;
   if (!rpc || !pool) return null;
@@ -71,17 +79,28 @@ async function unstakedFee(it: RawItem): Promise<number | null> {
     const res = await fetch(rpc, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: pool, data: UNSTAKED_FEE }, 'latest'] }),
-      next: { revalidate: CFG.historyRevalidateS, tags: ['vfat'] },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: pool, data: selector }, 'latest'] }),
+      next: { revalidate, tags: ['vfat'] },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     } as RequestInit);
     const body = (await res.json()) as { result?: string };
     if (!body.result || body.result === '0x') return null;
-    return Number(BigInt(body.result)) / 1e6;
+    return BigInt(body.result);
   } catch {
     return null;
   }
 }
+
+/** Aerodrome Slipstream and Aero: the share of an unstaked LP's fees the pool keeps. */
+const unstakedFee = async (it: RawItem) => {
+  const v = await readPool(it, UNSTAKED_FEE, CFG.historyRevalidateS);
+  return v === null ? null : Number(v) / 1e6;
+};
+
+/** Aero gauge: the staked liquidity in range now (decimal string). */
+const stakedLiquidity = async (it: RawItem) => (await readPool(it, STAKED_LIQUIDITY, STAKED_REVALIDATE_S))?.toString() ?? null;
+
+const hasAeroGauge = (it: RawItem) => it.pool?.type === 'concentrated' && (it.options ?? []).some((o) => o.kind === 'lp-stake' && !o.isKilled && o.protocol?.id === config.aero.venue);
 
 /** Fetches the missing fee data (each pool once at a time); resolves when all are in. */
 function fill(items: RawItem[]): Promise<unknown> {
@@ -90,13 +109,15 @@ function fill(items: RawItem[]): Promise<unknown> {
   return mapLimit(todo, HISTORY_CONCURRENCY, async (it) => {
     const id = it.id as string;
     const needsCut = (it.options ?? []).some((o) => o.kind === 'lp' && o.protocol?.id && UNSTAKED_FEE_VENUES.has(o.protocol.id));
+    const needsStaked = hasAeroGauge(it);
     let value: PoolFeeData | null = null;
     try {
-      const [history, cut] = await Promise.all([
+      const [history, cut, staked] = await Promise.all([
         get<RawHistory>(`/pool-history?id=${encodeURIComponent(id)}&limit=${FEE_WINDOW_DAYS}`, CFG.historyRevalidateS),
         needsCut ? unstakedFee(it) : Promise.resolve(undefined),
+        needsStaked ? stakedLiquidity(it) : Promise.resolve(undefined),
       ]);
-      value = { history, ...(needsCut ? { unstakedFee: cut } : {}) };
+      value = { history, ...(needsCut ? { unstakedFee: cut } : {}), ...(needsStaked ? { stakedLiquidity: staked } : {}) };
     } catch {
       value = null;
     }
@@ -142,6 +163,7 @@ export async function getLpPools(now = Date.now()): Promise<{ feed: LpPoolFeed; 
   const queries = {
     focus: `chainId=${CFG.focusChainId}&pageSize=${CFG.pageSize}&sortKey=tvl&sortDirection=desc`,
     global: `pageSize=${CFG.pageSize}&sortKey=feesUsd7d&sortDirection=desc`,
+    aero: `protocols=${encodeURIComponent(config.aero.venue)}&pageSize=${CFG.pageSize}&sortKey=tvl&sortDirection=desc`,
   } as const;
   const ids = Object.keys(queries) as (keyof typeof queries)[];
   const results = await Promise.allSettled(ids.map((id) => list(queries[id])));

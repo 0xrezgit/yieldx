@@ -12,7 +12,7 @@
     "focusChainId": 4663
   },
   "stockTokens": {
-    "_note": "Verified 2026-10-05 against vfat token metadata (name «… • Robinhood Token») and pool liquidity. Pools with any other token of the same symbol are not shown.",
+    "_note": "Verified 2026-10-05 against vfat token metadata (name «… • Robinhood Token») and pool liquidity. Pools with any other token of the same symbol are not shown. Base (8453): Coinbase tokenized stocks (symbol «TICKERc», addresses 0xb2000000000000000000…), verified 2026-10-23 against vfat token tags («stock») and Aero pool liquidity; keyed by ticker.",
     "4663": {
       "AAPL": "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9",
       "AMC": "0x05a3d1cd21d0c88145e82600e62e7e496e0f222b",
@@ -48,11 +48,66 @@
       "TSLA": "0x322f0929c4625ed5bad873c95208d54e1c003b2d",
       "TSM": "0x58ffe4a942d3885baa22d7520691f611ef09e7aa",
       "USO": "0xa30fa36db767ad9ed3f7a60fc79526fb4d56d344"
+    },
+    "8453": {
+      "AAPL": "0xb200000000000000000000c2e324d24d7eecd1fb",
+      "AMD": "0xb2000000000000000000000d8ce462e99ee7a47b",
+      "AMZN": "0xb200000000000000000000d9192b6b456483c2e8",
+      "AVGO": "0xb200000000000000000000fc737aea6196ab5a4c",
+      "BE": "0xb20000000000000000000016f9dfe862feba122b",
+      "DJT": "0xb200000000000000000000428e3a3eebbb20692b",
+      "GME": "0xb2000000000000000000007790ed6e48e06ed935",
+      "GOOGL": "0xb2000000000000000000002d0ba3164cc74f58b7",
+      "HIMS": "0xb20000000000000000000043a599976181bcf336",
+      "LLY": "0xb200000000000000000000f1a0f91e34892e4718",
+      "META": "0xb2000000000000000000008bc8786b856e61707c",
+      "MRNA": "0xb200000000000000000000e215e9b76ecba02468",
+      "MRVL": "0xb200000000000000000000ec3c4c7395cc609813",
+      "MSFT": "0xb200000000000000000000ab99cfa739e253872b",
+      "MSTR": "0xb2000000000000000000004884b426556b92883d",
+      "MU": "0xb200000000000000000000fd2f87532b90095211",
+      "NFLX": "0xb20000000000000000000058b8c947e44011dfe6",
+      "NVAX": "0xb200000000000000000000c597c476fcf9aed3a8",
+      "NVDA": "0xb20000000000000000000078ee7ce2fe4908108c",
+      "ORCL": "0xb200000000000000000000347afba223d7b6b63c",
+      "PLTR": "0xb2000000000000000000007d16372840df4dabbe",
+      "PTON": "0xb2000000000000000000009272a491812842aa84",
+      "RDDT": "0xb20000000000000000000066242d4067724cb7a1",
+      "SNDK": "0xb200000000000000000000397293cb8cda9a10c5",
+      "SPCX": "0xb2000000000000000000007b9fcbd005511acbd5",
+      "TSLA": "0xb2000000000000000000001e800a7f5189430cd0"
     }
   },
   "stockLogo": "https://financialmodelingprep.com/image-stock/",
   "_stockLogoNote": "Ticker logos (checked 2026-10-05: all listed tickers answer with an image). A failed image falls back to a monogram.",
-  "unstakedFeeRpc": {
-    "8453": "https://base-rpc.publicnode.com"
+  "_rpcNote": "Keyless RPCs for the pool reads (unstakedFee, stakedLiquidity) on every network Aero runs on; each answered both calls on an Aero pool 2026-10-23.",
+  "rpc": {
+    "1": "https://ethereum-rpc.publicnode.com",
+    "10": "https://optimism-rpc.publicnode.com",
+    "4663": "https://robinhood.drpc.org",
+    "5042": "https://arc.drpc.org",
+    "8453": "https://base-rpc.publicnode.com",
+    "42161": "https://arbitrum-one-rpc.publicnode.com",
+    "57073": "https://ink-rpc.publicnode.com"
+  },
+  "aero": {
+    "_note": "Aero (Aerodrome + Velodrome merged, live 2026-10-22). Staked LPs earn AERO only (their swap fees go to sAERO holders); unstaked LPs earn swap fees minus unstakedFee (0% on Ethereum, Arbitrum, Robinhood Chain; 5% on Base, OP, Ink, Arc). Gauge Caps hold each pool’s AERO to a multiple of its revenue, about 1.2× on average across the exchange (aero.xyz/articles/the-aero-economy, read 2026-10-23). Withdrawing before the minimum staking period forfeits the rewards; the period depends on asset type and market and is not published as a number.",
+    "venue": "aero",
+    "legacyVenues": [
+      "aerodrome",
+      "velodrome"
+    ],
+    "launch": "2026-10-22",
+    "capTarget": 1.2,
+    "poolUrl": "https://app.aero.xyz/pools/",
+    "sunsetChains": {
+      "130": "Unichain",
+      "252": "Fraxtal",
+      "1868": "Soneium",
+      "42220": "Celo"
+    },
+    "withdrawBy": {
+      "1135": "2026-10-31"
+    }
   }
 }

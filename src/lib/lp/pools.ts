@@ -3,6 +3,7 @@ import { tokenClass } from '../merkl/vetting';
 import { tokenInfo } from '../portfolio/tokens';
 import { networkByChainId } from '../registry/networks';
 import { revertRef, type RealLpStats, type RevertRef } from './revert';
+import { aeroPoolUrl, fullRangeUsd, isAeroVenue, isLegacyVenue, rewardAprPct, weeklyRevenue, type PoolReward } from './rewards';
 
 /**
  * LP pools from vfat's public data API, vetted for the «LP» tool. They never enter
@@ -20,9 +21,13 @@ import { revertRef, type RealLpStats, type RevertRef } from './revert';
  * placed over the full range. A range position earns that times its
  * concentration (see `concentration` in scenarios). Plain x·y=k pools spread
  * every dollar over the full range, so there «fees ÷ TVL» is the rate.
+ *
+ * Aero pools (live 2026-10-22) also pay AERO to staked positions (see rewards.ts).
+ * They are new and some have no fee history yet: such a pool is kept for its
+ * staked AERO rate alone, its fee rate left unknown, while every other rule holds.
  */
 
-export type AssetClass = 'usd' | 'eth' | 'btc' | 'stock';
+export type AssetClass = 'usd' | 'eur' | 'gold' | 'eth' | 'btc' | 'stock';
 
 export interface PoolToken {
   symbol: string;
@@ -47,8 +52,8 @@ export interface LpPool {
   tvlUsd: number;
   volume7dUsd: number;
   fees7dUsd: number;
-  /** Yearly fee rate of a full-range position, from the last 7 days (see the module note). */
-  feeAprPct: number;
+  /** Yearly fee rate of a full-range position (see the module note); null when the pool is too new to have one (Aero, rewards only). */
+  feeAprPct: number | null;
   /** Days of fee history behind `feeAprPct` (7 for x·y=k pools: vfat's 7-day total). */
   feeDays: number;
   /** The same rate over the last week alone (trend hint), when the history has it. */
@@ -63,6 +68,12 @@ export interface LpPool {
   realLps?: RealLpStats | null;
   /** Has incentive rewards beyond swap fees (not included in feeAprPct). */
   incentives: boolean;
+  /** AERO for a staked position (Aero gauge), when its rate is known. */
+  reward: PoolReward | null;
+  /** Aerodrome / Velodrome pool with a gauge: it pays no AERO since the Aero launch, and staked liquidity earns no fees either. */
+  legacyGauge: boolean;
+  /** The venue's own page for the pool (Aero), when known. */
+  venueUrl: string | null;
   /** Both sides are dollar stablecoins. */
   stable: boolean;
   /** 95th-percentile 7-day move of A against B (percent, both positive). */
@@ -82,7 +93,7 @@ export interface LpPoolFeed {
   pending: number;
   /** Shown pools whose real-LP figures (Revert) are still being fetched. */
   realPending: number;
-  sources: { id: 'focus' | 'global'; ok: boolean }[];
+  sources: { id: 'focus' | 'global' | 'aero'; ok: boolean }[];
   fetchedAt: string;
 }
 
@@ -91,10 +102,12 @@ export interface LpPoolFeed {
 interface RawToken {
   address?: string;
   symbol?: string;
+  decimals?: number;
   price?: number | null;
 }
 interface RawReward {
   type?: string;
+  token?: { symbol?: string };
   amountUsd?: number | null;
 }
 interface RawOption {
@@ -120,6 +133,8 @@ export interface RawItem {
     createdAt?: string | null;
     currentFee?: number | null;
     volumeUsd7d?: number | null;
+    /** Current price, Q64.96 (concentrated pools). */
+    sqrtPrice?: string | null;
     assetCorrelation?: RawRangeRisk | null;
   };
   options?: RawOption[];
@@ -139,22 +154,25 @@ export interface RawRangeRisk {
 
 /**
  * What a concentrated pool's fee rate needs beyond vfat's list: its daily history,
- * and for Aerodrome Slipstream the share of an unstaked LP's fees the pool keeps
- * (`unstakedFee()`, read on-chain; 0.05 = 5%).
+ * for Aerodrome Slipstream and Aero the share of an unstaked LP's fees the pool keeps
+ * (`unstakedFee()`, read on-chain; 0.05 = 5%), and for an Aero gauge the staked
+ * liquidity in range (`stakedLiquidity()`, raw units, decimal string).
  */
 export interface PoolFeeData {
   history: RawHistory | null;
   unstakedFee?: number | null;
+  stakedLiquidity?: string | null;
 }
 
-/** vfat protocol ids whose concentrated pools charge unstaked LPs (Aerodrome Slipstream). */
-export const UNSTAKED_FEE_VENUES = new Set(['aerodrome']);
+/** vfat protocol ids whose concentrated pools charge unstaked LPs (Aerodrome Slipstream, Aero). */
+export const UNSTAKED_FEE_VENUES = new Set(['aerodrome', 'aero']);
 
 /** vfat `/v4/pool-history` (daily buckets; only the fields read). */
 export interface RawHistory {
   token0?: { address?: string; decimals?: number };
   token1?: { address?: string; decimals?: number };
   points?: {
+    timestamp?: string;
     volumeUsd?: number | null;
     feePercent?: number | null;
     protocolFeesUsd?: number | null;
@@ -175,6 +193,10 @@ const STOCKS: Record<string, Set<string>> = Object.fromEntries(
 const DAY = 86_400_000;
 const num = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null);
 
+/** Euro stablecoins and tokenized gold: priced against the median of their own kind. */
+const EUR_LIKE = /^(eurc|eure|eura|eurcv|eurs|ageur|eurr|eurq|eurau)$/i;
+const GOLD_LIKE = /^(xaut|xaut0|xaum|paxg)$/i;
+
 export const emptyRejected = (): Record<RejectReason, number> => ({ asset: 0, price: 0, tvl: 0, age: 0, fees: 0, history: 0, outlier: 0, volatility: 0, inactive: 0 });
 
 /** Fewer days than this in the last week → no reliable fee rate. */
@@ -184,8 +206,11 @@ export const FEE_WINDOW_DAYS = 30;
 /** The last week, shown beside the month as a trend (never used for the rate). */
 const TREND_DAYS = 7;
 
+/** The ticker of a tokenized stock: Coinbase's carry a trailing «c» (NVDAc). */
+export const stockTicker = (symbol: string) => (/^[A-Z.]+c$/.test(symbol) ? symbol.slice(0, -1) : symbol.toUpperCase());
+
 /** Stocks: the ticker's logo; everything else: the app's token list (majors and stablecoins). */
-export const logoOf = (symbol: string, cls: AssetClass): string | null => (cls === 'stock' ? `${config.stockLogo}${encodeURIComponent(symbol.toUpperCase())}.png` : (tokenInfo(symbol)?.logo ?? null));
+export const logoOf = (symbol: string, cls: AssetClass): string | null => (cls === 'stock' ? `${config.stockLogo}${encodeURIComponent(stockTicker(symbol))}.png` : (tokenInfo(symbol)?.logo ?? null));
 
 /** Tokenized stocks by address only — a token reusing a stock's symbol is not one. */
 export const isStockToken = (chainId: number, address: string) => STOCKS[String(chainId)]?.has(address.toLowerCase()) ?? false;
@@ -197,10 +222,20 @@ function median(xs: number[]): number | null {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** ETH and BTC reference prices: the median over every pool in the response. */
-export function referencePrices(items: RawItem[]): { eth: number | null; btc: number | null } {
+/** Reference prices, USD; euro and gold are optional (a response without them has none). */
+export interface RefPrices {
+  eth: number | null;
+  btc: number | null;
+  eur?: number | null;
+  gold?: number | null;
+}
+
+/** ETH, BTC, euro and gold reference prices: the median over every pool in the response. */
+export function referencePrices(items: RawItem[]): Required<RefPrices> {
   const eth: number[] = [];
   const btc: number[] = [];
+  const eur: number[] = [];
+  const gold: number[] = [];
   for (const it of items)
     for (const t of it.pool?.underlying ?? []) {
       const p = num(t.price);
@@ -208,12 +243,14 @@ export function referencePrices(items: RawItem[]): { eth: number | null; btc: nu
       const s = t.symbol.trim().toLowerCase();
       if (s === 'eth' || s === 'weth') eth.push(p);
       if (s === 'wbtc' || s === 'cbbtc' || s === 'btc') btc.push(p);
+      if (EUR_LIKE.test(s)) eur.push(p);
+      if (GOLD_LIKE.test(s)) gold.push(p);
     }
-  return { eth: median(eth), btc: median(btc) };
+  return { eth: median(eth), btc: median(btc), eur: median(eur), gold: median(gold) };
 }
 
-/** The side used as the price unit (B): a dollar first, then ETH/BTC, a stock last. */
-const UNIT_RANK: Record<AssetClass, number> = { usd: 0, eth: 1, btc: 1, stock: 2 };
+/** The side used as the price unit (B): a dollar first, then the euro, then gold/ETH/BTC, a stock last. */
+const UNIT_RANK: Record<AssetClass, number> = { usd: 0, eur: 1, gold: 2, eth: 2, btc: 2, stock: 3 };
 
 /**
  * A's move from the measured move of the base token against the quote token. When
@@ -227,10 +264,21 @@ export function orientMove(m: { down: number; up: number }, aIsBase: boolean): {
 }
 
 /** A token's class, or why it is not accepted. Price must fit the class (a fake "USDC" at $0.40 is not a dollar). */
-function classify(t: RawToken, chainId: number, ref: { eth: number | null; btc: number | null }): AssetClass | 'asset' | 'price' {
+function classify(t: RawToken, chainId: number, ref: RefPrices): AssetClass | 'asset' | 'price' {
   if (!t.address || !t.symbol) return 'asset';
   if (isStockToken(chainId, t.address)) return 'stock';
-  const cls = tokenClass({ symbol: t.symbol });
+  const sym = t.symbol.trim();
+  if (EUR_LIKE.test(sym) || GOLD_LIKE.test(sym)) {
+    const p = num(t.price);
+    if (p === null) return 'price';
+    const eur = EUR_LIKE.test(sym);
+    // The kind's own median, itself within a sane band (a euro is $0.8–1.6, an ounce $1,000–20,000).
+    const r = (eur ? ref.eur : ref.gold) ?? null;
+    const [lo, hi, band] = eur ? [0.8, 1.6, 0.03] : [1000, 20_000, 0.05];
+    if (r === null || r < lo || r > hi) return 'price';
+    return Math.abs(p / r - 1) <= band ? (eur ? 'eur' : 'gold') : 'price';
+  }
+  const cls = tokenClass({ symbol: sym });
   if (cls === 'other') return 'asset';
   const p = num(t.price);
   if (p === null) return 'price';
@@ -275,8 +323,52 @@ export function fullRangeAprFromHistory(h: RawHistory, usdPrice: (address: strin
 /** vfat's deposit page for one option (the unstaked LP: it is the one that earns the swap fees). */
 export const farmUrl = (optionId: string) => `https://vfat.io/farm?farmId=${encodeURIComponent(optionId)}`;
 
-/** One vfat pool → a vetted row, or the first rule it fails. Concentrated pools need their fee data. */
-export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | null }, now: number, data?: PoolFeeData | null): LpPool | RejectReason {
+/** Rewards beyond swap fees an option pays per week, USD. */
+const weeklyRewardUsd = (o: RawOption) => (o.weeklyRewards ?? []).reduce((a, r) => a + (r.type !== 'swap-fee' ? Math.max(0, num(r.amountUsd) ?? 0) : 0), 0);
+
+/** The Aero gauge of a pool that pays rewards now (the staked LP), if any. */
+const aeroStake = (it: RawItem): RawOption | null =>
+  (it.options ?? []).find((o) => o.kind === 'lp-stake' && !o.isKilled && !!o.id && isAeroVenue(o.protocol?.id) && weeklyRewardUsd(o) > 0) ?? null;
+
+/**
+ * A staked position's AERO (see rewards.ts). Concentrated: the staked in-range
+ * liquidity read on-chain, valued at the pool's current price as full-range dollars;
+ * plain: the gauge's staked TVL. Null while either is unknown.
+ */
+function poolReward(it: RawItem, stake: RawOption, concentrated: boolean, data: PoolFeeData | null | undefined): PoolReward | null {
+  const weeklyUsd = weeklyRewardUsd(stake);
+  let staked: number | null = null;
+  if (concentrated) {
+    const L = Number(data?.stakedLiquidity);
+    const sqrtX96 = Number(it.pool?.sqrtPrice);
+    // token1 is the higher address (Uniswap v3 order), the unit of the pool's price.
+    const t1 = [...(it.pool?.underlying ?? [])].sort((x, y) => ((x.address ?? '').toLowerCase() < (y.address ?? '').toLowerCase() ? -1 : 1))[1];
+    const d1 = num(t1?.decimals);
+    const p1 = num(t1?.price);
+    if (L > 0 && sqrtX96 > 0 && d1 !== null && p1 !== null && p1 > 0) staked = fullRangeUsd(L, sqrtX96, d1, p1);
+  } else {
+    staked = num(stake.totalLiquidity);
+  }
+  if (staked === null || !(staked > 0)) return null;
+  const rev = data?.history?.points ? weeklyRevenue(data.history.points) : null;
+  const tokens = [...new Set((stake.weeklyRewards ?? []).filter((r) => r.type !== 'swap-fee' && (num(r.amountUsd) ?? 0) > 0).map((r) => r.token?.symbol?.trim()).filter(Boolean))];
+  return {
+    token: tokens.join(' + ') || 'AERO',
+    weeklyUsd,
+    aprPct: rewardAprPct(weeklyUsd, staked),
+    stakedFullRangeUsd: staked,
+    revenueWeeklyUsd: rev?.usd ?? null,
+    revenueDays: rev?.days ?? 0,
+    url: farmUrl(stake.id as string),
+  };
+}
+
+/**
+ * One vfat pool → a vetted row, or the first rule it fails. Concentrated pools need
+ * their fee data. An Aero pool paying AERO may be younger than a week and have no
+ * fee rate yet: it is kept for its staked rate alone.
+ */
+export function vetPool(it: RawItem, ref: RefPrices, now: number, data?: PoolFeeData | null): LpPool | RejectReason {
   const chainId = num(it.chainId);
   const under = it.pool?.underlying ?? [];
   if (!it.id || chainId === null || under.length !== 2 || it.isWhitelisted === false) return 'asset';
@@ -294,14 +386,15 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
   if (!opt || !opt.id) return 'inactive';
   const tvl = num(opt.totalLiquidity);
   if (tvl === null || tvl < CFG.minTvlUsd) return 'tvl';
+  const stake = aeroStake(it);
 
   const born = Date.parse(it.pool?.createdAt ?? it.firstSeenAt ?? '');
   if (!Number.isFinite(born)) return 'age';
   const ageDays = (now - born) / DAY;
-  if (ageDays < CFG.minAgeDays) return 'age';
+  if (ageDays < CFG.minAgeDays && !stake) return 'age';
 
   const fees = num(opt.feesUsd7d);
-  if (fees === null || fees <= 0) return 'fees';
+  if ((fees === null || fees <= 0) && !stake) return 'fees';
 
   // Without a measured price swing there is no loss estimate, so no dollar figure: dropped.
   // The full measurement now comes with the pool's history; the list keeps only part of it.
@@ -321,29 +414,43 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
   if (!aIsBase && base !== tb.address?.toLowerCase()) return 'volatility';
 
   const concentrated = it.pool?.type === 'concentrated';
-  let feeAprPct: number;
+  let feeAprPct: number | null;
   let feeDays = 7;
   let feeTrendPct: number | null = null;
   let unstakedFee = 0;
   if (concentrated) {
+    // The history (and, on Aero, the staked liquidity read with it) is needed either way.
+    if (!data?.history) return 'history';
     const prices = new Map(under.map((t) => [(t.address as string).toLowerCase(), num(t.price)]));
-    const r = data?.history ? fullRangeAprFromHistory(data.history, (addr) => prices.get(addr.toLowerCase()) ?? null) : null;
-    if (!r) return 'history';
-    // Aerodrome keeps a share of an unstaked LP's fees; without that share the rate would be too high.
+    const r = fullRangeAprFromHistory(data.history, (addr) => prices.get(addr.toLowerCase()) ?? null);
+    // Aerodrome and Aero keep a share of an unstaked LP's fees; without that share the rate would be too high.
+    let cut: number | null = 0;
     if (opt.protocol?.id && UNSTAKED_FEE_VENUES.has(opt.protocol.id)) {
-      const cut = num(data?.unstakedFee);
-      if (cut === null || cut < 0 || cut >= 1) return 'history';
-      unstakedFee = cut;
+      const c = num(data.unstakedFee);
+      cut = c !== null && c >= 0 && c < 1 ? c : null;
     }
-    feeAprPct = r.aprPct * (1 - unstakedFee);
-    feeTrendPct = r.trendPct === null ? null : r.trendPct * (1 - unstakedFee);
-    feeDays = r.days;
+    // Known even without a fee rate: an Aero pool's unstaked mode is described with it.
+    if (cut !== null) unstakedFee = cut;
+    if (!r || cut === null) {
+      if (!stake) return 'history';
+      feeAprPct = null;
+    } else {
+      feeAprPct = r.aprPct * (1 - cut);
+      feeTrendPct = r.trendPct === null ? null : r.trendPct * (1 - cut);
+      feeDays = r.days;
+    }
   } else {
-    feeAprPct = (fees / tvl) * (365 / 7) * 100;
+    feeAprPct = fees !== null && fees > 0 ? (fees / tvl) * (365 / 7) * 100 : null;
   }
-  if (!Number.isFinite(feeAprPct) || feeAprPct <= 0) return 'fees';
-  if (feeAprPct > CFG.maxFeeAprPct) return 'outlier';
+  const reward = stake ? poolReward(it, stake, concentrated, data) : null;
+  if (feeAprPct === null && !reward) return stake && concentrated ? 'history' : 'fees';
+  if (feeAprPct !== null && (!Number.isFinite(feeAprPct) || feeAprPct <= 0)) {
+    if (!reward) return 'fees';
+    feeAprPct = null;
+  }
+  if ((feeAprPct ?? 0) > CFG.maxFeeAprPct || (reward?.aprPct ?? 0) > CFG.maxFeeAprPct || (reward && !Number.isFinite(reward.aprPct))) return 'outlier';
   const fee = num(it.pool?.currentFee);
+  const legacyGauge = isLegacyVenue(opt.protocol?.id) && (it.options ?? []).some((o) => o.kind === 'lp-stake');
 
   return {
     id: it.id,
@@ -359,7 +466,7 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
     feeTierPct: fee !== null && fee >= 0 ? fee / 10_000 : null,
     tvlUsd: tvl,
     volume7dUsd: num(it.pool?.volumeUsd7d) ?? 0,
-    fees7dUsd: fees,
+    fees7dUsd: fees ?? 0,
     feeAprPct,
     feeDays,
     feeTrendPct,
@@ -367,6 +474,9 @@ export function vetPool(it: RawItem, ref: { eth: number | null; btc: number | nu
     url: farmUrl(opt.id),
     revert: revertRef(chainId, opt.protocol?.id, it.pool?.address, it.pool?.poolId),
     incentives: (it.options ?? []).some((o) => (o.weeklyRewards ?? []).some((r) => r.type !== 'swap-fee' && (num(r.amountUsd) ?? 0) > 0)),
+    reward,
+    legacyGauge,
+    venueUrl: isAeroVenue(opt.protocol?.id) && it.pool?.address ? aeroPoolUrl(chainId, it.pool.address.toLowerCase()) : null,
     stable: a === 'usd' && b === 'usd',
     move7d: orientMove({ down, up }, aIsBase),
     volAnnualPct: vol,
@@ -398,5 +508,5 @@ export function vetPools(items: RawItem[], now: number, feeData: Map<string, Poo
     if (typeof r === 'string') rejected[r]++;
     else byId.set(r.id, r);
   }
-  return { pools: [...byId.values()].sort((x, y) => y.feeAprPct - x.feeAprPct || (x.id < y.id ? -1 : 1)), rejected };
+  return { pools: [...byId.values()].sort((x, y) => (y.feeAprPct ?? 0) - (x.feeAprPct ?? 0) || (x.id < y.id ? -1 : 1)), rejected };
 }

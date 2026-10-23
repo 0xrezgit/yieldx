@@ -49,6 +49,12 @@ export const NETWORKS: Network[] = [
   evm(14, 'Flare', 'فلر', 'flare', [], 'flare'),
   evm(56, 'BNB Chain', 'بی‌ان‌بی چین', 'bnb', ['bsc', 'bnb'], 'bsc'),
   evm(130, 'Unichain', 'یونی‌چین', 'unichain', [], 'unichain'),
+  // Aero's and Velodrome's networks (LP tool); no local logo or DefiLlama slug verified yet.
+  evm(252, 'Fraxtal', 'فرکستال', null),
+  evm(1135, 'Lisk', 'لیسک', null),
+  evm(1868, 'Soneium', 'سونیوم', null),
+  evm(42220, 'Celo', 'سلو', null),
+  evm(57073, 'Ink', 'اینک', null),
   evm(137, 'Polygon', 'پالیگان', 'polygon', ['matic', 'polygon pos'], 'polygon'),
   evm(143, 'Monad', 'موناد', 'monad', [], 'monad'),
   evm(146, 'Sonic', 'سونیک', 'sonic', [], 'sonic'),

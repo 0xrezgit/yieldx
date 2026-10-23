@@ -5,6 +5,7 @@ import { Droplets, ExternalLink, Loader2 } from 'lucide-react';
 import config from '../../config/lp-pools.json';
 import type { LpPool, LpPoolFeed, RejectReason } from '../../lib/lp/pools';
 import { rankPools, type PoolEstimate } from '../../lib/lp/estimate';
+import { chainNotice } from '../../lib/lp/rewards';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
 import { networkByChainId } from '../../lib/registry/networks';
 import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
@@ -15,7 +16,8 @@ import { PairLogo } from '../ui/asset-identity';
 import { Empty, Pill, Segmented } from '../opportunities/parts';
 import type { LpPrefill } from '../opportunities/LpAnalyzer';
 
-type Scope = 'focus' | 'stock' | 'all';
+type Scope = 'focus' | 'aero' | 'fx' | 'stock' | 'all';
+const SCOPES: Scope[] = ['focus', 'aero', 'fx', 'stock', 'all'];
 const STEP = 15;
 const FOCUS = config.vfat.focusChainId;
 const PERIODS = [7, 30, 90] as const;
@@ -38,7 +40,7 @@ const signed = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 /** The pool as A/B (the pool list already keeps that order). */
 export const orient = (p: LpPool) => p.tokens;
 
-export function toPrefill(p: LpPool, capital?: number, days?: number): LpPrefill {
+export function toPrefill(p: LpPool, capital?: number, days?: number, mode?: PoolEstimate['mode']): LpPrefill {
   const [a, b] = orient(p);
   return {
     name: `${a.symbol}/${b.symbol} · ${p.protocol}`,
@@ -49,7 +51,7 @@ export function toPrefill(p: LpPool, capital?: number, days?: number): LpPrefill
     chain: networkByChainId(p.chainId).name,
     protocol: p.protocol,
     stable: p.stable,
-    feeApr: Math.round(p.feeAprPct * 100) / 100,
+    feeApr: p.feeAprPct === null ? null : Math.round(p.feeAprPct * 100) / 100,
     move7d: p.move7d,
     concentrated: p.concentrated,
     url: p.url,
@@ -58,6 +60,13 @@ export function toPrefill(p: LpPool, capital?: number, days?: number): LpPrefill
     feeTrendPct: p.feeTrendPct,
     unstakedFee: p.unstakedFee,
     realLps: p.realLps ?? null,
+    reward: p.reward,
+    mode: p.reward && (p.feeAprPct === null || (mode ?? 'stake') === 'stake') ? 'stake' : 'fees',
+    vol: p.volAnnualPct,
+    legacyGauge: p.legacyGauge,
+    chainId: p.chainId,
+    venueUrl: p.venueUrl ?? undefined,
+    ageDays: p.ageDays,
     source: 'vfat',
     ...(capital ? { capital } : {}),
     ...(days ? { days } : {}),
@@ -110,10 +119,15 @@ function useLpPools() {
   return { feed, failed: failed && !feed, stale: failed && !!feed, loading: !feed && !failed };
 }
 
+const CLASS_PILL: Partial<Record<LpPool['tokens'][number]['cls'], string>> = { stock: 'سهام', eur: 'یورو', gold: 'طلا' };
+
 function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: number; onPick: () => void }) {
   const net = networkByChainId(p.chainId);
   const [a, b] = orient(p);
   const range = est.shape.kind === 'range' ? est.shape : null;
+  const staked = est.mode === 'stake';
+  const pill = CLASS_PILL[a.cls] ?? CLASS_PILL[b.cls];
+  const notice = chainNotice(p.chainId);
   return (
     <li className="flex items-center gap-1">
       <button type="button" onClick={onPick} className="tap flex-1 min-w-0 text-right py-3 flex items-center gap-3 rounded-lg hover:bg-raised/50" aria-label={`تحلیل ${a.symbol}/${b.symbol}`}>
@@ -126,8 +140,10 @@ function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: num
             <bdi dir="ltr" className="truncate">
               {a.symbol}/{b.symbol}
             </bdi>
-            {a.cls === 'stock' && <Pill tone="info">سهام</Pill>}
+            {pill && <Pill tone="info">{pill}</Pill>}
             {p.stable && <Pill tone="success">استیبل</Pill>}
+            {p.reward && <Pill tone="accent">{staked ? <bdi dir="ltr">stake · {p.reward.token}</bdi> : 'بدون stake'}</Pill>}
+            {(p.legacyGauge || notice) && <Pill tone="warning">{notice?.kind === 'withdraw' ? 'برداشت تا پایان مهلت' : 'بدون پاداش'}</Pill>}
           </span>
           <span className="text-xs text-secondary truncate">
             <bdi dir="ltr">{p.protocol}</bdi> · {net.nameFa}
@@ -142,13 +158,31 @@ function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: num
                 'تمام‌بازه'
               )}
             </span>
-            <span className="whitespace-nowrap">
-              کارمزد <Num>{signed(est.feesUsd)}</Num>
-            </span>
+            {staked ? (
+              <span className="whitespace-nowrap">
+                <bdi dir="ltr">{p.reward!.token}</bdi> <Num>{signed(est.rewardsUsd)}</Num>
+                {est.capped && ' (با سقف درآمد)'}
+              </span>
+            ) : (
+              <span className="whitespace-nowrap">
+                کارمزد <Num>{signed(est.feesUsd)}</Num>
+              </span>
+            )}
             <span className="whitespace-nowrap">
               هزینه‌ی نوسان <Num>{signed(est.lossUsd)}</Num>
             </span>
-            {p.incentives && <span className="whitespace-nowrap">پاداش جدا حساب نشده</span>}
+            {est.otherNetUsd !== null && (
+              <span className="whitespace-nowrap">
+                {staked ? 'بدون stake' : 'با stake'} <Num>{signed(est.otherNetUsd)}</Num>
+              </span>
+            )}
+            {p.feeAprPct === null && <span className="whitespace-nowrap">کارمزد هنوز معلوم نیست</span>}
+            {p.ageDays < 7 && (
+              <span className="whitespace-nowrap">
+                تازه: <Num>{formatNumber(Math.max(1, Math.floor(p.ageDays)), 0)}</Num> روز
+              </span>
+            )}
+            {p.incentives && !p.reward && <span className="whitespace-nowrap">پاداش جدا حساب نشده</span>}
           </span>
           {p.realLps && (
             <span className="text-xs text-secondary flex flex-wrap gap-x-2" title="پوزیشن‌های واقعی همین استخر در Revert">
@@ -173,7 +207,7 @@ function Row({ p, est, rank, onPick }: { p: LpPool; est: PoolEstimate; rank: num
           </span>
         </span>
       </button>
-      <a href={p.url} target="_blank" rel="noopener noreferrer" className="tap shrink-0 grid place-items-center size-10 rounded-md text-muted hover:text-primary hover:bg-raised" aria-label={`ورود به بازار ${a.symbol}/${b.symbol} در vfat`} title="ورود به همین بازار (vfat)">
+      <a href={staked ? p.reward!.url : p.url} target="_blank" rel="noopener noreferrer" className="tap shrink-0 grid place-items-center size-10 rounded-md text-muted hover:text-primary hover:bg-raised" aria-label={`ورود به بازار ${a.symbol}/${b.symbol} در vfat`} title={staked ? 'ورود و stake در همین بازار (vfat)' : 'ورود به همین بازار (vfat)'}>
         <ExternalLink size={16} aria-hidden />
       </a>
     </li>
@@ -200,7 +234,7 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
     setSt((d) => ({
       capital: typeof s.capital === 'number' && s.capital > 0 ? s.capital : d.capital,
       days: PERIODS.includes(s.days as Period) ? (s.days as Period) : d.days,
-      scope: s.scope === 'stock' || s.scope === 'all' ? s.scope : d.scope,
+      scope: SCOPES.includes(s.scope as Scope) ? (s.scope as Scope) : d.scope,
     }));
   }, []);
   const patch = (p: Partial<Stored>) => {
@@ -212,7 +246,17 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
 
   const ranked = useMemo(() => {
     const all = feed?.pools ?? [];
-    const scoped = st.scope === 'focus' ? all.filter((p) => p.chainId === FOCUS) : st.scope === 'stock' ? all.filter((p) => p.tokens.some((t) => t.cls === 'stock')) : all;
+    const has = (p: LpPool, ...cls: LpPool['tokens'][number]['cls'][]) => p.tokens.some((t) => cls.includes(t.cls));
+    const scoped =
+      st.scope === 'focus'
+        ? all.filter((p) => p.chainId === FOCUS)
+        : st.scope === 'aero'
+          ? all.filter((p) => p.venueUrl !== null)
+          : st.scope === 'fx'
+            ? all.filter((p) => has(p, 'eur', 'gold'))
+            : st.scope === 'stock'
+              ? all.filter((p) => has(p, 'stock'))
+              : all;
     return rankPools(scoped, st.capital, st.days);
   }, [feed, st]);
   const dropped = feed ? (Object.entries(feed.rejected) as [RejectReason, number][]).filter(([, n]) => n > 0) : [];
@@ -249,6 +293,8 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
           size="sm"
           options={[
             { id: 'focus', label: networkByChainId(FOCUS).nameFa },
+            { id: 'aero', label: <bdi dir="ltr">Aero</bdi> },
+            { id: 'fx', label: 'یورو و طلا' },
             { id: 'stock', label: 'سهام توکنیزه' },
             { id: 'all', label: 'همه‌ی شبکه‌ها' },
           ]}
@@ -261,7 +307,7 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
             <span className="font-semibold text-primary">
               سود مورد انتظار <Num>{formatNumber(st.days, 0)}</Num> روزه با <Num>{formatUSD(st.capital, 0)}</Num>
             </span>
-            <span className="text-xs text-secondary leading-5">با بازه‌ای به اندازه‌ی نوسان معمول هر استخر: کارمزد منهای هزینه‌ی مورد انتظار نوسان قیمت، نسبت به نگه‌داشتن ساده. برای دیدن حالت‌های مختلف روی ردیف بزنید؛ برای ورود، آیکون کنار آن.</span>
+            <span className="text-xs text-secondary leading-5">با بازه‌ای به اندازه‌ی نوسان معمول هر استخر: کارمزد (یا در Aero پاداش AERO با stake، هر کدام بیشتر) منهای هزینه‌ی مورد انتظار نوسان قیمت، نسبت به نگه‌داشتن ساده. برای دیدن حالت‌های مختلف روی ردیف بزنید؛ برای ورود، آیکون کنار آن.</span>
           </span>
           {feed && <DataStatus source="api" fetchedAt={Date.parse(feed.fetchedAt)} stale={partial} label={<bdi dir="ltr">vfat</bdi>} />}
         </div>
@@ -285,7 +331,7 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
           <>
             <ol className="flex flex-col divide-y divide-default">
               {ranked.slice(0, shown).map(({ pool, est }, i) => (
-                <Row key={pool.id} p={pool} est={est} rank={i + 1} onPick={() => onPick(toPrefill(pool, st.capital, st.days))} />
+                <Row key={pool.id} p={pool} est={est} rank={i + 1} onPick={() => onPick(toPrefill(pool, st.capital, st.days, est.mode))} />
               ))}
             </ol>
             {shown < ranked.length && (
@@ -297,7 +343,7 @@ export function LpPools({ onPick }: { onPick: (p: LpPrefill) => void }) {
         )}
 
         <p className="text-xs text-muted leading-6 py-3 border-t border-default mt-1">
-          فقط جفت‌های استیبل، <bdi dir="ltr">ETH</bdi>، <bdi dir="ltr">BTC</bdi> و سهام توکنیزه‌ی تأییدشده. نرخ کارمزد از درآمد واقعی ۳۰ روز گذشته به ازای نقدینگی فعال استخر (در Aerodrome پس از کسر سهم استخر از کارمزد LPهای بدون استیک)؛ هزینه‌ی نوسان از نوسان واقعی ۳۰ روز اخیر همان جفت (σ²/۸ در سال). خروج قیمت از بازه، پاداش‌های جدا و گس حساب نشده‌اند.
+          فقط جفت‌های استیبل دلاری و یورویی، طلای توکنیزه، <bdi dir="ltr">ETH</bdi>، <bdi dir="ltr">BTC</bdi> و سهام توکنیزه‌ی تأییدشده. نرخ کارمزد از درآمد واقعی ۳۰ روز گذشته به ازای نقدینگی فعال استخر (در Aerodrome و Aero پس از کسر سهم استخر از کارمزد LPهای بدون stake)؛ پاداش AERO از پاداش هفتگی همین حالا به ازای نقدینگی stake‌شده‌ی داخل بازه، با سهم سرمایه‌ی خود شما، و اگر استخر بیش از سقف حدود ۱.۲ برابر درآمدش پاداش می‌دهد، کاهش‌یافته تا همان سقف؛ هزینه‌ی نوسان از نوسان واقعی ۳۰ روز اخیر همان جفت (σ²/۸ در سال). خروج قیمت از بازه، پاداش‌های دیگر و گس حساب نشده‌اند.
           {dropped.length > 0 && (
             <>
               {' '}کنار گذاشته شد:{' '}
