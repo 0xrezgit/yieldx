@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react';
 import { Droplets, ExternalLink, SlidersHorizontal } from 'lucide-react';
 import { breakEven, defaultMoves, positionFeeApr, scenario, type LpInput, type LpScenario, type PoolShape } from '../../lib/lp/scenarios';
-import { typicalMove } from '../../lib/lp/estimate';
+import { typicalMove, type EarnMode } from '../../lib/lp/estimate';
 import { logoOf } from '../../lib/lp/pools';
+import { positionRewardApr, type PoolReward } from '../../lib/lp/rewards';
 import type { RealLpStats } from '../../lib/lp/revert';
 import { tokenInfo } from '../../lib/portfolio/tokens';
 import { tokenClass } from '../../lib/merkl/vetting';
@@ -15,6 +16,7 @@ import { Num } from '../ui/num';
 import { Collapsible } from '../ui/card';
 import { PairLogo } from '../ui/asset-identity';
 import { Segmented } from './parts';
+import { AeroNotes, RangeLadder, RangeOdds, RewardSummary } from './LpAero';
 
 const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2);
 const signed = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
@@ -53,6 +55,17 @@ export interface LpPrefill {
   /** Logo URLs (not carried in links). */
   logoA?: string | null;
   logoB?: string | null;
+  /** Measured yearly volatility of A against B, %: the chance of staying in range. */
+  vol?: number;
+  /** AERO for a staked position (Aero gauge), and the mode the list picked (not carried in links). */
+  reward?: PoolReward | null;
+  mode?: EarnMode;
+  /** Old Aerodrome / Velodrome gauge: no AERO since the Aero launch (not carried in links). */
+  legacyGauge?: boolean;
+  /** Network id, for chain-wide notices; the venue's own pool page; the pool's age (not carried in links). */
+  chainId?: number;
+  venueUrl?: string;
+  ageDays?: number;
 }
 
 export function readLpPrefill(q: URLSearchParams): LpPrefill {
@@ -63,6 +76,7 @@ export function readLpPrefill(q: URLSearchParams): LpPrefill {
   };
   const md = n('md');
   const mu = n('mu');
+  const vol = n('vol');
   return {
     name: q.get('name') ?? undefined,
     a: q.get('a') ?? undefined,
@@ -76,6 +90,7 @@ export function readLpPrefill(q: URLSearchParams): LpPrefill {
     chain: q.get('chain') ?? undefined,
     protocol: q.get('dex') ?? undefined,
     move7d: md !== null && mu !== null && md >= 0 && mu >= 0 ? { down: md, up: mu } : undefined,
+    vol: vol !== null && vol > 0 ? vol : undefined,
     concentrated: q.get('cl') === '1',
     // Only a vfat page: a link must not send the user anywhere else.
     url: /^https:\/\/vfat\.io\/farm\?farmId=[^\s"'<>]+$/.test(q.get('go') ?? '') ? (q.get('go') as string) : undefined,
@@ -101,6 +116,7 @@ export function lpLink(p: LpPrefill): string {
     q.set('md', String(p.move7d.down));
     q.set('mu', String(p.move7d.up));
   }
+  if (p.vol) q.set('vol', String(Math.round(p.vol * 100) / 100));
   if (p.concentrated) q.set('cl', '1');
   if (p.url) q.set('go', p.url);
   if (p.revertUrl) q.set('rv', p.revertUrl);
@@ -207,6 +223,11 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
   const [rewardApr, setRewardApr] = useState<number>(0);
   const [costs, setCosts] = useState(0);
   const [custom, setCustom] = useState<number>(NaN);
+  const [vol, setVol] = useState<number>(prefill.vol ?? NaN);
+  const reward = prefill.reward ?? null;
+  const [mode, setMode] = useState<EarnMode>(reward && (prefill.mode === 'stake' || prefill.feeApr == null) ? 'stake' : 'fees');
+  const [capped, setCapped] = useState(true);
+  const staked = !!reward && mode === 'stake';
   const fromMerkl = prefill.rewardUsd != null;
   const fromPool = !!prefill.name;
   // vfat rates are per full-range dollar; a range earns them times its concentration.
@@ -214,14 +235,17 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
   const canRange = prefill.source !== 'vfat' || !!prefill.concentrated;
 
   const shape: PoolShape = kind === 'full' ? { kind: 'full' } : { kind: 'range', low: 1 - Math.min(99, Math.max(0.1, below)) / 100, high: 1 + Math.max(0.1, above) / 100 };
+  // Staked on Aero: AERO while in range, and no swap fees (they go to sAERO holders).
+  const stakeApr = staked ? positionRewardApr(reward, shape, capital > 0 ? capital : 0, capped) : NaN;
   const input: LpInput = {
     capital: capital > 0 ? capital : 0,
     days: days > 0 ? days : 0,
     shape,
-    feeAprPct: Number.isFinite(fee) ? fee : null,
+    feeAprPct: staked ? 0 : Number.isFinite(fee) ? fee : null,
     feeBasis,
     rewardUsd: fromMerkl ? (prefill.rewardUsd as number) : null,
-    rewardAprPct: fromMerkl ? null : rewardApr,
+    rewardAprPct: fromMerkl ? null : staked ? (Number.isFinite(stakeApr) ? stakeApr : 0) : rewardApr,
+    rewardBasis: staked ? 'in-range' : 'fixed',
     costsUsd: costs > 0 ? costs : 0,
   };
   const list = useMemo(() => cases(prefill.move7d, input.days, stable, custom), [prefill.move7d, input.days, stable, custom]);
@@ -284,32 +308,52 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
             )}
           </div>
         )}
-        <p className="text-sm text-secondary leading-7">
-          {inRangeApr === null ? (
-            <span className="text-warning">نرخ کارمزد وارد نشده (در «تنظیمات بیشتر»).</span>
-          ) : (
-            <>
-              درآمد کارمزد این پوزیشن: <b className="text-primary"><Num>{formatPercent(inRangeApr, 1)}</Num></b> سالانه{kind === 'range' && ' تا وقتی قیمت داخل بازه است'}
-              {prefill.feeApr != null && (
-                <span className="text-xs block">
-                  {prefill.source === 'vfat' ? (
-                    <>
-                      از کارمزد واقعی <Num>{formatNumber(prefill.feeDays ?? 30, 0)}</Num> روز گذشته به ازای نقدینگی فعال استخر (vfat){kind === 'range' && <>؛ تمام‌بازه <Num>{formatPercent(fee, 1)}</Num></>}
-                      {!!prefill.unstakedFee && <> · سهم <Num>{formatPercent(prefill.unstakedFee * 100, 0)}</Num> استخر از کارمزد LP بدون استیک کسر شده</>}
-                      {prefill.feeTrendPct != null && Number.isFinite(fee) && fee > 0 && Math.abs(prefill.feeTrendPct / fee - 1) >= 0.2 && (
-                        <span className="block">
-                          هفته‌ی اخیر <Num>{formatPercent(Math.abs(prefill.feeTrendPct / fee - 1) * 100, 0)}</Num> {prefill.feeTrendPct > fee ? 'بالاتر' : 'پایین‌تر'} از میانگین ماه.
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    'بازده کارمزد استخر (Merkl)'
-                  )}
-                </span>
-              )}
-            </>
-          )}
-        </p>
+        {reward && (
+          <Segmented<EarnMode>
+            value={mode}
+            onChange={setMode}
+            label="stake یا کارمزد"
+            size="sm"
+            options={[
+              { id: 'stake', label: <>stake: پاداش <bdi dir="ltr">{reward.token}</bdi></> },
+              { id: 'fees', label: 'بدون stake: کارمزد' },
+            ]}
+          />
+        )}
+        {kind === 'range' && <RangeOdds shape={shape} vol={vol} days={input.days} />}
+        {staked ? (
+          <RewardSummary reward={reward} shape={shape} capital={input.capital} capped={capped} onCapped={setCapped} />
+        ) : (
+          <p className="text-sm text-secondary leading-7">
+            {inRangeApr === null ? (
+              <span className="text-warning">
+                {prefill.source === 'vfat' && prefill.feeApr == null ? 'این استخر هنوز دو هفته تاریخچه‌ی کارمزد ندارد؛ اگر نرخی در نظر دارید، در «تنظیمات بیشتر» وارد کنید.' : 'نرخ کارمزد وارد نشده (در «تنظیمات بیشتر»).'}
+              </span>
+            ) : (
+              <>
+                درآمد کارمزد این پوزیشن: <b className="text-primary"><Num>{formatPercent(inRangeApr, 1)}</Num></b> سالانه{kind === 'range' && ' تا وقتی قیمت داخل بازه است'}
+                {prefill.feeApr != null && (
+                  <span className="text-xs block">
+                    {prefill.source === 'vfat' ? (
+                      <>
+                        از کارمزد واقعی <Num>{formatNumber(prefill.feeDays ?? 30, 0)}</Num> روز گذشته به ازای نقدینگی فعال استخر (vfat){kind === 'range' && <>؛ تمام‌بازه <Num>{formatPercent(fee, 1)}</Num></>}
+                        {!!prefill.unstakedFee && <> · سهم <Num>{formatPercent(prefill.unstakedFee * 100, 0)}</Num> استخر از کارمزد LP بدون استیک کسر شده</>}
+                        {prefill.feeTrendPct != null && Number.isFinite(fee) && fee > 0 && Math.abs(prefill.feeTrendPct / fee - 1) >= 0.2 && (
+                          <span className="block">
+                            هفته‌ی اخیر <Num>{formatPercent(Math.abs(prefill.feeTrendPct / fee - 1) * 100, 0)}</Num> {prefill.feeTrendPct > fee ? 'بالاتر' : 'پایین‌تر'} از میانگین ماه.
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      'بازده کارمزد استخر (Merkl)'
+                    )}
+                  </span>
+                )}
+              </>
+            )}
+          </p>
+        )}
+        <AeroNotes staked={staked} aero={!!prefill.venueUrl} unstakedFee={prefill.unstakedFee ?? 0} legacyGauge={!!prefill.legacyGauge} chainId={prefill.chainId} />
         {prefill.realLps && (
           <div className="rounded-lg border border-default bg-surface p-3 text-sm text-secondary leading-7">
             <b className="text-primary">LPهای واقعی همین استخر</b> (<bdi dir="ltr">Revert</bdi>، <Num>{formatNumber(prefill.realLps.count, 0)}</Num> پوزیشن باز بالای ۱۰۰ دلار و یک هفته): کارمزد سالانه‌ی میانه <b className="text-primary"><Num>{formatPercent(prefill.realLps.feeApr.median, 0)}</Num></b> (نیمی بین <Num>{formatPercent(prefill.realLps.feeApr.p25, 0)}</Num> و <Num>{formatPercent(prefill.realLps.feeApr.p75, 0)}</Num>)؛ <Num>{formatPercent(prefill.realLps.inRangePct, 0)}</Num> الان داخل بازه‌اند.
@@ -319,8 +363,13 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
         {(prefill.url || prefill.revertUrl) && (
           <div className="flex flex-wrap gap-2">
             {prefill.url && (
-              <a href={prefill.url} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1.5 rounded-md border border-strong px-3 min-h-10 text-sm font-medium text-primary hover:bg-raised">
-                <ExternalLink size={15} aria-hidden /> ورود به همین بازار در <bdi dir="ltr">vfat</bdi>
+              <a href={staked ? reward.url : prefill.url} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1.5 rounded-md border border-strong px-3 min-h-10 text-sm font-medium text-primary hover:bg-raised">
+                <ExternalLink size={15} aria-hidden /> {staked ? 'ورود و stake' : 'ورود به همین بازار'} در <bdi dir="ltr">vfat</bdi>
+              </a>
+            )}
+            {prefill.venueUrl && (
+              <a href={prefill.venueUrl} target="_blank" rel="noopener noreferrer" className="tap inline-flex items-center gap-1.5 rounded-md border border-default px-3 min-h-10 text-sm font-medium text-primary hover:bg-raised" title="صفحه‌ی همین استخر در Aero: حداقل دوره‌ی stake و پاداش لحظه‌ای">
+                <ExternalLink size={15} aria-hidden /> صفحه‌ی استخر در <bdi dir="ltr">Aero</bdi>
               </a>
             )}
             {prefill.revertUrl && (
@@ -364,10 +413,18 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
               دلارها با فرض ثابت ماندن قیمت دلاری <bdi dir="ltr">{b}</bdi> حساب شده‌اند
               {unitIsDollar ? '.' : <> — اگر <bdi dir="ltr">{b}</bdi> هم تغییر کند، نتیجه فرق می‌کند.</>}
             </li>
-            <li>کارمزد با همین نرخ ادامه فرض شده؛ حجم معاملات آینده معلوم نیست. پاداش‌های جدا و گس حساب نشده‌اند مگر در «تنظیمات بیشتر» وارد کنید.</li>
+            {staked ? (
+              <li>پاداش با نرخ همین حالا (یا با سقف درآمد) ادامه و قیمت AERO ثابت فرض شده؛ هر دو عوض می‌شوند. گس حساب نشده مگر در «تنظیمات بیشتر» وارد کنید.</li>
+            ) : (
+              <li>کارمزد با همین نرخ ادامه فرض شده؛ حجم معاملات آینده معلوم نیست. پاداش‌های جدا و گس حساب نشده‌اند مگر در «تنظیمات بیشتر» وارد کنید.</li>
+            )}
             {kind === 'range' && <li>بیرون از بازه کارمزدی نیست و همه‌ی پوزیشن به یکی از دو دارایی تبدیل می‌شود؛ در سناریوهای شدید همین را می‌بینید.</li>}
           </ul>
         </section>
+      )}
+
+      {canRange && ready && (
+        <RangeLadder vol={vol} days={input.days} capital={input.capital} reward={staked ? reward : null} capped={capped} feeFullRangePct={!staked && feeBasis === 'full-range' && Number.isFinite(fee) ? fee : null} />
       )}
 
       <Collapsible title="تنظیمات بیشتر" icon={<SlidersHorizontal size={18} aria-hidden />}>
@@ -380,7 +437,11 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
             help="کارمزد معاملاتی که به نقدینگی‌دهنده‌ها می‌رسد، به صورت نرخ سالانه. بهتر است از کارمزد واقعی هفته‌ها یا ماه گذشته باشد."
             warning={Number.isFinite(fee) ? undefined : 'بدون نرخ کارمزد سودی حساب نمی‌شود.'}
           />
-          {fromMerkl ? (
+          {staked ? (
+            <p className="text-sm text-secondary self-end">
+              پاداش <bdi dir="ltr">{reward.token}</bdi> از gauge همین استخر حساب می‌شود.
+            </p>
+          ) : fromMerkl ? (
             <p className="text-sm text-secondary self-end">
               پاداش در این دوره (Merkl): <Num>{usd(prefill.rewardUsd as number)}</Num>
             </p>
@@ -389,6 +450,16 @@ export function LpAnalyzer({ prefill = {} }: { prefill?: LpPrefill }) {
           )}
           <NumberField label="هزینه‌ی ورود و خروج" value={costs} onChange={(v) => setCosts(Number.isFinite(v) ? Math.max(0, v) : 0)} suffix="دلار" help="گس و کارمزد تبدیل" />
           <NumberField label="سناریوی دلخواه" value={custom} onChange={setCustom} suffix="٪" note={<>تغییر قیمت <bdi dir="ltr">{a}</bdi>؛ منفی یعنی افت.</>} />
+          {canRange && (
+            <NumberField
+              label="نوسان سالانه‌ی جفت"
+              value={vol}
+              onChange={(v) => setVol(Number.isFinite(v) && v > 0 ? v : NaN)}
+              suffix="٪"
+              help="نوسان سالانه‌ی قیمت نسبی دو دارایی؛ احتمال ماندن قیمت در بازه از آن حساب می‌شود."
+              note={prefill.vol ? 'از نوسان واقعی ۳۰ روز اخیر (vfat)' : undefined}
+            />
+          )}
           <div className="flex flex-col gap-1.5">
             <span className="text-sm text-secondary">هر دو دارایی استیبل‌کوین دلاری‌اند؟</span>
             <Segmented<'no' | 'yes'> value={stable ? 'yes' : 'no'} onChange={(v) => setStable(v === 'yes')} label="جفت استیبل" size="sm" options={[{ id: 'no', label: 'نه' }, { id: 'yes', label: 'بله' }]} />

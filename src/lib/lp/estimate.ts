@@ -1,4 +1,5 @@
 import type { LpPool } from './pools';
+import { capFactor, positionRewardApr } from './rewards';
 import { concentration, type LpInput, type PoolShape } from './scenarios';
 
 /**
@@ -15,8 +16,14 @@ import { concentration, type LpInput, type PoolShape } from './scenarios';
  *   σ = the pair's realised volatility, and scales with concentration too.
  *
  * So the expected result is concentration × (fee rate − σ²/8) × capital × time.
- * Incentive rewards, gas and leaving the range are not counted. An expectation
- * on these assumptions, not a forecast; the analyzer shows single outcomes.
+ *
+ * An Aero pool also offers staking: AERO instead of the fees (rewards.ts). That
+ * mode is estimated the same way, the AERO rate shared with what is already staked
+ * and — cautiously — cut to Aero's cap target when the pool pays far more than it
+ * earns; the better of the two modes is the pool's figure.
+ *
+ * Other incentive rewards, gas and leaving the range are not counted. An
+ * expectation on these assumptions, not a forecast; the analyzer shows single outcomes.
  */
 
 /** The pool's usual swing over `days` as fractions (0.08 = 8%), both positive. */
@@ -43,23 +50,34 @@ export const poolInput = (p: Pick<LpPool, 'feeAprPct' | 'move7d' | 'concentrated
   costsUsd: 0,
 });
 
+/** How a position earns: swap fees (unstaked), or the gauge's AERO (staked, no fees). */
+export type EarnMode = 'fees' | 'stake';
+
 /** Expected yearly cost of volatility for a full-range position, % of its value: σ²/8. */
 export const volatilityCostPct = (volAnnualPct: number) => ((volAnnualPct / 100) ** 2 / 8) * 100;
 
 export interface PoolEstimate {
-  /** Expected fees over the period. */
+  /** The mode the figure is for: the better of the two when the pool offers both. */
+  mode: EarnMode;
+  /** Expected fees over the period (0 when staked). */
   feesUsd: number;
+  /** Expected AERO over the period, at the cap target when the pool pays above it (0 unstaked). */
+  rewardsUsd: number;
+  /** The pool pays above Aero's cap target: `rewardsUsd` is already cut to it. */
+  capped: boolean;
   /** Expected cost of volatility against holding (≤ 0). */
   lossUsd: number;
-  /** Fees + loss. */
+  /** Fees + rewards + loss. */
   netUsd: number;
+  /** The other mode's net figure, when the pool offers both. */
+  otherNetUsd: number | null;
   /** The position assumed. */
   shape: PoolShape;
-  /** Yearly fee rate of that position while in range, %. */
+  /** Yearly rate of that position while in range, %: fees, or AERO when staked. */
   positionAprPct: number;
 }
 
-type Estimable = Pick<LpPool, 'feeAprPct' | 'move7d' | 'concentrated' | 'volAnnualPct'>;
+type Estimable = Pick<LpPool, 'feeAprPct' | 'move7d' | 'concentrated' | 'volAnnualPct'> & Partial<Pick<LpPool, 'reward'>>;
 
 export function estimatePool(p: Estimable, capital: number, days: number): PoolEstimate | null {
   if (!(capital > 0) || !(days > 0)) return null;
@@ -67,9 +85,17 @@ export function estimatePool(p: Estimable, capital: number, days: number): PoolE
   const k = concentration(shape);
   if (!Number.isFinite(k)) return null;
   const t = days / 365;
-  const feesUsd = capital * t * (p.feeAprPct / 100) * k;
   const lossUsd = -capital * t * (volatilityCostPct(p.volAnnualPct) / 100) * k;
-  return { feesUsd, lossUsd, netUsd: feesUsd + lossUsd, shape, positionAprPct: p.feeAprPct * k };
+  const fees =
+    p.feeAprPct === null ? null : { mode: 'fees' as const, feesUsd: capital * t * (p.feeAprPct / 100) * k, rewardsUsd: 0, capped: false, positionAprPct: p.feeAprPct * k };
+  const r = p.reward;
+  const apr = r ? positionRewardApr(r, shape, capital, true) : NaN;
+  const stake = r && Number.isFinite(apr) ? { mode: 'stake' as const, feesUsd: 0, rewardsUsd: capital * t * (apr / 100), capped: capFactor(r) < 1, positionAprPct: apr } : null;
+  const gross = (m: { feesUsd: number; rewardsUsd: number }) => m.feesUsd + m.rewardsUsd;
+  const best = fees && stake ? (gross(stake) > gross(fees) ? stake : fees) : (fees ?? stake);
+  if (!best) return null;
+  const other = best === fees ? stake : fees;
+  return { ...best, lossUsd, netUsd: gross(best) + lossUsd, otherNetUsd: other ? gross(other) + lossUsd : null, shape };
 }
 
 /** Pools with their estimate, best dollar figure first. */
