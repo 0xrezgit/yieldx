@@ -10,8 +10,20 @@ import { loopLenders, type PtLoopLender } from '../../lib/risk/leaderboard';
 import type { OpportunityListing } from '../../lib/risk/opportunities';
 import { formatNumber, formatPercent, formatUSDCompact } from '../../lib/utils/formatting';
 import { NumberField } from '../ui/field';
+import { boxIdOf, LoopHistory } from '../market/LoopHistory';
 import { Num } from '../ui/num';
 import type { CalcState } from './Calculator';
+import { networkByChainId } from '../../lib/registry/networks';
+import { TokenLogo } from '../ui/token-logo';
+import { tokenInfo } from '../../lib/portfolio/tokens';
+
+/** Money-market logos (the ones PendleLoop's own list links), by the protocol's name. */
+const LENDER_LOGO: [RegExp, string][] = [
+  [/^morpho/i, 'https://cdn.morpho.org/assets/logos/morpho.svg'],
+  [/^aave/i, 'https://app.aave.com/icons/tokens/aave.svg'],
+  [/^euler/i, 'https://storage.googleapis.com/prod-pendle-bucket-a/images/uploads/e2056d51-ce67-4202-9189-7c997b64a63f.png'],
+];
+const lenderLogo = (name: string) => LENDER_LOGO.find(([re]) => re.test(name))?.[1] ?? null;
 
 const r2 = (x: number) => Math.round(x * 100) / 100;
 const floor1 = (x: number) => Math.floor(x * 10) / 10;
@@ -101,8 +113,13 @@ export function PtLoopPosition({ c, set, row }: { c: CalcState; set: (p: Partial
                 <div key={l.id} className={`rounded-xl border px-3 py-2.5 flex flex-col gap-1.5 ${on ? 'border-accent bg-elevated' : 'border-default'}`}>
                   <button type="button" role="radio" aria-checked={on} onClick={() => fill(l)} className="tap text-right flex flex-col gap-1">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-primary">
-                        <bdi dir="ltr">{l.protocol}</bdi> · وام <bdi dir="ltr">{l.debtSymbol}</bdi>
+                      <span className="text-sm font-medium text-primary inline-flex items-center gap-1.5">
+                        <TokenLogo src={lenderLogo(l.protocol)} name={l.protocol} size={16} />
+                        <bdi dir="ltr">{l.protocol}</bdi>
+                        {l.chainId && <TokenLogo src={networkByChainId(l.chainId).logo} name={networkByChainId(l.chainId).name} size={14} />}
+                        <span className="text-muted">·</span> وام
+                        <TokenLogo src={tokenInfo(l.debtSymbol)?.logo ?? null} name={l.debtSymbol} size={16} />
+                        <bdi dir="ltr">{l.debtSymbol}</bdi>
                       </span>
                       <span className="text-xs text-muted">
                         خالص <Num className="text-st-loop font-semibold">{formatPercent(net, 2)}</Num>
@@ -196,6 +213,12 @@ export function PtLoopPosition({ c, set, row }: { c: CalcState; set: (p: Partial
         )}
         {short && <p className="text-xs text-warning">این بازار فقط <Num>{formatUSDCompact(selected!.availableUsd!)}</Num> برای وام دارد؛ این اهرم <Num>{formatUSDCompact(c.capital * (L - 1))}</Num> وام می‌خواهد.</p>}
       </div>
+
+      {selected && boxIdOf(selected.pendleLoop) && selected.chainId && selected.collateral && (
+        <div className="border-t border-default pt-4">
+          <LoopHistory chainId={selected.chainId} collateral={selected.collateral} boxId={boxIdOf(selected.pendleLoop)!} lltv={selected.lltvRawPct / 100} leverage={L} top={top} />
+        </div>
+      )}
     </>
   );
 }

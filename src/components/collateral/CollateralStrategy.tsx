@@ -16,6 +16,7 @@ import { LogoWithNetwork } from '../ui/asset-identity';
 import { Empty, Pill, Segmented } from '../opportunities/parts';
 import { StepList } from '../market/ActionPlan';
 import { ghostAction, primaryAction } from '../market/RowParts';
+import { LoopHistoryFor } from '../market/LoopHistory';
 
 interface Stored {
   holding: string;
@@ -142,6 +143,7 @@ function BestPair({ p, s }: { p: Pair; s: Stored }) {
         </div>
       </div>
       <Chips p={p} />
+      <LoopHistoryFor o={p.deploy.o} leverage={p.estimate.leverage?.leverage} />
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-5">
         <div className="rounded-xl border border-default bg-canvas p-4">
           <h3 className="text-sm font-semibold text-primary mb-3">قدم‌به‌قدم در اپ‌ها</h3>

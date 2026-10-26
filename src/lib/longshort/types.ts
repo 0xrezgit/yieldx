@@ -5,6 +5,8 @@ export interface LongShortRow {
   chainId: number;
   /** Money market the position lives in (Aave, Morpho). */
   protocol: string;
+  /** The money market's logo as PendleLoop lists it. */
+  protocolIcon: string | null;
   side: 'long' | 'short';
   category: 'crypto' | 'stocks';
   /** The asset the price view is on (WETH, WBTC, TSLAc…). */

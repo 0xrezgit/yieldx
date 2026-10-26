@@ -18,6 +18,7 @@ const PERP_TTL_MS = 10 * 60_000;
 const HL = 'https://api.hyperliquid.xyz/info';
 
 type Box = PendleLoopBox & {
+  iconUrl?: string | null;
   side?: string | null;
   categoryIds?: string[];
   baseAsset?: { address: string; symbol: string } | null;
@@ -72,7 +73,8 @@ export function longShortRow(b: Box): LongShortRow | null {
     key: `pendleloop:${b.chainId}:${b.boxId}`,
     boxId: b.boxId,
     chainId: b.chainId,
-    protocol: b.protocol,
+    protocol: b.protocol.toLowerCase() === 'aave' ? 'Aave V3' : b.protocol,
+    protocolIcon: b.iconUrl?.startsWith('https://') ? b.iconUrl : null,
     side,
     category,
     base: { symbol: b.baseAsset.symbol, address: b.baseAsset.address.toLowerCase() },

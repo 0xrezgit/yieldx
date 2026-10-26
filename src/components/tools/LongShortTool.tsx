@@ -11,6 +11,7 @@ import { formatMultiplier, formatNumber, formatPercent, formatUSD, formatUSDComp
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
 import { PairLogo } from '../ui/asset-identity';
+import { TokenLogo } from '../ui/token-logo';
 import { Empty, Metric, Pill, Segmented } from '../opportunities/parts';
 
 const STORE = STORAGE_KEYS.longShort;
@@ -30,14 +31,26 @@ const initial: Settings = { key: null, side: 'long', category: 'all', capital: 1
 function useLongShort() {
   const [feed, setFeed] = useState<LongShortFeed | null>(null);
   const [failed, setFailed] = useState(false);
+  // Re-read every minute and when the tab comes back: PendleLoop adds and removes markets.
   useEffect(() => {
     let live = true;
-    fetch('/api/longshort', { cache: 'no-store' })
-      .then((r) => (r.ok ? (r.json() as Promise<LongShortFeed>) : Promise.reject(new Error(String(r.status)))))
-      .then((f) => live && setFeed(f))
-      .catch(() => live && setFailed(true));
+    const load = () =>
+      fetch('/api/longshort', { cache: 'no-store' })
+        .then((r) => (r.ok ? (r.json() as Promise<LongShortFeed>) : Promise.reject(new Error(String(r.status)))))
+        .then((f) => {
+          if (!live) return;
+          setFeed(f);
+          setFailed(false);
+        })
+        .catch(() => live && setFailed(true));
+    load();
+    const timer = setInterval(() => document.visibilityState === 'visible' && load(), 60_000);
+    const onVisible = () => document.visibilityState === 'visible' && load();
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       live = false;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
   return { feed, failed };
@@ -164,8 +177,8 @@ export function MarketPicker({ rows, value, onChange }: { rows: LongShortRow[]; 
             <span className="flex flex-col leading-tight">
               <span className="text-sm font-semibold flex items-center gap-1">
                 <bdi dir="ltr">{r.base.symbol}</bdi>
-                <span className="text-xs text-secondary">
-                  {r.protocol} · {networkByChainId(r.chainId).name}
+                <span className="text-xs text-secondary inline-flex items-center gap-1">
+                  <TokenLogo src={r.protocolIcon} name={r.protocol} size={12} /> {r.protocol} · {networkByChainId(r.chainId).nameFa}
                 </span>
               </span>
               <span className="text-xs text-secondary whitespace-nowrap">
@@ -194,7 +207,7 @@ export function Summary({ row, a, s }: { row: LongShortRow; a: LongShortAnalysis
               {risk && <Pill tone={risk.tone}>{risk.label}</Pill>}
             </span>
             <span className="text-xs text-secondary">
-              وثیقه <bdi dir="ltr">{row.collateral.symbol}</bdi> · وام <bdi dir="ltr">{row.debt.symbol}</bdi> · {row.protocol} روی {networkByChainId(row.chainId).name} · LLTV <Num>{formatPercent(row.lltv * 100, 0)}</Num>
+              وثیقه <bdi dir="ltr">{row.collateral.symbol}</bdi> · وام <bdi dir="ltr">{row.debt.symbol}</bdi> · <TokenLogo src={row.protocolIcon} name={row.protocol} size={12} /> {row.protocol} روی {networkByChainId(row.chainId).nameFa} · LLTV <Num>{formatPercent(row.lltv * 100, 0)}</Num>
             </span>
           </div>
         </div>

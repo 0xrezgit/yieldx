@@ -5,6 +5,7 @@ import { MAX_POOL_SHARE_WITHOUT_QUOTE, quoteAmount } from '../opportunity/policy
 import { ptOpportunity } from '../opportunity/from-market';
 import { loopBorrowPct, PT_LEVERAGE_REASON, ptLenders, ptLoopLeverage } from '../opportunity/leverage';
 import { rateAfterBorrow } from '../opportunity/curve';
+import { evmChainId } from '../opportunity/costs';
 import type { OpportunityListing, ScreenSettings } from './opportunities';
 import { isLoopable, isStable } from './opportunities';
 import { quoteCheck } from '../opportunity/pt-price';
@@ -269,6 +270,9 @@ export interface PtLoopLender {
   availableUsd: number | null;
   url: string | null;
   pendleLoop: string | null;
+  /** For the box's history: its network and the PT's address. */
+  chainId: number | null;
+  collateral: string | null;
 }
 
 /** The lending markets for this PT market (the same matching as the Loop PT ranking), with the figures a loop needs. */
@@ -291,6 +295,8 @@ export function loopLenders(m: OpportunityListing, lending: Opportunity[], fetch
       availableUsd: side.availableUsd,
       url: lender.url ?? null,
       pendleLoop: c.pendleLoop ?? null,
+      chainId: evmChainId(lender.chain),
+      collateral: c.token.address?.toLowerCase() ?? null,
     };
   });
 }
