@@ -22,6 +22,7 @@ import { AssetIdentity } from '../ui/asset-identity';
 import { MarketPicker } from '../forms/MarketPicker';
 import { Segmented, signedPct } from './parts';
 import { LoopResult, type CalcMode, type CalcState } from './Calculator';
+import { PtLoopPosition } from './PtLoopPosition';
 
 type Unit = 'usd' | 'token';
 type Reading = 'likely' | 'now' | 'low';
@@ -345,17 +346,10 @@ export function PendleCalculator({ c, set, markets, onPick, gas }: { c: CalcStat
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4 items-start">
           <Card>
             <h2 className="text-lg font-semibold text-primary">لوپ PT</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField label="سرمایه" value={c.capital} onChange={(v) => set({ capital: v })} suffix="دلار" />
-              <NumberField label="روز تا سررسید" value={c.days} onChange={(v) => set({ days: v })} />
-              <NumberField label="نرخ PT (Implied)" value={c.entryAPY} onChange={(v) => set({ entryAPY: v })} suffix="%" />
-              <NumberField label="اهرم" value={c.leverage} onChange={(v) => set({ leverage: v })} suffix="×" />
-              <NumberField label="بهره‌ی وام" value={c.borrowAPY} onChange={(v) => set({ borrowAPY: v })} suffix="%" />
-              <NumberField label="LLTV" value={c.lltv} onChange={(v) => set({ lltv: v })} suffix="%" />
-            </div>
+            <PtLoopPosition c={c} set={set} row={row} />
           </Card>
           <div className="flex flex-col gap-4">
-            <LoopResult c={{ ...c, mode: 'loop' }} />
+            <LoopResult c={{ ...c, mode: 'loop', fee: c.loopFee }} />
           </div>
         </div>
       ) : tab === 'mint' ? (

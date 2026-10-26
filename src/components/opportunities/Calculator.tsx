@@ -43,6 +43,12 @@ export interface CalcState {
   leverage: number;
   borrowAPY: number;
   lltv: number;
+  /** PT loop: the lending market its borrow rate and LLTV were filled from ('' = typed by hand). */
+  loopLender: string;
+  /** PT loop: cost of buying the PT, % of the whole collateral (Pendle: its AMM fee is in the rate instead). */
+  loopFee: number;
+  /** PT loop: the market its PT rate and fee were filled from. */
+  loopFillFor: string;
 }
 
 export const defaultCalc: CalcState = {
@@ -68,6 +74,9 @@ export const defaultCalc: CalcState = {
   leverage: 3,
   borrowAPY: 5.5,
   lltv: 86,
+  loopLender: '',
+  loopFee: thresholds.exit.costPercent,
+  loopFillFor: '',
 };
 
 const money = (x: number) => formatUSD(x, 0, true);
