@@ -36,6 +36,8 @@ export interface PendleLoopBox {
   isDepegged?: boolean;
   /** Long/short boxes only ('long' | 'short'). */
   side?: string | null;
+  /** PT boxes: the PT's maturity (ISO); the box stays in Pendle's list for a while after it. */
+  expiry?: string | null;
   data?: {
     lltv?: number;
     borrowApy?: number;
@@ -63,6 +65,8 @@ const isAddr = (x: unknown): x is string => typeof x === 'string' && /^0x[0-9a-f
 export function pendleLoopLender(b: PendleLoopBox, fetchedAt: string): Opportunity | null {
   const d = b.data ?? {};
   if ((b.kind !== 'pt' && b.kind !== 'vanilla') || b.side || OWN_SOURCE.has(b.protocol?.toLowerCase()) || b.isDepegged) return null;
+  // A PT past maturity: nothing left to loop (its box lingers with broken rates).
+  if (b.kind === 'pt' && typeof b.expiry === 'string' && !(Date.parse(b.expiry) > Date.parse(fetchedAt))) return null;
   if (!isAddr(b.ptAddress) || !isAddr(b.debtAsset) || !isAddr(b.moneyMarketAddress) || !b.debtSymbol || !b.ptSymbol) return null;
   if (!fin(d.lltv) || !(d.lltv > 0 && d.lltv < 1) || !fin(d.borrowApy) || d.borrowApy < 0 || d.borrowApy > 2) return null;
   const chain = `eip155:${b.chainId}`;
@@ -118,6 +122,7 @@ export function morphoListing(boxes: PendleLoopBox[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const b of boxes) {
     if (b.protocol?.toLowerCase() !== 'morpho' || b.side || b.isDepegged || !isAddr(b.ptAddress) || !isAddr(b.debtAsset)) continue;
+    if (b.kind === 'pt' && typeof b.expiry === 'string' && !(Date.parse(b.expiry) > Date.now())) continue;
     const chain = `eip155:${b.chainId}`;
     const id = morphoMarketId(b);
     // Some boxes link a named page (…/pt-reusd-10dec2026-usdt) instead of the id: matched by collateral, debt and LLTV.

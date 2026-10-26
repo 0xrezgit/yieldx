@@ -16,6 +16,7 @@ import { stepsFor } from '../../lib/market/steps';
 import { ScenarioTable } from './ScenarioTable';
 import { borrowShockUsd, pointsLadder } from '../../lib/calculators/points-worth';
 import { DEFAULT_POINTS_SETTINGS, LadderView, ZeroCard } from './PointsWorthView';
+import { LoopHistoryFor } from './LoopHistory';
 
 export const usd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : Math.abs(x) >= 1 ? 2 : 4);
 
@@ -131,6 +132,7 @@ export function OpportunityDetails({ row, days, modelVersion }: { row: Evaluated
         />
       )}
       {pointsLoop && <LoopPoints e={e} shock={shock ?? 0} />}
+      {x && <LoopHistoryFor o={o} leverage={x.leverage} />}
       <section className="rounded-xl border border-default p-3" aria-labelledby={`steps-${o.key}`}>
         <h3 id={`steps-${o.key}`} className="text-xs text-muted mb-3">
           قدم‌به‌قدم تا سود دلاری

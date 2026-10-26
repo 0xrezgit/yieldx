@@ -14,6 +14,7 @@ import { Num } from '../ui/num';
 import { Empty, Pill, Segmented } from '../opportunities/parts';
 import { StepList } from '../market/ActionPlan';
 import { Identity } from '../market/MarketAnalysis';
+import { LoopHistoryFor } from '../market/LoopHistory';
 
 interface Settings {
   capital: number;
@@ -280,6 +281,7 @@ function PartCard({ p, n }: { p: MonthlyPart; n: number }) {
           </span>
         </p>
       )}
+      <LoopHistoryFor o={p.o} leverage={p.e.leverage?.leverage} />
 
       <div className="rounded-lg bg-canvas border border-default px-3 py-2 text-sm flex items-start gap-2">
         <CalendarCheck size={15} className="shrink-0 mt-0.5 text-accent" aria-hidden />

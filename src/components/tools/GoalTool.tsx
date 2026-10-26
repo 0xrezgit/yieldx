@@ -16,6 +16,7 @@ import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
 import { Empty, Pill, Segmented } from '../opportunities/parts';
 import { StepList } from '../market/ActionPlan';
+import { LoopHistoryFor } from '../market/LoopHistory';
 import { Identity } from '../market/MarketAnalysis';
 
 interface Settings {
@@ -559,6 +560,7 @@ export function PartCard({ a, n }: { a: Allocation; n: number }) {
         )}
       </div>
       <Liquidation a={a} />
+      <LoopHistoryFor o={a.o} leverage={a.e.leverage?.leverage} />
       <StepList steps={planSteps(a)} />
     </article>
   );

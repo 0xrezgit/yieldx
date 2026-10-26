@@ -23,6 +23,7 @@ import { isStable } from '../../lib/risk/opportunities';
 import { calculatorLink, listingLink, marketAddress } from '../../lib/market/links';
 import { loopLeaderSteps, ytLeaderSteps } from '../../lib/market/steps';
 import { StepList, StepStrip } from './ActionPlan';
+import { boxIdOf, LoopHistory } from './LoopHistory';
 import { Count, Facts, primaryAction, Rank, secondaryAction, Stats, Tags } from './RowParts';
 import protocols from '../../config/protocols.json';
 import { formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
@@ -216,11 +217,21 @@ function Row({ row, rank, strategy, capital }: { row: LeaderRow; rank: number; s
       {open && (
         <div className="mt-3 rounded-xl border border-default bg-canvas p-3 sm:p-4 flex flex-col gap-4">
           {plan && <YtPlanView plan={plan} name={m.name} days={m.daysToMaturity} cheap={cheap ?? null} unitUsd={m.unitUsd} watch={{ id: `${m.protocol}-${m.id}`, name: m.name, impliedPct: m.impliedAPY }} />}
+          {strategy === 'loop' && row.lender && row.leverage != null && <LeaderLoopHistory m={m} pendleLoop={row.lender.pendleLoop} lltvPct={row.lender.lltvPct} leverage={row.leverage} />}
           <StepList steps={steps} />
         </div>
       )}
     </article>
   );
+}
+
+/** The loop's past at its leverage (and 4× / 6× above it), when PendleLoop lists the box. */
+function LeaderLoopHistory({ m, pendleLoop, lltvPct, leverage }: { m: OpportunityListing; pendleLoop: string | null; lltvPct: number; leverage: number }) {
+  const box = boxIdOf(pendleLoop);
+  const chainId = networkByName(m.chain).chainId;
+  const pt = m.ptToken?.address;
+  if (!box || typeof chainId !== 'number' || !pt) return null;
+  return <LoopHistory chainId={chainId} collateral={pt.toLowerCase()} boxId={box} lltv={lltvPct / 100} leverage={leverage} variant="line" />;
 }
 
 function Bucket({ title, icon, cls, rows, strategy, capital }: { title: string; icon: ReactNode; cls: string; rows: LeaderRow[]; strategy: LeaderStrategy; capital: number }) {
