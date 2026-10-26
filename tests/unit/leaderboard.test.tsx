@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buckets, leaderLoop, leaderQuoteKey, leaderYt, ytGoalRows, ytMinHold, YT_EXIT_SHIFT_PP, type LeaderRow } from '../../src/lib/risk/leaderboard';
+import { buckets, leaderLoop, leaderQuoteKey, loopLenders, leaderYt, ytGoalRows, ytMinHold, YT_EXIT_SHIFT_PP, type LeaderRow } from '../../src/lib/risk/leaderboard';
 import { simulateLoop } from '../../src/lib/calculators/trade';
 import { defaultScreenSettings, type OpportunityListing } from '../../src/lib/risk/opportunities';
 import type { Opportunity } from '../../src/types/opportunity';
@@ -295,6 +295,25 @@ describe('leaderLoop', () => {
     expect(r.lender!.rateModelled).toBe(true);
     expect(r.lender!.borrowNowPct).toBe(5);
     expect(r.lender!.borrowPct).toBeGreaterThan(5);
+  });
+});
+
+describe('loopLenders (the calculator\'s PT loop)', () => {
+  it('lists the markets that take this PT, with the rate and limit a loop is filled from', () => {
+    const oracle = lender(
+      { ratePct: 6, ratePct7d: 7, availableUsd: 3_300_000, collateral: [{ token: { symbol: 'PT-USDx', address: PT }, maxLtv: 0.915, oracleFactor: 0.98, borrowLtv: 0.85, pendleLoop: 'https://app.pendle.finance/trade/loop/box/1' }] },
+      { key: 'morpho:eip155:1:0xn:supply' },
+    );
+    const list = loopLenders(ptListing(), [lender(), oracle, lender({}, { chain: 'eip155:8453' })]);
+    expect(list).toHaveLength(2);
+    expect(list[0]).toMatchObject({ protocol: 'Morpho', debtSymbol: 'USDC', borrowPct: 5, borrowNowPct: 5, borrow7dPct: null, lltvRawPct: 91.5, maxLeverage: Infinity, pendleLoop: null });
+    expect(list[0].lltvPct).toBeCloseTo(91.5, 9);
+    // The higher of today and the 7-day average; the limit on the oracle's value; the borrow cap as leverage.
+    expect(list[1]).toMatchObject({ borrowPct: 7, borrowNowPct: 6, borrow7dPct: 7, availableUsd: 3_300_000, pendleLoop: 'https://app.pendle.finance/trade/loop/box/1' });
+    expect(list[1].lltvPct).toBeCloseTo(91.5 * 0.98, 9);
+    expect(list[1].maxLeverage).toBeCloseTo(1 / 0.15, 9);
+    expect(new Set(list.map((l) => l.id)).size).toBe(2);
+    expect(loopLenders(ptListing(), [])).toEqual([]);
   });
 });
 

@@ -249,6 +249,52 @@ export function leaderLoop(markets: OpportunityListing[], s: ScreenSettings, len
   return board;
 }
 
+/** A lending market that takes this PT, as the calculator's PT loop fills itself from it. */
+export interface PtLoopLender {
+  /** Lending market and collateral: one reserve can take several PTs. */
+  id: string;
+  name: string;
+  protocol: string;
+  debtSymbol: string;
+  /** Today's rate or the 7-day average, whichever is higher (as the Loop PT ranking). */
+  borrowPct: number;
+  borrowNowPct: number;
+  borrow7dPct: number | null;
+  /** The liquidation limit on the PT's market value: the LLTV times the oracle factor, %. */
+  lltvPct: number;
+  /** The LLTV as the market publishes it, %. */
+  lltvRawPct: number;
+  /** Where the protocol stops new borrowing (Kamino's max LTV), as leverage; Infinity when it does not. */
+  maxLeverage: number;
+  availableUsd: number | null;
+  url: string | null;
+  pendleLoop: string | null;
+}
+
+/** The lending markets for this PT market (the same matching as the Loop PT ranking), with the figures a loop needs. */
+export function loopLenders(m: OpportunityListing, lending: Opportunity[], fetchedAt = new Date().toISOString()): PtLoopLender[] {
+  const pt = ptOpportunity(m.protocol, m, fetchedAt);
+  return ptLenders(pt, lending).map(({ lender, collateral: c, debt }) => {
+    const side = lender.borrow!;
+    const f = c.oracleFactor !== undefined && c.oracleFactor > 0 && c.oracleFactor < 1 ? c.oracleFactor : 1;
+    return {
+      id: `${lender.key}|${(c.token.address ?? '').toLowerCase()}`,
+      name: lender.market.name,
+      protocol: lender.protocol.name,
+      debtSymbol: debt.symbol ?? '—',
+      borrowPct: loopBorrowPct(side) as number,
+      borrowNowPct: side.ratePct as number,
+      borrow7dPct: side.ratePct7d ?? null,
+      lltvPct: c.maxLtv * f * 100,
+      lltvRawPct: c.maxLtv * 100,
+      maxLeverage: c.borrowLtv !== undefined && c.borrowLtv > 0 && c.borrowLtv < 1 ? 1 / (1 - c.borrowLtv) : Infinity,
+      availableUsd: side.availableUsd,
+      url: lender.url ?? null,
+      pendleLoop: c.pendleLoop ?? null,
+    };
+  });
+}
+
 /** Markets kept out of the YT dollar ranking, and why: no dollar figure is shown for them. */
 export interface YtExcluded {
   /** 0% base on a points market: the YT pays only in points. */

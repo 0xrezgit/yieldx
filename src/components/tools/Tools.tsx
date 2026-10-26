@@ -144,6 +144,8 @@ export default function Tools() {
               // Unknown base APY → 0 (the calculator warns), never the previous market's value.
               baseAPY: m.baseAPY === null || !Number.isFinite(m.baseAPY) ? 0 : round(m.baseAPY),
               holdDays: Math.min(s.calc.holdDays, m.daysToMaturity),
+              // The PT loop fills its rate and fee from this market again.
+              loopFillFor: '',
               // YT: the protocol's own fee on this market (Pendle's AMM fee, Exponent's book), not a flat guess.
               ...((mode ?? s.calc.mode) === 'yt' && ytFees({ ...m, impliedPct: m.impliedAPY }, s.calc.fee).source !== 'assumed' ? { fee: round(ytFees({ ...m, impliedPct: m.impliedAPY }, s.calc.fee).entryPct) } : {}),
               // Points program: this market's, or none — never carried from the previous market.
