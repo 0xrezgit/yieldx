@@ -32,11 +32,12 @@ const STAKED_REVALIDATE_S = 600;
 
 export class LpUpstreamError extends Error {}
 
-async function get<T>(path: string, revalidate: number): Promise<T> {
+/** revalidate null: not kept in Next's data cache (per-pool reads, already kept in memory here). */
+async function get<T>(path: string, revalidate: number | null): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${API}${path}`, {
       headers: { accept: 'application/json' },
-      next: { revalidate, tags: ['vfat'] },
+      ...(revalidate === null ? { cache: 'no-store' } : { next: { revalidate, tags: ['vfat'] } }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     } as RequestInit);
     // vfat rate-limits bursts with 429 + Retry-After (seconds).
@@ -71,7 +72,7 @@ const STAKED_LIQUIDITY = '0x3ab04b20'; // stakedLiquidity() — staked liquidity
 const RPC = config.rpc as Record<string, string>;
 
 /** One uint256 view of the pool; null when it cannot be read. */
-async function readPool(it: RawItem, selector: string, revalidate: number): Promise<bigint | null> {
+async function readPool(it: RawItem, selector: string): Promise<bigint | null> {
   const rpc = RPC[String(it.chainId)];
   const pool = it.pool?.address;
   if (!rpc || !pool) return null;
@@ -80,7 +81,7 @@ async function readPool(it: RawItem, selector: string, revalidate: number): Prom
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: pool, data: selector }, 'latest'] }),
-      next: { revalidate, tags: ['vfat'] },
+      cache: 'no-store',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     } as RequestInit);
     const body = (await res.json()) as { result?: string };
@@ -93,12 +94,12 @@ async function readPool(it: RawItem, selector: string, revalidate: number): Prom
 
 /** Aerodrome Slipstream and Aero: the share of an unstaked LP's fees the pool keeps. */
 const unstakedFee = async (it: RawItem) => {
-  const v = await readPool(it, UNSTAKED_FEE, CFG.historyRevalidateS);
+  const v = await readPool(it, UNSTAKED_FEE);
   return v === null ? null : Number(v) / 1e6;
 };
 
 /** Aero gauge: the staked liquidity in range now (decimal string). */
-const stakedLiquidity = async (it: RawItem) => (await readPool(it, STAKED_LIQUIDITY, STAKED_REVALIDATE_S))?.toString() ?? null;
+const stakedLiquidity = async (it: RawItem) => (await readPool(it, STAKED_LIQUIDITY))?.toString() ?? null;
 
 const hasAeroGauge = (it: RawItem) => it.pool?.type === 'concentrated' && (it.options ?? []).some((o) => o.kind === 'lp-stake' && !o.isKilled && o.protocol?.id === config.aero.venue);
 
@@ -113,7 +114,7 @@ function fill(items: RawItem[]): Promise<unknown> {
     let value: PoolFeeData | null = null;
     try {
       const [history, cut, staked] = await Promise.all([
-        get<RawHistory>(`/pool-history?id=${encodeURIComponent(id)}&limit=${FEE_WINDOW_DAYS}`, CFG.historyRevalidateS),
+        get<RawHistory>(`/pool-history?id=${encodeURIComponent(id)}&limit=${FEE_WINDOW_DAYS}`, null),
         needsCut ? unstakedFee(it) : Promise.resolve(undefined),
         needsStaked ? stakedLiquidity(it) : Promise.resolve(undefined),
       ]);
@@ -140,7 +141,7 @@ async function fetchRealLps(p: LpPool): Promise<void> {
   try {
     // The 100 largest positions: the pool's real money, and one request per pool.
     const q = `network=${encodeURIComponent(r.network)}&pool=${encodeURIComponent(r.pool)}&limit=100&sort=underlying_value&desc=true`;
-    const res = await fetch(`${REVERT_API}/positions?${q}`, { headers: { accept: 'application/json' }, next: { revalidate: CFG.historyRevalidateS, tags: ['revert'] }, signal: AbortSignal.timeout(TIMEOUT_MS) } as RequestInit);
+    const res = await fetch(`${REVERT_API}/positions?${q}`, { headers: { accept: 'application/json' }, cache: 'no-store', signal: AbortSignal.timeout(TIMEOUT_MS) } as RequestInit);
     if (res.ok) {
       const body = (await res.json()) as { data?: RawRevertPosition[] };
       value = realLpStats(Array.isArray(body.data) ? body.data : [], r);

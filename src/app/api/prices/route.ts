@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
   const list = [...ids.keys()].join(',');
   const url = at === null ? `${LLAMA}/current/${list}?searchWidth=4h` : `${LLAMA}/historical/${at}/${list}?searchWidth=4h`;
   try {
-    // Current prices move; historical ones never change.
-    const res = await fetch(url, { next: { revalidate: at === null ? 60 : 86_400 }, headers: { accept: 'application/json' } } as RequestInit);
+    // Current prices: a minute in the data cache. Historical ones: every second is its own URL, so caching them only piles up entries.
+    const res = await fetch(url, { ...(at === null ? { next: { revalidate: 60 } } : { cache: 'no-store' }), headers: { accept: 'application/json' } } as RequestInit);
     if (!res.ok) return NextResponse.json({ error: 'upstream_error', message: `price API responded with ${res.status}` }, { status: 502 });
     const data = (await res.json()) as LlamaPrices;
     const prices: Record<string, { usd: number; at: string }> = {};
