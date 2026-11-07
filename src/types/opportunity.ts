@@ -219,6 +219,16 @@ export interface LoopSpec {
   entryUrl?: string | null;
   /** The same loop in PendleLoop, one click (see BorrowSide.collateral). */
   pendleLoop?: string;
+  /** A real-world-asset collateral priced as a dollar NAV (src/config/rwa.json): not a peg. */
+  rwa?: RwaInfo;
+}
+
+/** Who issues an RWA token and what backs it. */
+export interface RwaInfo {
+  issuer: string;
+  /** What backs it, in Persian. */
+  backing: string;
+  url: string | null;
 }
 
 /** What an amount of the chain's USDC buys of a PT or YT right now, from the protocol's router. */

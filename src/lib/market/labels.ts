@@ -52,6 +52,7 @@ export function exitShort(e: Estimate, o: Opportunity): string {
  */
 export function badgesOf(e: Estimate, o: Opportunity): string[] {
   const out: string[] = [];
+  if (o.loop?.rwa) out.push('RWA · ریسک اعتباری');
   if (e.leverage) out.push(`اهرم ${formatNumber(e.leverage.leverage, 1)}×`);
   if (o.maturity && e.earningDays < e.days) out.push(`سررسید روز ${formatNumber(Math.ceil(e.earningDays), 0)}`);
   const lead = o.assets.deposit[0]?.symbol;

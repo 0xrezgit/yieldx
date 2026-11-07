@@ -22,6 +22,7 @@ import { Coverage } from './Coverage';
 import { LeaderRanking } from './LeaderRanking';
 import { ghostAction, primaryAction, Rank, secondaryAction, Tags } from './RowParts';
 import { Confidence } from './Confidence';
+import { RwaIntro, RwaWaiting } from './RwaParts';
 
 type View = 'all' | 'yt' | 'loop';
 
@@ -249,6 +250,14 @@ export default function MarketAnalysis() {
   const offset = best ? 1 : 0;
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   const shown = list.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // «RWA»: the loops whose market cannot lend now sit beside the ranking, not in it.
+  const rwaWaiting =
+    filter === 'rwa' && view && m.analysis
+      ? Object.values(view.ranking.aside)
+          .flat()
+          .map((e) => m.analysis!.rowByKey.get(e.key))
+          .filter((r): r is NonNullable<typeof r> => !!r?.o.loop?.rwa && r.byHorizon[days].placement === 'no-capacity')
+      : [];
 
   return (
     <main className="sx max-w-matrix mx-auto px-[var(--space-page-x)] py-5 lg:py-8 flex flex-col gap-4 lg:gap-5">
@@ -310,8 +319,10 @@ export default function MarketAnalysis() {
                 </div>
               </div>
 
+              {filter === 'rwa' && <RwaIntro ranked={top.length} waiting={rwaWaiting.length} />}
+
               {!top.length ? (
-                <Empty>برای این سرمایه و مدت فرصت سودده‌ای پیدا نشد.</Empty>
+                filter === 'rwa' ? null : <Empty>برای این سرمایه و مدت فرصت سودده‌ای پیدا نشد.</Empty>
               ) : (
                 list.length > 0 && (
                   <section aria-label="رتبه‌بندی" aria-busy={m.pending} className={`sx-card px-3 pt-3 sm:px-5 sm:pt-4 pb-1 transition-opacity ${m.pending ? 'opacity-60' : ''}`}>
@@ -339,6 +350,7 @@ export default function MarketAnalysis() {
                   </section>
                 )
               )}
+              {filter === 'rwa' && <RwaWaiting rows={rwaWaiting} />}
             </>
           )}
 

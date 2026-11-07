@@ -61,7 +61,7 @@ export interface Analysis {
   rankingVersion: string;
 }
 
-export type FamilyFilter = 'all' | 'lend' | 'vault' | 'fixed' | 'leverage' | 'rewards';
+export type FamilyFilter = 'all' | 'lend' | 'vault' | 'fixed' | 'leverage' | 'rwa' | 'rewards';
 
 export const FAMILY_FILTERS: { id: FamilyFilter; label: string }[] = [
   { id: 'all', label: 'همه' },
@@ -69,6 +69,7 @@ export const FAMILY_FILTERS: { id: FamilyFilter; label: string }[] = [
   { id: 'vault', label: 'خزانه' },
   { id: 'fixed', label: 'سررسیددار' },
   { id: 'leverage', label: 'اهرم' },
+  { id: 'rwa', label: 'RWA' },
   { id: 'rewards', label: 'پاداش‌دار' },
 ];
 
@@ -78,7 +79,8 @@ const inFamily = (f: FamilyFilter, o: Opportunity, e: Estimate) =>
   (f === 'lend' && o.family === 'lend') ||
   (f === 'vault' && o.family === 'vault') ||
   (f === 'rewards' && e.rewards > 0) ||
-  (f === 'leverage' && o.family === 'leverage');
+  (f === 'leverage' && o.family === 'leverage') ||
+  (f === 'rwa' && !!o.loop?.rwa);
 
 /** Text that a search matches: symbols, protocol, network, market name and addresses. */
 export function searchText(o: Opportunity): string {

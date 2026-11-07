@@ -46,3 +46,19 @@ A token without a logo from these sources is shown with a monogram of its symbol
 Coverage check on 2026-09-29: 137 of 140 live markets have a working logo (103 URLs,
 0 failing); no source for Exponent srEHYUSD and srONyc (Jupiter has no icon for
 their mints) and Spectra ESPN.
+
+## Tokens (RWA loops)
+
+Local copies (256×256 WebP, sharp on 3× screens; resized from the source) of real-world-asset token marks, used
+only next to the token's name. The issuers' own files are too heavy for a 32-pixel row
+(ONyc's is a 4000×4000 PNG, 3 MB, served in 13 s). Retrieved 2026-11-08 from the URLs
+Jupiter's token list gives for each mint (lite-api.jup.ag/tokens/v2/search).
+
+| File | Token | Mint (Solana) | Source |
+|---|---|---|---|
+| tokens/onyc.webp | ONyc (OnRe) | 5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5 | arweave.net/PyZzfGP-CqzaVlxTU3sb-I5uv4ZZKwnY8aCjcWn9S1A |
+| tokens/pt-onyc.webp | PT-ONyc-10JAN27 (Exponent) | HH7FiYbEfDwQoK2ZJpkMz1T6wG6TqPsWcxWCtEVgigrZ | cdn.exponent.finance/pt-tokens/PT-ONyc.svg |
+| tokens/auto.webp | AUTO (Figure) | GNE6oDS6jHrfaV3GQVVCCp37fDnT7PiPuewMKBj2bqNm | storage.googleapis.com/hastra-cdn-prod/spl/autotoken.png |
+| tokens/prime.webp | PRIME (Figure) | 3b8X44fLF9ooXaUm3hhSgjpmVs6rZZ3pPoGnGahc3Uu7 | storage.googleapis.com/hastra-cdn-prod/spl/primetoken.png |
+| tokens/pst.webp | PST (Huma) | 59obFNBzyTBGowrkif5uK7ojS58vsuWz3ZCvg6tfZAGw | meta.huma.finance/pst.svg |
+| tokens/reusd.webp | reUSD (Re Protocol) | 2uxaYT1fVrp6Fg2BrxQcyKSW91hefM6dG9krpbeDiirT | gateway.irys.xyz/9y3EEjMgUU9jHAS5cse5AC4GjVBh4Qr1QYDtZ78G3UzV |

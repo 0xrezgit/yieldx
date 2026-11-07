@@ -255,6 +255,8 @@ describe('GET /api/:protocol', () => {
   });
 
   it('still lists Exponent markets when the logo service is down', async () => {
+    const { resetSolanaTokens } = await import('../../src/lib/protocols/jupiter');
+    resetSolanaTokens();
     mockFetch({ 'api.exponent.finance/markets': { body: exponentMarkets }, 'lite-api.jup.ag': { status: 500, body: {} } });
     const res = await listMarkets(req('/api/exponent'), ctx({ protocol: 'exponent' }));
     const { markets } = await res.json();
