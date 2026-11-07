@@ -2,6 +2,7 @@ import 'server-only';
 import protocols from '../../config/protocols.json';
 import { fetchJson, isArrayOf, isObject, mapLimit, postJson } from '../protocols/base';
 import { pendleLoopUrl, type PendleLoopBox } from '../lending/pendle-loop';
+import { underlyingOf } from '../leverage/assets';
 import type { LongShortFeed, LongShortRisk, LongShortRow, PerpRef } from './types';
 
 /**
@@ -52,13 +53,7 @@ export function parseRisk(r: Box['risks']): LongShortRisk | null {
 
 /** The Hyperliquid coin for a base asset: ETH and its wrappers, BTC and its wrappers, stocks on the «xyz» dex. */
 export function perpCoinOf(symbol: string, category: string): string | null {
-  if (category === 'stocks') {
-    const t = symbol.replace(/c$/, '').toUpperCase();
-    return /^[A-Z]{1,6}$/.test(t) ? `xyz:${t}` : null;
-  }
-  if (/^(w?eth|wsteth|weeth|steth)$/i.test(symbol)) return 'ETH';
-  if (/^(wbtc|cbbtc|tbtc|btc)$/i.test(symbol)) return 'BTC';
-  return null;
+  return underlyingOf(symbol, category === 'stocks' ? 'stocks' : 'crypto')?.perp ?? null;
 }
 
 export function longShortRow(b: Box): LongShortRow | null {
@@ -128,7 +123,34 @@ export async function fetchPerps(coins: string[], now: number): Promise<Map<stri
 }
 
 let pendleCache: { at: number; rows: LongShortRow[]; fetchedAt: string } | null = null;
-let perpCache: { at: number; perps: Map<string, PerpRef> } | null = null;
+/** Per coin, so the Long/Short list and the leverage comparison (more coins) share one cache. */
+const perpCache = new Map<string, { at: number; ref: PerpRef | null }>();
+
+/**
+ * Hyperliquid perps for these coins, cached per coin for minutes. A failed refresh keeps
+ * what was cached and returns the error beside it; a coin with no perp is cached as null.
+ */
+export async function getPerps(coins: string[], now = Date.now()): Promise<{ perps: Map<string, PerpRef>; error: string | null }> {
+  const due = [...new Set(coins)].filter((c) => {
+    const e = perpCache.get(c);
+    return !e || now - e.at >= PERP_TTL_MS;
+  });
+  let error: string | null = null;
+  if (due.length) {
+    try {
+      const got = await fetchPerps(due, now);
+      for (const c of due) perpCache.set(c, { at: now, ref: got.get(c) ?? null });
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'unknown error';
+    }
+  }
+  const perps = new Map<string, PerpRef>();
+  for (const c of coins) {
+    const ref = perpCache.get(c)?.ref;
+    if (ref) perps.set(c, ref);
+  }
+  return { perps, error };
+}
 
 export async function getLongShortFeed(now = Date.now()): Promise<LongShortFeed> {
   let error: string | null = null;
@@ -142,16 +164,8 @@ export async function getLongShortFeed(now = Date.now()): Promise<LongShortFeed>
       if (!pendleCache) return { rows: [], fetchedAt: new Date(now).toISOString(), error, perpError: null };
     }
   }
-  let perpError: string | null = null;
   const coins = [...new Set(pendleCache.rows.map((r) => perpCoinOf(r.base.symbol, r.category)).filter((c): c is string => c !== null))];
-  if (!perpCache || now - perpCache.at >= PERP_TTL_MS) {
-    try {
-      perpCache = { at: now, perps: await fetchPerps(coins, now) };
-    } catch (e) {
-      perpError = e instanceof Error ? e.message : 'unknown error';
-    }
-  }
-  const perps = perpCache?.perps ?? new Map<string, PerpRef>();
+  const { perps, error: perpError } = await getPerps(coins, now);
   const rows = pendleCache.rows.map((r) => {
     const coin = perpCoinOf(r.base.symbol, r.category);
     return { ...r, perp: (coin && perps.get(coin)) || null };

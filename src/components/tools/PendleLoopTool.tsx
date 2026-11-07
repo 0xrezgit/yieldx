@@ -4,8 +4,11 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { ChevronDown, ExternalLink, Landmark, Loader2, Repeat, Search, ShieldAlert } from 'lucide-react';
 import thresholds from '../../config/thresholds.json';
 import { useLoopHistory } from '../../hooks/useLoopHistory';
-import { maxLoopLeverage, simulateLoop } from '../../lib/calculators/trade';
 import type { LoopBox, LoopBoxesFeed } from '../../lib/pendleloop/types';
+import { borrowAfter, leverageForHealth, loopPosition, midEntry, pendleMaxLeverage, type LoopEntry } from '../../lib/pendleloop/position';
+import { rateAfterBorrow } from '../../lib/opportunity/curve';
+import { quoteAmount } from '../../lib/opportunity/policy';
+import type { ExecQuote } from '../../types/opportunity';
 import type { OpportunityListing } from '../../lib/risk/opportunities';
 import { networkByChainId, networkByName } from '../../lib/registry/networks';
 import { formatDate, formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
@@ -217,6 +220,31 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 
 type Range = '7' | '30' | 'all';
 
+/**
+ * What Pendle's router pays for this box's PT at the position's size, sold from the borrowed
+ * token (what PendleLoop swaps). Asked once the amount settles; none for a box without a PT market.
+ */
+function useLoopQuote(b: LoopBox, positionUsd: number): { quote: ExecQuote | null; waiting: boolean } {
+  const usd = quoteAmount(positionUsd);
+  const key = b.kind === 'pt' && b.ptMarketAddress && usd >= 100 && usd <= 10_000_000 ? `chain=${b.chainId}&market=${b.ptMarketAddress}&side=pt&usd=${usd}&token=${b.debt.address}` : null;
+  const [got, setGot] = useState<{ key: string; q: ExecQuote | null } | null>(null);
+  useEffect(() => {
+    if (!key) return;
+    let live = true;
+    const t = setTimeout(() => {
+      fetch(`/api/quote?${key}`)
+        .then((r) => (r.ok ? (r.json() as Promise<ExecQuote>) : null))
+        .then((q) => live && setGot({ key, q }))
+        .catch(() => live && setGot({ key, q: null }));
+    }, 500);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [key]);
+  return { quote: got && got.key === key ? got.q : null, waiting: key !== null && got?.key !== key };
+}
+
 function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: number }) {
   const net = networkByChainId(b.chainId);
   const { feed, loading } = useLoopHistory(b.chainId, b.collateral.address);
@@ -227,28 +255,31 @@ function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: num
   const [horizon, setHorizon] = useState(30);
 
   const last = series?.rows[series.rows.length - 1] ?? null;
-  // The oracle can read the PT under its market price (Morpho's fixed curves): the limit is on the oracle's value.
+  // The oracle can read the PT under its market price (Morpho's fixed curves): PendleLoop's LTV is on the oracle's value.
   const oracleFactor = last && last[3] > 0 ? Math.min(1, last[2] / last[3]) : 1;
-  const lltvPct = b.lltv * oracleFactor * 100;
-  const top = floor1(Math.min(maxLoopLeverage(lltvPct, 1.01, 0), b.maxLeverage ?? Infinity, 20));
-  const safe = Math.min(maxLoopLeverage(lltvPct, thresholds.opportunities.loopMinHealth, 0), top);
+  // PendleLoop's leverage (1 ÷ (1 − LTV)), its cap and the app's safe line.
+  const top = floor1(Math.min(pendleMaxLeverage(b.lltv), b.maxLeverage ?? Infinity, 20));
+  const safe = Math.min(leverageForHealth(b.lltv, thresholds.opportunities.loopMinHealth), top);
   const L = Math.min(Math.max(1.1, lev), top);
   const days = b.kind === 'pt' ? Math.max(1, daysLeft(b, now) ?? 1) : horizon;
   const yieldPct = (b.yieldApy ?? 0) * 100;
-  const borrowPct = b.borrowApy * 100;
-
-  const r = useMemo(() => {
-    if (b.kind === 'pt') {
-      const s = simulateLoop({ capital, daysToMaturity: days, entryAPY: yieldPct, leverage: L, borrowAPY: borrowPct, lltv: lltvPct, feePercent: 0 });
-      return { apy: s.netAPY, profit: s.profit, breakEven: s.breakEvenBorrowAPY, health: s.healthFactor, debt: s.debt, collateral: s.collateralValue };
-    }
-    // Without a maturity: the asset's yield on the whole position, the loan's rate on the debt, prices held.
-    const t = days / 365;
-    const gain = capital * L * (Math.pow(1 + yieldPct / 100, t) - 1);
-    const cost = capital * (L - 1) * (Math.pow(1 + borrowPct / 100, t) - 1);
-    const profit = gain - cost;
-    return { apy: (Math.pow(1 + profit / capital, 1 / t) - 1) * 100, profit, breakEven: (L * yieldPct) / (L - 1), health: (lltvPct / 100) * (L / (L - 1)), debt: capital * (L - 1), collateral: capital * L };
-  }, [b.kind, capital, days, yieldPct, L, borrowPct, lltvPct]);
+  const { quote, waiting } = useLoopQuote(b, capital * L);
+  const entry: LoopEntry = useMemo(() => {
+    const mid = midEntry(b.kind, yieldPct, days);
+    // A quote is used only when it reads close to the market (a routing failure is not a price).
+    if (!quote || !(quote.midUsd && quote.midUsd > 0) || !(quote.units > 0)) return mid;
+    const e = (quote.units * quote.midUsd) / quote.usd;
+    return e > 0.8 && e < 1.01 ? { unitsPerUsd: quote.units / quote.usd, midUsd: quote.midUsd, quoted: true } : mid;
+  }, [quote, b.kind, yieldPct, days]);
+  const feeRate = b.serviceFeeRate ?? 0;
+  // The borrow rate after this position's own borrow, on the market's curve.
+  const first = loopPosition({ kind: b.kind, capital, leverage: L, days, yieldPct, borrowPct: b.borrowApy * 100, lltv: b.lltv, oracleFactor, feeRate, entry });
+  const after = borrowAfter(b.borrowApy * 100, first.debtUsd, b.borrowRef, b.borrowCurve ? rateAfterBorrow(b.borrowCurve, first.debtUsd, b.borrowApy * 100) : null);
+  const borrowPct = after.pct;
+  const r = useMemo(
+    () => loopPosition({ kind: b.kind, capital, leverage: L, days, yieldPct, borrowPct, lltv: b.lltv, oracleFactor, feeRate, entry }),
+    [b.kind, b.lltv, capital, L, days, yieldPct, borrowPct, oracleFactor, feeRate, entry],
+  );
 
   const points: LoopChartPoint[] = useMemo(() => {
     if (!series) return [];
@@ -256,8 +287,8 @@ function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: num
     return series.rows.filter((x) => x[0] >= from).map(([t, borrow, , , fixed]) => ({ t, borrowPct: borrow, fixedPct: fixed }));
   }, [series, range]);
 
-  const buffer = (1 - 1 / r.health) * 100;
-  const short = b.liquidityUsd !== null && r.debt > b.liquidityUsd;
+  const buffer = r.healthPct * 100;
+  const short = b.liquidityUsd !== null && r.debtUsd > b.liquidityUsd;
   const at = (x: number) => `${top > 1.1 ? ((x - 1.1) / (top - 1.1)) * 100 : 0}%`;
 
   return (
@@ -296,7 +327,7 @@ function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: num
           {b.kind === 'vanilla' && <NumberField label="مدت نگه‌داری" value={horizon} onChange={(v) => setHorizon(Number.isFinite(v) && v > 0 ? v : 1)} suffix="روز" />}
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-secondary">اهرم (دلاری)</span>
+              <span className="text-sm text-secondary">اهرم (همان عدد PendleLoop)</span>
               <span className={`text-lg font-semibold ${L > safe ? 'text-warning' : 'text-primary'}`}>
                 <Num>{`${formatNumber(L, 1)}×`}</Num>
               </span>
@@ -323,13 +354,29 @@ function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: num
               <dd className={`text-xl font-semibold ${r.profit >= 0 ? 'text-success' : 'text-danger'}`}><Num>{formatUSD(r.profit, 2, true)}</Num></dd>
             </div>
           </div>
-          <Line label="وام" value={<Num>{formatUSD(r.debt, 0)}</Num>} />
-          <Line label="وثیقه" value={<Num>{formatUSD(r.collateral, 0)}</Num>} />
-          <Line label="سقف بهره‌ی وام (سربه‌سر)" value={Number.isFinite(r.breakEven) ? <Num>{formatPercent(r.breakEven, 2)}</Num> : '—'} />
+          <Line label="وام" value={<Num>{formatUSD(r.debtUsd, 0)}</Num>} />
+          <Line label={b.kind === 'pt' ? 'وثیقه (PT)' : 'وثیقه'} value={b.kind === 'pt' ? <span className="inline-flex gap-1.5"><Num>{formatNumber(r.units, 0)}</Num><span className="text-muted">·</span><Num>{formatUSD(r.collateralUsd, 0)}</Num></span> : <Num>{formatUSD(r.collateralUsd, 0)}</Num>} />
+          <Line
+            label={entry.quoted ? `هزینه‌ی ورود (کارمزد ${formatPercent(feeRate * 100, 2)} + اثر قیمت و تبدیل ${quote?.tokenIn ?? ''})` : `هزینه‌ی ورود (کارمزد ${formatPercent(feeRate * 100, 2)})`}
+            value={<Num className="text-warning">{formatUSD(-r.entryCostUsd, 2, true)}</Num>}
+          />
+          <Line label={after.source === 'pendle' ? 'بهره‌ی وام پس از وام شما (برآورد پندل)' : after.source === 'curve' ? 'بهره‌ی وام پس از وام شما (منحنی نرخ بازار)' : 'بهره‌ی وام'} value={<Num>{formatPercent(borrowPct, 2)}</Num>} />
+          <Line label="بهره‌ی وامی که سود را صفر می‌کند (با هزینه‌ی ورود؛ عدد PendleLoop بدون آن و بالاتر است)" value={r.breakEvenBorrowPct !== null && Number.isFinite(r.breakEvenBorrowPct) ? <Num>{formatPercent(r.breakEvenBorrowPct, 2)}</Num> : '—'} />
           <Line label="Health Factor" value={<Num className={r.health < thresholds.opportunities.loopMinHealth ? 'text-danger' : ''}>{formatNumber(r.health, 2)}</Num>} />
-          <Line label="فاصله تا لیکوئید (درصد PendleLoop)" value={<Num className={buffer < 5 ? 'text-danger' : buffer < 7 ? 'text-warning' : 'text-success'}>{formatPercent(buffer, 2)}</Num>} />
-          {b.serviceFeeRate !== null && <Line label="کارمزد سرویس PendleLoop (طبق API)" value={<Num>{pct(b.serviceFeeRate, 2)}</Num>} />}
-          {oracleFactor < 0.9999 && <p className="text-xs text-muted">اوراکل این بازار PT را <Num>{formatPercent((1 - oracleFactor) * 100, 2)}</Num> زیر قیمت بازار می‌خواند؛ LLTV روی همان حساب شد.</p>}
+          <Line label="Health Factor به سبک PendleLoop" value={<Num className={buffer < 5 ? 'text-danger' : buffer < 7 ? 'text-warning' : 'text-success'}>{formatPercent(buffer, 2)}</Num>} />
+          {b.kind === 'pt' &&
+            (entry.quoted ? (
+              <p className="text-xs text-muted leading-5">
+                قیمت اجرایی روتر پندل برای خرید <Num>{formatUSD(quote!.usd, 0)}</Num> PT با <bdi dir="ltr">{quote!.tokenIn ?? 'USDC'}</bdi>{quote!.priceImpactPct !== null && <> (اثر قیمت <Num>{formatPercent(quote!.priceImpactPct, 2)}</Num>)</>}.
+              </p>
+            ) : waiting ? (
+              <p className="text-xs text-muted leading-5 inline-flex items-center gap-1.5">
+                <Loader2 size={12} className="animate-spin" aria-hidden /> گرفتن قیمت اجرایی پندل برای این مبلغ…
+              </p>
+            ) : (
+              <p className="text-xs text-warning leading-5">قیمت اجرایی پندل دریافت نشد: اثر قیمت و تبدیل توکن وام حساب نشده و سود واقعی کمتر از این است.</p>
+            ))}
+          {oracleFactor < 0.9999 && <p className="text-xs text-muted">اوراکل این بازار PT را <Num>{formatPercent((1 - oracleFactor) * 100, 2)}</Num> زیر قیمت بازار می‌خواند؛ LTV روی همان حساب شد.</p>}
           {short && <p className="text-xs text-warning">نقدینگی قابل وام <Num>{formatUSDCompact(b.liquidityUsd!)}</Num> است؛ این اهرم بیشتر می‌خواهد.</p>}
         </dl>
       </div>
@@ -368,8 +415,8 @@ function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: num
         )}
       </div>
       <p className="text-xs text-muted leading-5">
-        شبکه: {net.nameFa}. APY با نرخ‌های همین لحظه تا {b.kind === 'pt' ? 'سررسید' : 'پایان مدت'} حساب شده و کارمزد ورود و اثر قیمت در آن نیست (در تست واقعی PendleLoop اثر قیمت ناچیز بود). اهرمی که PendleLoop نشان
-        می‌دهد به تعداد توکن است و کمی بزرگ‌تر از این اهرم دلاری.
+        شبکه: {net.nameFa}. اهرم و Health Factor به تعریف خود PendleLoop است (۱ ÷ (۱ − LTV) با قیمت اوراکل)، پس همان عدد صفحه‌ی PendleLoop را وارد کنید. APY با نرخ‌های همین لحظه تا {b.kind === 'pt' ? 'سررسید' : 'پایان مدت'} حساب شده، با کارمزد PendleLoop، اثر قیمت خرید (روتر پندل) و بهره‌ی وام پس از وام شما. فرض این است که با همان توکن وام
+        (<bdi dir="ltr">{b.debt.symbol}</bdi>) واریز می‌کنید؛ واریز با توکن دیگر (مثلاً ETH) یک سواپ و ریسک قیمت اضافه دارد که اینجا نیست.
       </p>
     </section>
   );

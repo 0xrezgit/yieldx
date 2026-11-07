@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ArrowUpDown, BadgeCheck, Calculator, CalendarCheck, Droplets, HandCoins, Loader2, RefreshCw, Repeat, Target, TrendingUp } from 'lucide-react';
+import { ArrowRight, ArrowUpDown, BadgeCheck, Calculator, CalendarCheck, Droplets, HandCoins, Loader2, RefreshCw, Repeat, Target } from 'lucide-react';
 import protocols from '../../config/protocols.json';
 import type { ProtocolId } from '../../types/protocol';
 import { useAllMarkets } from '../../hooks/useAllMarkets';
@@ -20,13 +20,15 @@ import { BorrowTool } from './BorrowTool';
 import { GoalTool } from './GoalTool';
 import { MonthlyIncome } from './MonthlyIncome';
 import { LpPools } from './LpPools';
-import { MultiplyTool } from './MultiplyTool';
-import { LongShortTool } from './LongShortTool';
+import { LeverageTool } from './LeverageTool';
 import { PendleLoopTool } from './PendleLoopTool';
 import { VerifiedYields } from './VerifiedYields';
 
-type Tab = 'goal' | 'monthly' | 'calc' | 'pendleloop' | 'lp' | 'multiply' | 'longshort' | 'borrow' | 'verified';
-const TABS: Tab[] = ['goal', 'monthly', 'calc', 'pendleloop', 'lp', 'multiply', 'longshort', 'borrow', 'verified'];
+type Tab = 'goal' | 'monthly' | 'calc' | 'pendleloop' | 'lp' | 'leverage' | 'borrow' | 'verified';
+const TABS: Tab[] = ['goal', 'monthly', 'calc', 'pendleloop', 'lp', 'leverage', 'borrow', 'verified'];
+/** The two tools «معامله‌ی اهرمی» replaced: their links and saved tabs open it. */
+const MOVED: Record<string, Tab> = { multiply: 'leverage', longshort: 'leverage' };
+const tabOf = (x: unknown): Tab | null => (typeof x === 'string' ? (TABS.includes(x as Tab) ? (x as Tab) : (MOVED[x] ?? null)) : null);
 
 const TOOL_CHOICES: Choice<Tab>[] = [
   { id: 'goal', icon: Target, title: 'هدف سود', text: 'سود دلاری که می‌خواهید: چه چیزی واقعاً به آن می‌رسد' },
@@ -34,8 +36,7 @@ const TOOL_CHOICES: Choice<Tab>[] = [
   { id: 'calc', icon: Calculator, title: 'ماشین‌حساب', text: 'یک معامله‌ی YT، PT یا لوپ را با عددهای خودتان' },
   { id: 'pendleloop', icon: Repeat, title: 'PendleLoop', text: 'Loop to Earn روی همه‌ی شبکه‌ها: نمودار نرخ‌ها، اهرم دلاری و لیکوئید در گذشته' },
   { id: 'lp', icon: Droplets, title: <>استخر <bdi dir="ltr">LP</bdi></>, text: 'کارمزد واقعی هر استخر و زیان ناپایدار' },
-  { id: 'multiply', icon: TrendingUp, title: 'Multiply پرنوسان', text: 'خرید اهرمی: قیمت لیکوییدشدن و شش مسیر قیمت' },
-  { id: 'longshort', icon: ArrowUpDown, title: 'Long/Short', text: 'PendleLoop روی کریپتو و سهام: لیکوییدشدن، هزینه و مقایسه با پرپ' },
+  { id: 'leverage', icon: ArrowUpDown, title: 'معامله‌ی اهرمی', text: 'Kamino، PendleLoop یا پرپ: کدام ارزان‌تر' },
   { id: 'borrow', icon: HandCoins, title: 'هزینه‌ی وام', text: 'ارزان‌ترین وام برای وثیقه‌ی شما' },
   { id: 'verified', icon: BadgeCheck, title: 'تأییدشده', text: 'خزانه‌هایی که بازدهشان روی زنجیره چک شد' },
 ];
@@ -111,7 +112,7 @@ export default function Tools() {
         ? { protocol: proto as ProtocolId, marketId: market, marketName: params.get('name') ?? '', icon: null, ...(mode === 'pt' || mode === 'yt' || mode === 'lp' ? { mode } : {}) }
         : {};
     setSt({
-      tab: TABS.includes(linked as Tab) ? (linked as Tab) : TABS.includes(saved.tab as Tab) ? (saved.tab as Tab) : initial.tab,
+      tab: tabOf(linked) ?? tabOf(saved.tab) ?? initial.tab,
       screen: sane(saved.screen, initial.screen),
       calc: { ...sane(saved.calc, initial.calc), ...fromLink },
       filters: { ...defaultFilters, ...saved.filters },
@@ -234,14 +235,13 @@ export default function Tools() {
       )}
       {tab === 'goal' && <GoalTool />}
       {tab === 'monthly' && <MonthlyIncome />}
-      {tab === 'multiply' && <MultiplyTool />}
       {tab === 'pendleloop' && <PendleLoopTool markets={markets} />}
-      {tab === 'longshort' && <LongShortTool />}
+      {tab === 'leverage' && <LeverageTool />}
       {tab === 'borrow' && <BorrowTool />}
       {tab === 'verified' && <VerifiedYields />}
 
       {tab === 'calc' && <PendleCalculator c={st.calc} set={setCalc} markets={markets.filter((m) => !m.expired)} onPick={(m) => pick(m)} gas={gas ?? []} />}
-      {updatedAt === null && !loading && tab !== 'goal' && tab !== 'monthly' && tab !== 'lp' && tab !== 'multiply' && tab !== 'longshort' && tab !== 'pendleloop' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
+      {updatedAt === null && !loading && tab !== 'goal' && tab !== 'monthly' && tab !== 'lp' && tab !== 'leverage' && tab !== 'pendleloop' && tab !== 'borrow' && tab !== 'verified' && <p className="text-xs text-warning">داده‌ی زنده‌ای دریافت نشد.</p>}
     </main>
   );
 }

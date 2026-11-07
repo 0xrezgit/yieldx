@@ -1,4 +1,5 @@
 import type { LongShortRisk } from '../longshort/types';
+import type { SupplyCurve } from '../../types/opportunity';
 
 /** One PendleLoop «Loop to Earn» box as /api/pendleloop sends it (live; expired PTs left out). */
 export interface LoopBox {
@@ -28,6 +29,14 @@ export interface LoopBox {
   utilization: number | null;
   /** PendleLoop's service fee on the position, fraction. */
   serviceFeeRate: number | null;
+  /** The money market's borrow-rate curve (rate in %), to read the rate after this position's own borrow; null when not sent. */
+  borrowCurve: SupplyCurve | null;
+  /**
+   * PendleLoop's own reference position: the borrow APY (%) after borrowing `debtUsd`. Morpho
+   * markets refill from their vaults, so the raw curve overstates a borrow's effect; this is
+   * what Pendle itself expects. PT boxes only; null when not sent.
+   */
+  borrowRef: { debtUsd: number; borrowPct: number } | null;
   minOpenUsd: number | null;
   isDepegged: boolean;
   /** Pendle's oracle write-up: whether the PT price follows the market or a fixed curve. */
