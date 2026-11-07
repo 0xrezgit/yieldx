@@ -1,3 +1,4 @@
+import { isDollarDebt, RWA_RISKS, rwaLogo, rwaOf } from './rwa';
 import type { CostItem, DataQuality, Estimate, LeverageResult, LoopSpec, Opportunity } from '../../types/opportunity';
 import { tokenClass } from '../merkl/vetting';
 import { maxLoopLeverage, simulateLoop } from '../calculators/trade';
@@ -81,14 +82,16 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
     const side = o.borrow;
     const debt = o.assets.deposit[0];
     if (!side || !debt?.symbol || !debt.address || side.ratePct === null) continue;
-    const debtClass = side.debtClass ?? loopClass(debt.symbol, o.chain);
+    const debtClass = side.debtClass ?? (isDollarDebt(o.chain, debt.address) ? 'usd' : loopClass(debt.symbol, o.chain));
     if (!CLASSES.has(debtClass)) continue;
     for (const c of side.collateral) {
       if (!c.token.symbol || !c.token.address || !c.yield || !(c.yield.pct > 0)) continue;
       if (pts.has(addrKey(o.chain, c.token.address))) continue;
+      // A real-world asset priced as a dollar NAV (ONyc, AUTO…) pairs with a dollar debt, never as a pegged one.
+      const rwa = debtClass === 'usd' ? rwaOf(o.chain, c.token.address) : null;
       // A dollar name alone (apyUSD, syrupUSDC) pairs with a dollar debt, its peg unverified.
-      const cClass = c.class ?? loopClass(c.token.symbol, o.chain);
-      const unverified = cClass === 'other' && debtClass === 'usd' && /usd/i.test(c.token.symbol);
+      const cClass = rwa ? 'usd' : (c.class ?? loopClass(c.token.symbol, o.chain));
+      const unverified = !!rwa || (cClass === 'other' && debtClass === 'usd' && /usd/i.test(c.token.symbol));
       if (cClass !== debtClass && !unverified) continue;
       const quality: DataQuality = side.premiumUnknown ? (o.quality === 'current' ? 'partial' : o.quality) : o.quality;
       out.push({
@@ -104,10 +107,10 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
         supplyCurve: null,
         book: null,
         borrow: null,
-        loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}), ...(c.oracleFactor !== undefined ? { oracleFactor: c.oracleFactor } : {}), pairClass: debtClass as LoopSpec['pairClass'], ...(unverified ? { pegVerified: false } : {}), ...(c.pendleLoop ? { pendleLoop: c.pendleLoop } : {}) },
+        loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}), ...(c.oracleFactor !== undefined ? { oracleFactor: c.oracleFactor } : {}), pairClass: debtClass as LoopSpec['pairClass'], ...(unverified ? { pegVerified: false } : {}), ...(c.pendleLoop ? { pendleLoop: c.pendleLoop } : {}), ...(rwa ? { rwa } : {}) },
         quality,
-        notes: [...(o.notes ?? []).filter((n) => !n.startsWith('Hub:')), ...(side.premiumUnknown ? ['Aave V4: نرخ وام پایه به کار رفت؛ صرف ریسک کاربر (User Risk Premium) که به ترکیب وثیقه‌ی شما بستگی دارد لحاظ نشده و نرخ واقعی می‌تواند بالاتر باشد.'] : [])],
-        icon: c.logo ?? icons.get(addrKey(o.chain, c.token.address) ?? '') ?? null,
+        notes: [...(o.notes ?? []).filter((n) => !n.startsWith('Hub:')), ...(rwa ? [`دارایی RWA از ${rwa.issuer}، پشتوانه: ${rwa.backing}.`, ...RWA_RISKS] : []), ...(side.premiumUnknown ? ['Aave V4: نرخ وام پایه به کار رفت؛ صرف ریسک کاربر (User Risk Premium) که به ترکیب وثیقه‌ی شما بستگی دارد لحاظ نشده و نرخ واقعی می‌تواند بالاتر باشد.'] : [])],
+        icon: c.logo ?? icons.get(addrKey(o.chain, c.token.address) ?? '') ?? rwaLogo(o.chain, c.token.address),
       });
     }
   }
@@ -172,14 +175,16 @@ export function ptLoopLeverage(p: { impliedPct: number; borrowPct: number; days:
  */
 export function ptLenders(pt: Pick<Opportunity, 'chain' | 'ptToken' | 'assets' | 'ptClass'>, lending: Opportunity[]) {
   const key = addrKey(pt.chain, pt.ptToken?.address);
-  const unitClass = pt.ptClass?.class ?? tokenClass({ symbol: pt.assets.deposit[0]?.symbol ?? '' });
+  // A PT on a dollar-NAV real-world asset (PT-ONyc) loops against a dollar debt.
+  const rwa = rwaOf(pt.chain, pt.ptToken?.address) ?? rwaOf(pt.chain, pt.assets.deposit[0]?.address);
+  const unitClass = rwa ? 'usd' : (pt.ptClass?.class ?? tokenClass({ symbol: pt.assets.deposit[0]?.symbol ?? '' }));
   const out: { lender: Opportunity; collateral: NonNullable<Opportunity['borrow']>['collateral'][number]; debt: NonNullable<Opportunity['assets']['deposit'][number]> }[] = [];
   if (!key || !CLASSES.has(unitClass)) return out;
   for (const o of lending) {
     const side = o.borrow;
     const debt = o.assets.deposit[0];
     if (!side || !debt?.symbol || !debt.address || side.ratePct === null) continue;
-    if (tokenClass({ symbol: debt.symbol }) !== unitClass) continue;
+    if ((isDollarDebt(o.chain, debt.address) ? 'usd' : tokenClass({ symbol: debt.symbol })) !== unitClass) continue;
     for (const c of side.collateral) if (addrKey(o.chain, c.token.address) === key) out.push({ lender: o, collateral: c, debt });
   }
   return out;
@@ -197,7 +202,9 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
     const unit = p.assets.deposit[0];
     for (const { lender: o, collateral: c, debt } of ptLenders(p, opps)) {
       const side = o.borrow!;
-      const debtClass = tokenClass({ symbol: debt.symbol ?? '' });
+      const rwa = rwaOf(p.chain, p.ptToken.address) ?? rwaOf(p.chain, unit?.address);
+      const debtClass = rwa || isDollarDebt(o.chain, debt.address) ? 'usd' : tokenClass({ symbol: debt.symbol ?? '' });
+      // A PT keeps its own loop policy (PT_LOOP_POLICY, already cautious); an RWA underlying only adds its label and risks.
       const unverified = p.ptClass?.pegVerified === false;
       const token = { symbol: p.ptToken.symbol ?? `PT-${unit?.symbol ?? ''}`, address: p.ptToken.address };
       const worst = worseQuality(o.quality, p.quality);
@@ -224,6 +231,7 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
           ...(c.oracleFactor !== undefined ? { oracleFactor: c.oracleFactor } : {}),
           pairClass: debtClass as LoopSpec['pairClass'],
           pegVerified: !unverified,
+          ...(rwa ? { rwa } : {}),
           entryUrl: p.url ?? null,
           ...(c.pendleLoop ? { pendleLoop: c.pendleLoop } : {}),
         },
@@ -236,7 +244,7 @@ export function buildPtLoops(opps: Opportunity[]): Opportunity[] {
         quality: worst,
         sources: [...o.sources, ...p.sources],
         notes: [
-          ...(unverified ? [`برابری ${unit?.symbol ?? 'دارایی پایه'} با دلار فقط از نامش برداشته شده؛ پروتکل آن را استیبل‌کوین علامت نزده است.`] : []),
+          ...(rwa ? [`PT روی دارایی RWA از ${rwa.issuer}، پشتوانه: ${rwa.backing}.`, ...RWA_RISKS] : unverified ? [`برابری ${unit?.symbol ?? 'دارایی پایه'} با دلار فقط از نامش برداشته شده؛ پروتکل آن را استیبل‌کوین علامت نزده است.`] : []),
           ...(debt.symbol !== unit?.symbol ? [`PT به ${unit?.symbol ?? '—'} بازخرید می‌شود و وام ${debt.symbol} است؛ برابری این دو فرض شده.`] : []),
           'اوراکل وام ممکن است قیمت بازار PT را بخواند؛ بالا رفتن نرخ بازار پیش از سررسید سلامت را کم می‌کند.',
         ],
@@ -389,7 +397,7 @@ export function leverageEstimate(
   assumptions.push(
     pt
       ? `اهرم ${formatNumber(L, 2)}× طبق سیاست لوپ PT (${PT_LEVERAGE_REASON[pt.reason]}): ${formatNumber(P.maxLeverage, 1)}× یا ${formatNumber(P.cautiousLeverage, 1)}×، سلامت دست‌کم ${formatNumber(P.minHealth, 2)} و تحمل جهش ${formatNumber(P.rateBufferPp, 0)} واحد درصدی نرخ PT.`
-      : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(pegUnverified ? P.cautiousLeverage : lev.maxLeverage, pegUnverified ? 1 : 0)}×${pegUnverified ? ` (برابری ${l.collateral.token.symbol} با دلار فقط از نامش پیداست، تأیید نشده)` : ''}.`,
+      : `اهرم ${formatNumber(L, 2)}× طبق سیاست اهرم: سلامت دست‌کم ${formatNumber(lev.minHealth, 2)} و حداکثر ${formatNumber(pegUnverified ? P.cautiousLeverage : lev.maxLeverage, pegUnverified ? 1 : 0)}×${pegUnverified ? (l.rwa ? ` (دارایی RWA: ارزشش NAV ${l.rwa.issuer} است، نه یک دلار ثابت؛ اهرم محتاط)` : ` (برابری ${l.collateral.token.symbol} با دلار فقط از نامش پیداست، تأیید نشده)`) : ''}.`,
     `بازده وثیقه ${formatPercent(y, 2)} (${l.collateral.yield.source}) و نرخ وام ${formatPercent(r, 2)} برای کل دوره ثابت فرض شدند.`,
     `لیکوییدشدن اگر ارزش ${l.collateral.token.symbol} نسبت به ${l.debt.token.symbol} حدود ${formatPercent(liquidationDrop * 100, 1)} کم شود.`,
   );
