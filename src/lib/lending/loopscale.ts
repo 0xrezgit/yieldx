@@ -2,6 +2,7 @@ import lending from '../../config/lending.json';
 import type { Opportunity, RewardStream } from '../../types/opportunity';
 import { isObject, postJson, withRetry } from '../protocols/base';
 import { fetchSolanaTokens } from '../protocols/jupiter';
+import { isDollarDebt, rwaLogo } from '../opportunity/rwa';
 
 /**
  * Loopscale lending vaults («Lend / Earn») on Solana.
@@ -112,6 +113,102 @@ export function loopscaleVault(v: LoopscaleVaultInfo, fetchedAt: string, symbol:
 
 const isPage = (b: unknown): b is VaultsPage => isObject<VaultsPage>(b) && Array.isArray((b as VaultsPage).lendVaults);
 
+/** One Loopscale loop market (POST /v1/markets/loop/info, keyed by its slug); fields as the live answer sends them. */
+export interface LoopscaleLoopInfo {
+  collateralMint: string;
+  principalMint: string;
+  name?: string | null;
+  /** The collateral's own yield, %. */
+  collateralApyPct?: number | null;
+  maxLeverage?: number | null;
+  /** Net APY at `maxLeverage` with today's best borrow, %; 0 when nothing can be borrowed. */
+  maxLeveragedApyPct?: number | null;
+  /** What lenders offer now, principal native units. */
+  principalAmountAvailable?: number | null;
+  /** Borrowers' leverage and net APY, weighted by size. */
+  wAvgLeverage?: number | null;
+  wAvgApy?: number | null;
+  totalPrincipalDeployed?: number | null;
+  totalPrincipalDeployedUsd?: number | null;
+  feVisible?: boolean | null;
+}
+
+/**
+ * A Loopscale loop as a borrow side (like a Kamino reserve's): its principal is the debt,
+ * its collateral the one token it takes. The loop builder pairs them, so a Loopscale loop
+ * gets the same leverage policy, RWA label and «no capacity» handling as any other.
+ *
+ * Loopscale lends through an order book: there is no one borrow rate. It is read back from
+ * what the API gives — the net APY at the highest leverage with today's best offers
+ * (L·y − (L−1)·b), else the borrowers' size-weighted average (their own leverage and APY).
+ * The liquidation LTV is not sent: the borrow limit (1 − 1/max leverage) stands in, which
+ * puts liquidation no further than it really is. A PT collateral carries no yield here; the
+ * PT loop builder prices it from its own market.
+ */
+export function loopscaleLoop(slug: string, l: LoopscaleLoopInfo, fetchedAt: string): Opportunity | null {
+  if (l.feVisible === false || !l.collateralMint || !l.principalMint) return null;
+  const [cSym, dSym] = (l.name ?? '').split('/').map((x) => x.trim());
+  const L = n(l.maxLeverage ?? null);
+  const y = n(l.collateralApyPct ?? null);
+  if (!cSym || !dSym || L === null || !(L > 1) || y === null || !(y > 0) || y > 100) return null;
+  const top = n(l.maxLeveragedApyPct ?? null);
+  const wL = n(l.wAvgLeverage ?? null);
+  const wApy = n(l.wAvgApy ?? null);
+  const fromTop = top !== null && top !== 0 ? (L * y - top) / (L - 1) : null;
+  const fromAvg = wL !== null && wL > 1 && wApy !== null ? (wL * y - wApy) / (wL - 1) : null;
+  const ratePct = fromTop !== null && fromTop >= 0 && fromTop < 100 ? fromTop : fromAvg !== null && fromAvg >= 0 && fromAvg < 100 ? fromAvg : null;
+  if (ratePct === null) return null;
+  const deployed = n(l.totalPrincipalDeployed ?? null);
+  const deployedUsd = n(l.totalPrincipalDeployedUsd ?? null);
+  const unitUsd = deployed && deployed > 0 && deployedUsd !== null ? deployedUsd / deployed : null;
+  const free = n(l.principalAmountAvailable ?? null) ?? 0;
+  const availableUsd = free <= 0 ? 0 : unitUsd !== null ? free * unitUsd : null;
+  const isPt = /^PT-/i.test(cSym);
+  const borrowLtv = 1 - 1 / L;
+  return {
+    key: `loopscale:solana:mainnet:${slug}:loop`,
+    family: 'borrow',
+    protocol: { id: 'loopscale', version: 'loop', name: 'Loopscale' },
+    chain: 'solana:mainnet',
+    market: { id: slug, address: null, name: `${cSym}/${dSym} · Loopscale` },
+    assets: { deposit: [{ symbol: dSym, address: l.principalMint }], collateral: [{ symbol: cSym, address: l.collateralMint }] },
+    rate: { value: null, kind: 'apy', feesIncluded: true, rewardsIncluded: false, at: fetchedAt },
+    maturity: null,
+    capacity: { depositRemainingUsd: null, withdrawableNowUsd: null },
+    exit: { type: 'instant' },
+    rewards: [],
+    borrow: {
+      ratePct,
+      ratePct7d: null,
+      curve: null,
+      availableUsd,
+      collateral: [
+        {
+          token: { symbol: cSym, address: l.collateralMint },
+          maxLtv: borrowLtv,
+          yield: isPt ? null : { pct: y, kind: 'apy', source: 'Loopscale (بازده خود وثیقه)' },
+          ...(rwaLogo('solana:mainnet', l.collateralMint) ? { logo: rwaLogo('solana:mainnet', l.collateralMint) as string } : {}),
+        },
+      ],
+      metric: 'ltv',
+      ...(isDollarDebt('solana:mainnet', l.principalMint) ? { debtClass: 'usd' as const } : {}),
+    },
+    quality: 'partial',
+    sources: [{ name: 'Loopscale API', url: CFG.api, fetchedAt, sourceUpdatedAt: null }],
+    notes: [
+      'منبع Loopscale: API شرکا (/markets/loop/info) بدون مستندات عمومی.',
+      fromTop !== null && ratePct === fromTop
+        ? `Loopscale وام را از دفتر سفارش می‌دهد و نرخ واحد ندارد: نرخ ${ratePct.toFixed(2)}٪ از APY در سقف اهرم با بهترین پیشنهادهای امروز برگردانده شد.`
+        : `Loopscale الان پیشنهاد وامی ندارد؛ نرخ ${ratePct.toFixed(2)}٪ میانگین وام‌گیرندگان فعلی است.`,
+      'حد لیکوییدشدن منتشر نمی‌شود: سقف وام (۱ − ۱/اهرم بیشینه) به جای آن گذاشته شد، یعنی فاصله تا لیکوییدشدن کمتر از واقع نشان داده نمی‌شود.',
+    ],
+    url: CFG.home,
+    unofficialSource: true,
+  };
+}
+
+const isLoops = (b: unknown): b is Record<string, LoopscaleLoopInfo> => isObject(b) && !Array.isArray(b);
+
 export async function fetchLoopscale(fetchedAt: string): Promise<Opportunity[]> {
   const vaults: LoopscaleVaultInfo[] = [];
   for (let page = 0; page < CFG.maxPages; page++) {
@@ -119,12 +216,26 @@ export async function fetchLoopscale(fetchedAt: string): Promise<Opportunity[]> 
     vaults.push(...d.lendVaults);
     if (d.hasMore === false || d.lendVaults.length < CFG.pageSize) break;
   }
-  const tokens = await fetchSolanaTokens(vaults.map((v) => v.vault?.principalMint).filter(Boolean));
-  return vaults
-    .map((v) => {
-      const t = tokens.get(v.vault?.principalMint);
-      const o = loopscaleVault(v, fetchedAt, t?.symbol ?? null);
-      return o && t?.icon ? { ...o, icon: t.icon } : o;
-    })
+  // Loops are best-effort beside the vaults: a failed read leaves the vaults in place.
+  const loops = await withRetry(() => postJson<Record<string, LoopscaleLoopInfo>>(CFG.name, `${CFG.api}/markets/loop/info`, {}, isLoops)).catch(() => ({}) as Record<string, LoopscaleLoopInfo>);
+  const loopRows = Object.entries(loops)
+    .map(([slug, l]) => loopscaleLoop(slug, l, fetchedAt))
     .filter((o): o is Opportunity => o !== null);
+  const tokens = await fetchSolanaTokens([...vaults.map((v) => v.vault?.principalMint), ...loopRows.flatMap((o) => [o.assets.deposit[0]?.address, o.assets.collateral?.[0]?.address])].filter((x): x is string => !!x));
+  const withLogos = loopRows.map((o) => {
+    const c = o.borrow!.collateral[0];
+    const logo = c.logo ?? tokens.get(c.token.address ?? '')?.icon ?? undefined;
+    const icon = tokens.get(o.assets.deposit[0]?.address ?? '')?.icon ?? null;
+    return { ...o, icon, borrow: { ...o.borrow!, collateral: [logo ? { ...c, logo } : c] } };
+  });
+  return [
+    ...vaults
+      .map((v) => {
+        const t = tokens.get(v.vault?.principalMint);
+        const o = loopscaleVault(v, fetchedAt, t?.symbol ?? null);
+        return o && t?.icon ? { ...o, icon: t.icon } : o;
+      })
+      .filter((o): o is Opportunity => o !== null),
+    ...withLogos,
+  ];
 }

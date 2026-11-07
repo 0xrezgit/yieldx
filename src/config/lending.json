@@ -60,6 +60,7 @@
     "name": "Loopscale",
     "api": "https://tars.loopscale.com/v1",
     "app": "https://app.loopscale.com/lend",
+    "home": "https://app.loopscale.com",
     "pageSize": 50,
     "maxPages": 4,
     "minSupplyUsd": 50000

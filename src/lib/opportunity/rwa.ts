@@ -18,7 +18,7 @@ export function rwaOf(chain: string, address: string | null | undefined): RwaInf
   return hit ? { issuer: hit.issuer, backing: hit.backing, url: hit.url ?? null } : null;
 }
 
-/** The token's logo from the list, for when the live token list is unreachable. */
+/** The token's local logo (public/logos/tokens): the issuers' own files are too heavy for a row. */
 export const rwaLogo = (chain: string, address: string | null | undefined) => (address ? (COLLATERAL[chain]?.[address]?.logo ?? null) : null);
 
 /** A dollar token whose symbol does not say so (wYLDS, CASH): held at $1. */

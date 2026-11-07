@@ -110,7 +110,8 @@ export function buildLoops(opps: Opportunity[]): Opportunity[] {
         loop: { collateral: { token: c.token, yield: c.yield, supplyPct: c.supplyPct ?? null }, debt: { token: debt, side }, maxLtv: c.maxLtv, ...(c.borrowLtv !== undefined ? { borrowLtv: c.borrowLtv } : {}), ...(c.oracleFactor !== undefined ? { oracleFactor: c.oracleFactor } : {}), pairClass: debtClass as LoopSpec['pairClass'], ...(unverified ? { pegVerified: false } : {}), ...(c.pendleLoop ? { pendleLoop: c.pendleLoop } : {}), ...(rwa ? { rwa } : {}) },
         quality,
         notes: [...(o.notes ?? []).filter((n) => !n.startsWith('Hub:')), ...(rwa ? [`دارایی RWA از ${rwa.issuer}، پشتوانه: ${rwa.backing}.`, ...RWA_RISKS] : []), ...(side.premiumUnknown ? ['Aave V4: نرخ وام پایه به کار رفت؛ صرف ریسک کاربر (User Risk Premium) که به ترکیب وثیقه‌ی شما بستگی دارد لحاظ نشده و نرخ واقعی می‌تواند بالاتر باشد.'] : [])],
-        icon: c.logo ?? icons.get(addrKey(o.chain, c.token.address) ?? '') ?? rwaLogo(o.chain, c.token.address),
+        // An RWA token's own logo is a multi-megabyte file: the local copy first.
+        icon: rwaLogo(o.chain, c.token.address) ?? c.logo ?? icons.get(addrKey(o.chain, c.token.address) ?? '') ?? null,
       });
     }
   }

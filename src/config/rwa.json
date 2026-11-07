@@ -1,5 +1,5 @@
 {
-  "_note": "Real-world-asset tokens priced as a dollar NAV, which loop against a dollar debt (Kamino lists them as «RWA Loops»). They are not pegged: the issuer's NAV grows with the yield and can be marked down (a credit or insurance loss), and redemption can be queued or gated. Each was checked 2026-11-08 on DefiLlama's 90-day daily price: a steady rise, no daily-sampled fall over 0.1 % (PT-ONyc, a PT, 1.9 %). Left out: STRCx ($109, 8.8 % range — a price bet) and sACRED (no public price). Dollar debts: tokens held at $1 (90-day range under 0.2 %) whose symbol does not say USD. Logos are Jupiter's token list's (a fallback when it is unreachable).",
+  "_note": "Real-world-asset tokens priced as a dollar NAV, which loop against a dollar debt (Kamino lists them as «RWA Loops»). They are not pegged: the issuer's NAV grows with the yield and can be marked down (a credit or insurance loss), and redemption can be queued or gated. Each was checked 2026-11-08 on DefiLlama's 90-day daily price: a steady rise, no daily-sampled fall over 0.1 % (PT-ONyc, a PT, 1.9 %). Left out: STRCx ($109, 8.8 % range — a price bet) and sACRED (no public price). Dollar debts: tokens held at $1 (90-day range under 0.2 %) whose symbol does not say USD. Logos: local 256×256 copies (public/logos/tokens, sources in public/logos/SOURCES.md) — the issuers' own files are up to 3 MB (ONyc: 4000×4000, 13 s) and never showed in a 32-pixel row.",
   "collateral": {
     "solana:mainnet": {
       "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5": {
@@ -7,42 +7,42 @@
         "issuer": "OnRe",
         "backing": "بیمه‌ی اتکایی (حق بیمه‌ی نهادی)",
         "url": "https://onre.finance",
-        "logo": "https://ardrive.net/PyZzfGP-CqzaVlxTU3sb-I5uv4ZZKwnY8aCjcWn9S1A"
+        "logo": "/logos/tokens/onyc.webp"
       },
       "HH7FiYbEfDwQoK2ZJpkMz1T6wG6TqPsWcxWCtEVgigrZ": {
         "symbol": "PT-ONyc-10JAN27",
         "issuer": "OnRe · Exponent",
         "backing": "PT روی ONyc: بازده ثابت تا سررسید، بیمه‌ی اتکایی",
         "url": "https://onre.finance",
-        "logo": "https://cdn.exponent.finance/pt-tokens/PT-ONyc.svg"
+        "logo": "/logos/tokens/pt-onyc.webp"
       },
       "GNE6oDS6jHrfaV3GQVVCCp37fDnT7PiPuewMKBj2bqNm": {
         "symbol": "AUTO",
         "issuer": "Figure",
         "backing": "وام‌های خودروی آمریکا",
         "url": "https://www.figure.com",
-        "logo": "https://storage.googleapis.com/hastra-cdn-prod/spl/autotoken.png"
+        "logo": "/logos/tokens/auto.webp"
       },
       "59obFNBzyTBGowrkif5uK7ojS58vsuWz3ZCvg6tfZAGw": {
         "symbol": "PST",
         "issuer": "Huma · Sentora",
         "backing": "تأمین مالی تجاری نهادی",
         "url": "https://huma.finance",
-        "logo": "https://meta.huma.finance/pst.svg"
+        "logo": "/logos/tokens/pst.webp"
       },
       "3b8X44fLF9ooXaUm3hhSgjpmVs6rZZ3pPoGnGahc3Uu7": {
         "symbol": "PRIME",
         "issuer": "Figure",
         "backing": "وام‌های رهنی خانه (HELOC)",
         "url": "https://www.figure.com",
-        "logo": "https://storage.googleapis.com/hastra-cdn-prod/spl/primetoken.png"
+        "logo": "/logos/tokens/prime.webp"
       },
       "2uxaYT1fVrp6Fg2BrxQcyKSW91hefM6dG9krpbeDiirT": {
         "symbol": "reUSD",
         "issuer": "Re Protocol",
         "backing": "بیمه‌ی اتکایی، ترانش ارشد",
         "url": "https://re.xyz",
-        "logo": "https://gateway.irys.xyz/9y3EEjMgUU9jHAS5cse5AC4GjVBh4Qr1QYDtZ78G3UzV"
+        "logo": "/logos/tokens/reusd.webp"
       }
     }
   },
