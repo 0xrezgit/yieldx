@@ -9,10 +9,13 @@ import { formatMultiplier, formatNumber, formatPercent, formatUSD, formatUSDComp
 import { NumberField } from '../ui/field';
 import { Num } from '../ui/num';
 import { PairLogo } from '../ui/asset-identity';
+import { networkByKey } from '../../lib/registry/networks';
+import { tokenLogo } from '../../lib/leverage/logos';
 import { Empty, Metric, Pill, Segmented } from '../opportunities/parts';
 
 const STORE = STORAGE_KEYS.multiply;
-const CHAIN = 'solana:mainnet';
+/** The network name the logo registry knows (a raw key like «solana:mainnet» would show a monogram). */
+const CHAIN = networkByKey('solana:mainnet').name;
 const LEVERAGES = [1.5, 2, 2.5, 3, 4, 5] as const;
 const PERIODS = [7, 30, 90, 180] as const;
 
@@ -125,7 +128,7 @@ function PairPicker({ rows, value, onChange }: { rows: MultiplyRow[]; value: str
             onClick={() => onChange(r.key)}
             className={`tap shrink-0 rounded-lg border px-3 py-2 flex items-center gap-2 text-start ${on ? 'border-accent bg-accent/10' : 'border-default bg-surface hover:bg-elevated'}`}
           >
-            <PairLogo a={{ symbol: r.collateral.symbol, logo: r.collateral.icon }} b={{ symbol: r.debt.symbol, logo: r.debt.icon }} chain={CHAIN} size={24} />
+            <PairLogo a={{ symbol: r.collateral.symbol, logo: tokenLogo(r.collateral.symbol, r.collateral.icon) }} b={{ symbol: r.debt.symbol, logo: tokenLogo(r.debt.symbol, r.debt.icon) }} chain={CHAIN} size={24} />
             <span className="flex flex-col leading-tight">
               <bdi dir="ltr" className="text-sm font-semibold">
                 {r.collateral.symbol}/{r.debt.symbol}
@@ -147,7 +150,7 @@ export function Summary({ row, a, capital }: { row: MultiplyRow; a: MultiplyAnal
     <section className="sx-card p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <PairLogo a={{ symbol: row.collateral.symbol, logo: row.collateral.icon }} b={{ symbol: row.debt.symbol, logo: row.debt.icon }} chain={CHAIN} size={32} />
+          <PairLogo a={{ symbol: row.collateral.symbol, logo: tokenLogo(row.collateral.symbol, row.collateral.icon) }} b={{ symbol: row.debt.symbol, logo: tokenLogo(row.debt.symbol, row.debt.icon) }} chain={CHAIN} size={32} />
           <div className="flex flex-col">
             <bdi dir="ltr" className="font-semibold">
               {row.collateral.symbol}/{row.debt.symbol}
@@ -323,7 +326,7 @@ export function ScenarioCard({ sc, row, liq }: { sc: ScenarioResult; row: Multip
   );
 }
 
-function StrategyLegend() {
+export function StrategyLegend() {
   return (
     <section className="sx-card p-4 flex flex-col gap-2">
       <h3 className="font-semibold">پنج روش مدیریت موقعیت</h3>
@@ -339,7 +342,7 @@ function StrategyLegend() {
   );
 }
 
-function Assumptions({ row, a, feed }: { row: MultiplyRow; a: MultiplyAnalysis; feed: MultiplyFeed | null }) {
+export function Assumptions({ row, a, feed = null }: { row: MultiplyRow; a: MultiplyAnalysis; feed?: MultiplyFeed | null }) {
   const skipped = Object.entries(feed?.skipped ?? {});
   return (
     <section className="text-xs text-secondary leading-6 flex flex-col gap-1">

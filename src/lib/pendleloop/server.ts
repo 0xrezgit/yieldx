@@ -35,6 +35,13 @@ const fin = (x: unknown): x is number => typeof x === 'number' && Number.isFinit
 const isAddr = (x: unknown): x is string => typeof x === 'string' && /^0x[0-9a-fA-F]{40}$/.test(x);
 const https = (x: unknown): string | null => (typeof x === 'string' && x.startsWith('https://') ? x : null);
 
+/** The money market's rate curve as the box sends it (utilization → borrow APY), in %; null when incomplete. */
+function curveOf(d: NonNullable<Box['data']>): LoopBox['borrowCurve'] {
+  const pts = (d.borrowRateCurve ?? []).filter((p) => fin(p.utilization) && fin(p.borrowApy)).map((p) => ({ u: p.utilization, rate: p.borrowApy * 100 }));
+  if (pts.length < 2 || !fin(d.totalSupplyUsd) || !(d.totalSupplyUsd > 0) || !fin(d.utilization)) return null;
+  return { suppliedUsd: d.totalSupplyUsd, borrowedUsd: d.totalSupplyUsd * d.utilization, points: pts.sort((a, b) => a.u - b.u), source: 'منحنی نرخ بازار وام طبق PendleLoop' };
+}
+
 /** A box as the page needs it; null for long/short, broken or expired boxes. */
 export function loopBoxOf(b: Box, now = Date.now()): LoopBox | null {
   const d = b.data ?? {};
@@ -65,6 +72,7 @@ export function loopBoxOf(b: Box, now = Date.now()): LoopBox | null {
     liquidityUsd: fin(d.liquidityUsd) ? d.liquidityUsd : null,
     utilization: fin(d.utilization) ? d.utilization : null,
     serviceFeeRate: fin(d.serviceFeeRate) ? d.serviceFeeRate : null,
+    borrowCurve: curveOf(d),
     minOpenUsd: fin(b.minOpenUsd) ? b.minOpenUsd : null,
     isDepegged: b.isDepegged === true,
     risk: parseRisk(b.risks),

@@ -1,0 +1,705 @@
+[
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:d4A2prbA2whesmvHaL88BH6Ewn5N4bTSU2Ze8P6Bc4Q:D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "SOL",
+   "mint": "So11111111111111111111111111111111111111112",
+   "priceUsd": 104.46965027445559,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.99982253,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 4.115421819524445,
+  "ownYieldPct": 0,
+  "supplyPct": 4.115421819524445,
+  "borrowPct": 6.829875532406918,
+  "borrowNowPct": 6.046690414203693,
+  "borrow7dPct": 6.829875532406918,
+  "liqLtv": 0.8,
+  "maxLtv": 0.74,
+  "liqBonus": 0.1,
+  "closeFactor": 0.1,
+  "volPct": 59.60427547402373,
+  "flashFee": 0.000009999999999999593,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 9856436.532783734,
+  "depositUsd": 255457068.1026486,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:d4A2prbA2whesmvHaL88BH6Ewn5N4bTSU2Ze8P6Bc4Q:2gc9Dm1eB6UgVYFBUN9bWks6Kes9PbWSaPaa9DqyvEiN",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "SOL",
+   "mint": "So11111111111111111111111111111111111111112",
+   "priceUsd": 104.46965027445559,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png"
+  },
+  "debt": {
+   "symbol": "PYUSD",
+   "mint": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+   "priceUsd": 0.99981575,
+   "icon": "https://424565.fs1.hubspotusercontent-na1.net/hubfs/424565/PYUSDLOGO.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 4.115421819524445,
+  "ownYieldPct": 0,
+  "supplyPct": 4.115421819524445,
+  "borrowPct": 7.1782688943276,
+  "borrowNowPct": 7.1782688943276,
+  "borrow7dPct": 6.5575135731878955,
+  "liqLtv": 0.8,
+  "maxLtv": 0.74,
+  "liqBonus": 0.1,
+  "closeFactor": 0.1,
+  "volPct": 59.5169750580005,
+  "flashFee": 0.000009999999999999593,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 3701863.9154005023,
+  "depositUsd": 255457068.1026486,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:EVbyPKrHG6WBfm4dLxLMJpUDY43cCAcHSpV3KYjKsktW:D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "JITOSOL",
+   "mint": "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn",
+   "priceUsd": 136.61347081845042,
+   "icon": "https://storage.googleapis.com/token-metadata/JitoSOL-256.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.99982253,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 4.748706307785316,
+  "ownYieldPct": 4.74815731822335,
+  "supplyPct": 0.000548989561965918,
+  "borrowPct": 6.829875532406918,
+  "borrowNowPct": 6.046690414203693,
+  "borrow7dPct": 6.829875532406918,
+  "liqLtv": 0.73,
+  "maxLtv": 0.65,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 59.363720606540824,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 9856436.532783734,
+  "depositUsd": 100522589.47080238,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:37Jk2zkz23vkAYBT66HM2gaqJuNg2nYLsCreQAVt5MWK:D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "cbBTC",
+   "mint": "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij",
+   "priceUsd": 81625.06138705001,
+   "icon": "https://ipfs.io/ipfs/QmZ7L8yd5j36oXXydUiYFiFsRHbi3EdgC4RuFwvM7dcqge"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.99982253,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0.007348587150191044,
+  "ownYieldPct": 0,
+  "supplyPct": 0.007348587150191044,
+  "borrowPct": 6.829875532406918,
+  "borrowNowPct": 6.046690414203693,
+  "borrow7dPct": 6.829875532406918,
+  "liqLtv": 0.8,
+  "maxLtv": 0.79,
+  "liqBonus": 0.1,
+  "closeFactor": 0.1,
+  "volPct": 41.42795949192147,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 9856436.532783734,
+  "depositUsd": 51777430.708307005,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:DGQZWCY17gGtBUgdaFs1VreJWsodkjFxndPsskwFKGpp:D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "JupSOL",
+   "mint": "jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v",
+   "priceUsd": 127.01224018615096,
+   "icon": "https://static.jup.ag/jupSOL/icon.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.99982253,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 5.079633722734533,
+  "ownYieldPct": 5.07856795197904,
+  "supplyPct": 0.0010657707554928564,
+  "borrowPct": 6.829875532406918,
+  "borrowNowPct": 6.046690414203693,
+  "borrow7dPct": 6.829875532406918,
+  "liqLtv": 0.73,
+  "maxLtv": 0.65,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 60.178296284608344,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 9856436.532783734,
+  "depositUsd": 49806241.74407674,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek:DdTmCCjv7zHRD1hJv3E8bpnSEQBzdKkzB1j9ApXX5QoP:Ga4rZytCpq1unD4DbEJ5bkHeUz9g3oh9AAFEi6vSauXp",
+  "market": {
+   "address": "DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek",
+   "name": "JLP Market"
+  },
+  "collateral": {
+   "symbol": "JLP",
+   "mint": "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4",
+   "priceUsd": 4.548121562633856,
+   "icon": "https://static.jup.ag/jlp/icon.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.9998297100000001,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 8.722949172114271,
+  "ownYieldPct": 8.722949172114271,
+  "supplyPct": 0,
+  "borrowPct": 5.507718657120889,
+  "borrowNowPct": 5.444397671049295,
+  "borrow7dPct": 5.507718657120889,
+  "liqLtv": 0.85,
+  "maxLtv": 0.84,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 36.35552704849619,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 1337767.217255426,
+  "depositUsd": 44724489.81440775,
+  "url": "https://kamino.com/borrow?marketsFilter=DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek"
+ },
+ {
+  "key": "kamino:DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek:DdTmCCjv7zHRD1hJv3E8bpnSEQBzdKkzB1j9ApXX5QoP:8rM1AY8M4YP4xNVmxhKnEUnj5CRWrcbcHpcgMoDfgqVi",
+  "market": {
+   "address": "DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek",
+   "name": "JLP Market"
+  },
+  "collateral": {
+   "symbol": "JLP",
+   "mint": "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4",
+   "priceUsd": 4.548121562633856,
+   "icon": "https://static.jup.ag/jlp/icon.png"
+  },
+  "debt": {
+   "symbol": "USDG",
+   "mint": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+   "priceUsd": 0.9999263799999999,
+   "icon": "https://424565.fs1.hubspotusercontent-na1.net/hubfs/424565/GDN-USDG-Token-512x512.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 8.722949172114271,
+  "ownYieldPct": 8.722949172114271,
+  "supplyPct": 0,
+  "borrowPct": 5.361615624888011,
+  "borrowNowPct": 5.3301771212670435,
+  "borrow7dPct": 5.361615624888011,
+  "liqLtv": 0.85,
+  "maxLtv": 0.84,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 36.373344459664466,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 38868.71925416532,
+  "depositUsd": 44724489.81440775,
+  "url": "https://kamino.com/borrow?marketsFilter=DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek"
+ },
+ {
+  "key": "kamino:DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek:DdTmCCjv7zHRD1hJv3E8bpnSEQBzdKkzB1j9ApXX5QoP:2ov3CMqPBYG3jNBmmpXgK9KMW5GmU5GWZNGcwf7w3BC1",
+  "market": {
+   "address": "DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek",
+   "name": "JLP Market"
+  },
+  "collateral": {
+   "symbol": "JLP",
+   "mint": "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4",
+   "priceUsd": 4.548121562633856,
+   "icon": "https://static.jup.ag/jlp/icon.png"
+  },
+  "debt": {
+   "symbol": "USDT",
+   "mint": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+   "priceUsd": 0.9987650100000001,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB/logo.svg"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 8.722949172114271,
+  "ownYieldPct": 8.722949172114271,
+  "supplyPct": 0,
+  "borrowPct": 5.435651266260798,
+  "borrowNowPct": 5.253818270834154,
+  "borrow7dPct": 5.435651266260798,
+  "liqLtv": 0.85,
+  "maxLtv": 0.84,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 36.075038369175644,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 131419.81512874455,
+  "depositUsd": 44724489.81440775,
+  "url": "https://kamino.com/borrow?marketsFilter=DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek"
+ },
+ {
+  "key": "kamino:DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek:DdTmCCjv7zHRD1hJv3E8bpnSEQBzdKkzB1j9ApXX5QoP:FswUCVjvfAuzHCgPDF95eLKscGsLHyJmD6hzkhq26CLe",
+  "market": {
+   "address": "DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek",
+   "name": "JLP Market"
+  },
+  "collateral": {
+   "symbol": "JLP",
+   "mint": "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4",
+   "priceUsd": 4.548121562633856,
+   "icon": "https://static.jup.ag/jlp/icon.png"
+  },
+  "debt": {
+   "symbol": "PYUSD",
+   "mint": "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
+   "priceUsd": 0.99981475,
+   "icon": "https://424565.fs1.hubspotusercontent-na1.net/hubfs/424565/PYUSDLOGO.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 8.722949172114271,
+  "ownYieldPct": 8.722949172114271,
+  "supplyPct": 0,
+  "borrowPct": 8.314858914619672,
+  "borrowNowPct": 8.314858914619672,
+  "borrow7dPct": 7.943519450049143,
+  "liqLtv": 0.85,
+  "maxLtv": 0.84,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 36.30962385599421,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 33619.64534611301,
+  "depositUsd": 44724489.81440775,
+  "url": "https://kamino.com/borrow?marketsFilter=DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek"
+ },
+ {
+  "key": "kamino:DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek:DdTmCCjv7zHRD1hJv3E8bpnSEQBzdKkzB1j9ApXX5QoP:6ekGhgbrVyL86SkFUjvoMyVNY4sFrfDbu6KCRhWkTUwS",
+  "market": {
+   "address": "DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek",
+   "name": "JLP Market"
+  },
+  "collateral": {
+   "symbol": "JLP",
+   "mint": "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4",
+   "priceUsd": 4.548121562633856,
+   "icon": "https://static.jup.ag/jlp/icon.png"
+  },
+  "debt": {
+   "symbol": "USD1",
+   "mint": "USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB",
+   "priceUsd": 0.9988395499999998,
+   "icon": "https://raw.githubusercontent.com/worldliberty/usd1-metadata/refs/heads/main/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 8.722949172114271,
+  "ownYieldPct": 8.722949172114271,
+  "supplyPct": 0,
+  "borrowPct": 26.739907514189976,
+  "borrowNowPct": 26.739907514189976,
+  "borrow7dPct": 26.14221010676437,
+  "liqLtv": 0.85,
+  "maxLtv": 0.84,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 36.19147492646044,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 0,
+  "depositUsd": 44724489.81440775,
+  "url": "https://kamino.com/borrow?marketsFilter=DxXdAyU3kCjnyggvHmY5nAwg5cRbbmdyX3npfDMjjMek"
+ },
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:FBSyPnxtHKLBZ4UeeUyAnbtFuAmTHLtso9YtsqRDRWpM:D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "MSOL",
+   "mint": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+   "priceUsd": 147.68469678741602,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So/logo.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.99982253,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 5.036072626911669,
+  "ownYieldPct": 5.02750692603443,
+  "supplyPct": 0.008565700877238847,
+  "borrowPct": 6.829875532406918,
+  "borrowNowPct": 6.046690414203693,
+  "borrow7dPct": 6.829875532406918,
+  "liqLtv": 0.73,
+  "maxLtv": 0.65,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 59.70379444017849,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 9856436.532783734,
+  "depositUsd": 14776910.793740023,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:4Hyrqb9Mq7y1wkq4YoqHkPdPx3VQyFY3mxMj67naC1Cb:D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "xBTC",
+   "mint": "CtzPWv73Sn1dMGVU3ZtLv9yWSyUAanBni19YWDaznnkn",
+   "priceUsd": 81625.06138705,
+   "icon": "https://static.coinall.ltd/cdn/oksupport/common/20250512-095503.72e1f41d9b9a06.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.99982253,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0.0068639867282227485,
+  "ownYieldPct": 0,
+  "supplyPct": 0.0068639867282227485,
+  "borrowPct": 6.829875532406918,
+  "borrowNowPct": 6.046690414203693,
+  "borrow7dPct": 6.829875532406918,
+  "liqLtv": 0.8,
+  "maxLtv": 0.79,
+  "liqBonus": 0.1,
+  "closeFactor": 0.1,
+  "volPct": 41.413138728155644,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 9856436.532783734,
+  "depositUsd": 9028136.723085126,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF:HV9KsS5mB4b9CFhDJVKdfxWBAomYfUk5PeUsdgMQsUrB:ApQkX32ULJUzszZDe986aobLDLMNDoGQK8tRm6oD6SsA",
+  "market": {
+   "address": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+   "name": "SOL/BTC Market"
+  },
+  "collateral": {
+   "symbol": "pSOL",
+   "mint": "pSo1f9nQXWgXibFtKf7NWYxb5enAM4qfP6UJSiXRQfL",
+   "priceUsd": 115.23893238662248,
+   "icon": "https://assets.phantom.app/assets/metadata/PSOL.png"
+  },
+  "debt": {
+   "symbol": "CASH",
+   "mint": "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH",
+   "priceUsd": 1,
+   "icon": "https://token-metadata.bridge.xyz/images/cash.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 5.343608250992052,
+  "ownYieldPct": 5.34108175363979,
+  "supplyPct": 0.0025264973522620693,
+  "borrowPct": 5.3378728711391625,
+  "borrowNowPct": 5.18471647011991,
+  "borrow7dPct": 5.3378728711391625,
+  "liqLtv": 0.55,
+  "maxLtv": 0.45,
+  "liqBonus": 0.15,
+  "closeFactor": 0.1,
+  "volPct": 59.85000045722826,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 65090.91635118544,
+  "depositUsd": 6034270.554801504,
+  "url": "https://kamino.com/borrow?marketsFilter=7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+ },
+ {
+  "key": "kamino:GBJ3bzUiMfwC9ugaF3MM68EXMDyTUb5UryRRAcVjEowd:6e8XcrdencrXBjXtTqYkRS63nS36petvzkV3gBf2ezbH:EW9vT7g2VH2aTFfcbaXRUCbF7jEfaLwMiJpckwDZwUZd",
+  "market": {
+   "address": "GBJ3bzUiMfwC9ugaF3MM68EXMDyTUb5UryRRAcVjEowd",
+   "name": "ZEC Market"
+  },
+  "collateral": {
+   "symbol": "ZEC",
+   "mint": "A7bdiYdS5GjqGFtxf17ppRHtDKPkkRqbKtR27dxvQXaS",
+   "priceUsd": 1209.10210166,
+   "icon": "https://ardrive.net/QSYqnmB7NYlB7n1R6rz935Y07dlRK0tIuKe2mof5Sho"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.9997685900000001,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0,
+  "ownYieldPct": 0,
+  "supplyPct": 0,
+  "borrowPct": 9.985104158540814,
+  "borrowNowPct": 9.985104158540814,
+  "borrow7dPct": 9.462540436372073,
+  "liqLtv": 0.65,
+  "maxLtv": 0.4,
+  "liqBonus": 0.07,
+  "closeFactor": 0.2,
+  "volPct": 126.42829966236022,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 90269.549229058,
+  "depositUsd": 4275118.898182548,
+  "url": "https://kamino.com/borrow?marketsFilter=GBJ3bzUiMfwC9ugaF3MM68EXMDyTUb5UryRRAcVjEowd"
+ },
+ {
+  "key": "kamino:5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua:UvXjBuC7YZYaGB9Rn1PpBD1GySmjzunXgE8Zev9ua8d:97zoywd8mPZsGTg8q1wdD2Wgkdrs2tqusp1Qqcxbyj7E",
+  "market": {
+   "address": "5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua",
+   "name": "xStocks Market"
+  },
+  "collateral": {
+   "symbol": "SPYx",
+   "mint": "XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W",
+   "priceUsd": 768.0591811178107,
+   "icon": "https://xstocks-metadata.backed.fi/logos/tokens/SPYx.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.9997732899999999,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0.07546389997790115,
+  "ownYieldPct": 0,
+  "supplyPct": 0.07546389997790115,
+  "borrowPct": 8.554610333444025,
+  "borrowNowPct": 8.554610333444025,
+  "borrow7dPct": 6.747832413132106,
+  "liqLtv": 0.75,
+  "maxLtv": 0.73,
+  "liqBonus": 0.1,
+  "closeFactor": 0.2,
+  "volPct": 13.832370544572239,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 376020.2431660398,
+  "depositUsd": 4271379.832890147,
+  "url": "https://kamino.com/borrow?marketsFilter=5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua"
+ },
+ {
+  "key": "kamino:5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua:2jerdAXR8r2B6z3P7P6VgSiePQX7wqcpbEqdDbm8mgeB:97zoywd8mPZsGTg8q1wdD2Wgkdrs2tqusp1Qqcxbyj7E",
+  "market": {
+   "address": "5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua",
+   "name": "xStocks Market"
+  },
+  "collateral": {
+   "symbol": "QQQx",
+   "mint": "Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ",
+   "priceUsd": 706.7290969737633,
+   "icon": "https://xstocks-metadata.backed.fi/logos/tokens/QQQx.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.9997732899999999,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0.17579410211086,
+  "ownYieldPct": 0,
+  "supplyPct": 0.17579410211086,
+  "borrowPct": 8.554610333444025,
+  "borrowNowPct": 8.554610333444025,
+  "borrow7dPct": 6.747832413132106,
+  "liqLtv": 0.72,
+  "maxLtv": 0.7,
+  "liqBonus": 0.1,
+  "closeFactor": 0.2,
+  "volPct": 22.44309646272342,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 376020.2431660398,
+  "depositUsd": 3234490.796710449,
+  "url": "https://kamino.com/borrow?marketsFilter=5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua"
+ },
+ {
+  "key": "kamino:5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua:5iTiczqgUegqA3PpoNpotizMbY9n1sRWr3oL6igKvWuf:97zoywd8mPZsGTg8q1wdD2Wgkdrs2tqusp1Qqcxbyj7E",
+  "market": {
+   "address": "5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua",
+   "name": "xStocks Market"
+  },
+  "collateral": {
+   "symbol": "TSLAx",
+   "mint": "XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB",
+   "priceUsd": 374.84000000000003,
+   "icon": "https://xstocks-metadata.backed.fi/logos/tokens/TSLAx.png"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.9997732899999999,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0.0023934485048116017,
+  "ownYieldPct": 0,
+  "supplyPct": 0.0023934485048116017,
+  "borrowPct": 8.554610333444025,
+  "borrowNowPct": 8.554610333444025,
+  "borrow7dPct": 6.747832413132106,
+  "liqLtv": 0.65,
+  "maxLtv": 0.55,
+  "liqBonus": 0.1,
+  "closeFactor": 0.2,
+  "volPct": 47.313076317689735,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 376020.2431660398,
+  "depositUsd": 2951743.4679952865,
+  "url": "https://kamino.com/borrow?marketsFilter=5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua"
+ },
+ {
+  "key": "kamino:7G9hUEyKbxLdRmvNwpe5V1D23gXdcXoSuwoFRCBa2c2j:5MHbdvbQTegtPfFikifciBopmdEmZvWXDUpcHkQaz1w4:3u3earD5RAUn66zrjsmZPCGJ1zRFpmMtDTKv7ozDx96p",
+  "market": {
+   "address": "7G9hUEyKbxLdRmvNwpe5V1D23gXdcXoSuwoFRCBa2c2j",
+   "name": "PAXG Market"
+  },
+  "collateral": {
+   "symbol": "PAX Gold",
+   "mint": "5GgRAEmv8ZxF2PR5hY72Qs5x1bnQ6UK2RbTPoqJ3wSwW",
+   "priceUsd": 4024.34,
+   "icon": "https://424565.fs1.hubspotusercontent-na1.net/hubfs/424565/PAXG%20Metadata%202026/PAXG-Symbol-512x512px-Circle.png"
+  },
+  "debt": {
+   "symbol": "USDG",
+   "mint": "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH",
+   "priceUsd": 0.9999502100000001,
+   "icon": "https://424565.fs1.hubspotusercontent-na1.net/hubfs/424565/GDN-USDG-Token-512x512.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0,
+  "ownYieldPct": 0,
+  "supplyPct": 0,
+  "borrowPct": 4.75303900273123,
+  "borrowNowPct": 4.75303900273123,
+  "borrow7dPct": 4.0973647925653385,
+  "liqLtv": 0.8,
+  "maxLtv": 0.75,
+  "liqBonus": 0.07,
+  "closeFactor": 0.2,
+  "volPct": 23.236151860927954,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 90165.9489396756,
+  "depositUsd": 2858161.91754332,
+  "url": "https://kamino.com/borrow?marketsFilter=7G9hUEyKbxLdRmvNwpe5V1D23gXdcXoSuwoFRCBa2c2j"
+ },
+ {
+  "key": "kamino:FteaGMVCLDF4eonrTiQkRQ5kby5ohwCfaMD2mNiPkZL7:H8t4gGHEhrWzUXhQevc8A6zJ5Mn5dFwEAU47JbbVJfDs:DD4RN8t37nmw7EANW37ejdDEuFz9Tmf3TZTN7jxKsE8i",
+  "market": {
+   "address": "FteaGMVCLDF4eonrTiQkRQ5kby5ohwCfaMD2mNiPkZL7",
+   "name": "HYPE Market"
+  },
+  "collateral": {
+   "symbol": "HYPE",
+   "mint": "98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g",
+   "priceUsd": 77.2614594,
+   "icon": "https://ardrive.net/QBRdRop8wI4PpScSRTKyibv-fQuYBua-WOvC7tuJyJo"
+  },
+  "debt": {
+   "symbol": "USDC",
+   "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+   "priceUsd": 0.99976764,
+   "icon": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png"
+  },
+  "elevationGroup": 0,
+  "collateralYieldPct": 0,
+  "ownYieldPct": 0,
+  "supplyPct": 0,
+  "borrowPct": 6.365634751056458,
+  "borrowNowPct": 6.109008310003894,
+  "borrow7dPct": 6.365634751056458,
+  "liqLtv": 0.65,
+  "maxLtv": 0.55,
+  "liqBonus": 0.07,
+  "closeFactor": 0.2,
+  "volPct": 75.08071561889554,
+  "flashFee": 0,
+  "volDays": 90,
+  "history": [],
+  "availableUsd": 112154.35781269749,
+  "depositUsd": 991176.5008202128,
+  "url": "https://kamino.com/borrow?marketsFilter=FteaGMVCLDF4eonrTiQkRQ5kby5ohwCfaMD2mNiPkZL7"
+ }
+]

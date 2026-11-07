@@ -6,6 +6,8 @@ import type { LongShortFeed, LongShortRow } from '../../lib/longshort/types';
 import { analyzeLongShort, borrowPctOf, holdingPctOf, LEVERAGE_MIN, maxLeverageOf, type LongShortAnalysis, type LongShortInput } from '../../lib/longshort/model';
 import { reviewLongShort, type ReviewTone } from '../../lib/longshort/review';
 import { networkByChainId } from '../../lib/registry/networks';
+import { tokenLogo } from '../../lib/leverage/logos';
+import { tokenInfo } from '../../lib/portfolio/tokens';
 import { readLocal, STORAGE_KEYS, writeLocal } from '../../lib/data/local-store';
 import { formatMultiplier, formatNumber, formatPercent, formatUSD, formatUSDCompact } from '../../lib/utils/formatting';
 import { NumberField } from '../ui/field';
@@ -56,6 +58,8 @@ function useLongShort() {
   return { feed, failed };
 }
 
+/** The dollar side of a market: what a long borrows, what a short posts. */
+const dollarOf = (r: LongShortRow) => (r.side === 'long' ? r.debt.symbol : r.collateral.symbol);
 const signedUsd = (x: number) => formatUSD(x, Math.abs(x) >= 100 ? 0 : 2, true);
 const tone = (x: number) => (x > 0.005 ? 'text-success' : x < -0.005 ? 'text-danger' : 'text-secondary');
 const price = (x: number) => formatUSD(x, x < 10 ? 4 : 2);
@@ -173,7 +177,7 @@ export function MarketPicker({ rows, value, onChange }: { rows: LongShortRow[]; 
             onClick={() => onChange(r.key)}
             className={`tap shrink-0 rounded-lg border px-3 py-2 flex items-center gap-2 text-start ${on ? 'border-accent bg-accent/10' : 'border-default bg-surface hover:bg-elevated'}`}
           >
-            <PairLogo a={{ symbol: r.base.symbol }} b={{ symbol: r.side === 'long' ? r.debt.symbol : r.collateral.symbol }} chain={`eip155:${r.chainId}`} size={24} />
+            <PairLogo a={{ symbol: r.base.symbol, logo: tokenLogo(r.base.symbol, null, r.category) }} b={{ symbol: dollarOf(r), logo: tokenInfo(dollarOf(r))?.logo }} chain={networkByChainId(r.chainId).name} size={24} />
             <span className="flex flex-col leading-tight">
               <span className="text-sm font-semibold flex items-center gap-1">
                 <bdi dir="ltr">{r.base.symbol}</bdi>
@@ -192,14 +196,14 @@ export function MarketPicker({ rows, value, onChange }: { rows: LongShortRow[]; 
   );
 }
 
-export function Summary({ row, a, s }: { row: LongShortRow; a: LongShortAnalysis; s: Settings }) {
+export function Summary({ row, a, s }: { row: LongShortRow; a: LongShortAnalysis; s: Pick<LongShortInput, 'capital' | 'days'> }) {
   const risk = row.risk ? RISK[row.risk.level] : null;
   const dist = Math.abs(a.liqMove);
   return (
     <section className="sx-card p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
-          <PairLogo a={{ symbol: row.base.symbol }} b={{ symbol: row.side === 'long' ? row.debt.symbol : row.collateral.symbol }} chain={`eip155:${row.chainId}`} size={32} />
+          <PairLogo a={{ symbol: row.base.symbol, logo: tokenLogo(row.base.symbol, null, row.category) }} b={{ symbol: dollarOf(row), logo: tokenInfo(dollarOf(row))?.logo }} chain={networkByChainId(row.chainId).name} size={32} />
           <div className="flex flex-col min-w-0">
             <span className="font-semibold flex items-center gap-1.5 flex-wrap">
               <bdi dir="ltr">{row.base.symbol}</bdi>
@@ -264,7 +268,7 @@ const REVIEW_ICON: Record<ReviewTone, { Icon: typeof Info; cls: string }> = {
   good: { Icon: CheckCircle2, cls: 'text-success' },
 };
 
-export function Review({ row, a, s }: { row: LongShortRow; a: LongShortAnalysis; s: Settings }) {
+export function Review({ row, a, s }: { row: LongShortRow; a: LongShortAnalysis; s: LongShortInput }) {
   const items = reviewLongShort(row, a, s);
   return (
     <section className="sx-card p-4 flex flex-col gap-2" aria-labelledby="ls-review">
@@ -322,7 +326,7 @@ export function Outcomes({ row, a }: { row: LongShortRow; a: LongShortAnalysis }
   );
 }
 
-export function PerpCompare({ row, a, s }: { row: LongShortRow; a: LongShortAnalysis; s: Settings }) {
+export function PerpCompare({ row, a, s }: { row: LongShortRow; a: LongShortAnalysis; s: Pick<LongShortInput, 'days'> }) {
   const p = a.perp!;
   const cells: { label: string; loop: ReactNode; perp: ReactNode }[] = [
     { label: 'نگه‌داری در سال (روی سرمایه)', loop: <Num className={tone(a.holdingPct)}>{formatPercent(a.holdingPct, 1, true)}</Num>, perp: <Num className={tone(p.holdingPct)}>{formatPercent(p.holdingPct, 1, true)}</Num> },
@@ -367,7 +371,7 @@ export function PerpCompare({ row, a, s }: { row: LongShortRow; a: LongShortAnal
   );
 }
 
-function Differences() {
+export function Differences() {
   const items: [string, string][] = [
     ['هزینه', 'در PendleLoop هزینه‌ی نگه‌داری از نرخ‌های بازار وام می‌آید (بهره‌ی وام منهای سود وثیقه) و با میزان استفاده از بازار عوض می‌شود. در پرپ فاندینگ است که هر ساعت با عدم‌تعادل خریداران و فروشندگان عوض می‌شود و می‌تواند علامتش برگردد.'],
     ['لیکوییدشدن', 'اینجا با رسیدن به LLTV بازار وام و با قیمت اوراکل (مثلاً Chainlink) لیکویید می‌شوید، و لیکوییدکننده پاداش برمی‌دارد. در پرپ با رسیدن به حاشیه‌ی نگه‌داری و با قیمت مارک صرافی. با اهرم برابر، این‌جا معمولاً زودتر لیکویید می‌شوید.'],

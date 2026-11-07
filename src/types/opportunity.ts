@@ -232,6 +232,14 @@ export interface ExecQuote {
   unitUsd: number;
   /** Price impact the router reports, %; null when it reports none. */
   priceImpactPct: number | null;
+  /**
+   * The PT's (or YT's) mid price in USD when quoted. The executed price against it is the
+   * entry cost; the accounting asset's dollar price (`unitUsd`) is not always what one PT
+   * redeems for (PT-USD3: its unit is worth about $1.005), so a rate read from it can be off.
+   */
+  midUsd?: number | null;
+  /** Symbol of the token sold for the quote (USDC unless asked otherwise). */
+  tokenIn?: string | null;
   at: string;
   source: 'Pendle';
 }
