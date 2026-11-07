@@ -5,7 +5,7 @@ import { ChevronDown, ExternalLink, Landmark, Loader2, Repeat, Search, ShieldAle
 import thresholds from '../../config/thresholds.json';
 import { useLoopHistory } from '../../hooks/useLoopHistory';
 import type { LoopBox, LoopBoxesFeed } from '../../lib/pendleloop/types';
-import { leverageForHealth, loopPosition, midEntry, pendleMaxLeverage, type LoopEntry } from '../../lib/pendleloop/position';
+import { borrowAfter, leverageForHealth, loopPosition, midEntry, pendleMaxLeverage, type LoopEntry } from '../../lib/pendleloop/position';
 import { rateAfterBorrow } from '../../lib/opportunity/curve';
 import { quoteAmount } from '../../lib/opportunity/policy';
 import type { ExecQuote } from '../../types/opportunity';
@@ -274,7 +274,8 @@ function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: num
   const feeRate = b.serviceFeeRate ?? 0;
   // The borrow rate after this position's own borrow, on the market's curve.
   const first = loopPosition({ kind: b.kind, capital, leverage: L, days, yieldPct, borrowPct: b.borrowApy * 100, lltv: b.lltv, oracleFactor, feeRate, entry });
-  const borrowPct = (b.borrowCurve && rateAfterBorrow(b.borrowCurve, first.debtUsd, b.borrowApy * 100)) ?? b.borrowApy * 100;
+  const after = borrowAfter(b.borrowApy * 100, first.debtUsd, b.borrowRef, b.borrowCurve ? rateAfterBorrow(b.borrowCurve, first.debtUsd, b.borrowApy * 100) : null);
+  const borrowPct = after.pct;
   const r = useMemo(
     () => loopPosition({ kind: b.kind, capital, leverage: L, days, yieldPct, borrowPct, lltv: b.lltv, oracleFactor, feeRate, entry }),
     [b.kind, b.lltv, capital, L, days, yieldPct, borrowPct, oracleFactor, feeRate, entry],
@@ -359,7 +360,7 @@ function BoxDetail({ b, icon, now }: { b: LoopBox; icon: string | null; now: num
             label={entry.quoted ? `هزینه‌ی ورود (کارمزد ${formatPercent(feeRate * 100, 2)} + اثر قیمت و تبدیل ${quote?.tokenIn ?? ''})` : `هزینه‌ی ورود (کارمزد ${formatPercent(feeRate * 100, 2)})`}
             value={<Num className="text-warning">{formatUSD(-r.entryCostUsd, 2, true)}</Num>}
           />
-          <Line label="بهره‌ی وام پس از وام شما" value={<Num>{formatPercent(borrowPct, 2)}</Num>} />
+          <Line label={after.source === 'pendle' ? 'بهره‌ی وام پس از وام شما (برآورد پندل)' : after.source === 'curve' ? 'بهره‌ی وام پس از وام شما (منحنی نرخ بازار)' : 'بهره‌ی وام'} value={<Num>{formatPercent(borrowPct, 2)}</Num>} />
           <Line label="بهره‌ی وامی که سود را صفر می‌کند (با هزینه‌ی ورود؛ عدد PendleLoop بدون آن و بالاتر است)" value={r.breakEvenBorrowPct !== null && Number.isFinite(r.breakEvenBorrowPct) ? <Num>{formatPercent(r.breakEvenBorrowPct, 2)}</Num> : '—'} />
           <Line label="Health Factor" value={<Num className={r.health < thresholds.opportunities.loopMinHealth ? 'text-danger' : ''}>{formatNumber(r.health, 2)}</Num>} />
           <Line label="Health Factor به سبک PendleLoop" value={<Num className={buffer < 5 ? 'text-danger' : buffer < 7 ? 'text-warning' : 'text-success'}>{formatPercent(buffer, 2)}</Num>} />

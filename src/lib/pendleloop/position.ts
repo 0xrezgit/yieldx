@@ -118,3 +118,21 @@ export const pendleMaxLeverage = (lltv: number, minHealthPct = 0.03) => 1 / (1 -
 
 /** The highest leverage whose LLTV ÷ LTV stays at `minHealth` or above. */
 export const leverageForHealth = (lltv: number, minHealth: number) => (minHealth > lltv ? 1 / (1 - lltv / minHealth) : Infinity);
+
+/**
+ * The borrow APY (%) after this position borrows `debtUsd`. Up to PendleLoop's reference
+ * position, a straight line from today's rate to the reference's (what Pendle itself
+ * expects: PT-strUSD/USDC on Morpho, 2026-11-07, 9.51 % → 9.73 % for $41k, where the raw
+ * curve said 24 %). Past the reference (Pendle sizes it small where liquidity is thin) the
+ * market's curve, never below the reference's rate — a straight line out there gave 297 %.
+ * Without a reference, the curve; else today's rate.
+ */
+export function borrowAfter(spotPct: number, debtUsd: number, ref: { debtUsd: number; borrowPct: number } | null, curve: number | null): { pct: number; source: 'pendle' | 'curve' | 'spot' } {
+  const hasCurve = curve !== null && Number.isFinite(curve);
+  if (ref && ref.debtUsd > 0 && debtUsd >= 0) {
+    if (debtUsd <= ref.debtUsd) return { pct: Math.max(spotPct, spotPct + (ref.borrowPct - spotPct) * (debtUsd / ref.debtUsd)), source: 'pendle' };
+    return hasCurve && curve > ref.borrowPct ? { pct: curve, source: 'curve' } : { pct: Math.max(spotPct, ref.borrowPct), source: 'pendle' };
+  }
+  if (hasCurve) return { pct: curve, source: 'curve' };
+  return { pct: spotPct, source: 'spot' };
+}

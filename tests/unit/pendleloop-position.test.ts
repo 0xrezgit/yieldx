@@ -62,3 +62,18 @@ describe('the rate an executable quote pays', () => {
     expect(quoteCheck(q, 15.48, days)).toMatchObject({ ok: true });
   });
 });
+
+describe('the borrow rate after this position’s own borrow', () => {
+  it('follows PendleLoop’s reference position where it has one, not the raw curve', async () => {
+    const { borrowAfter } = await import('../../src/lib/pendleloop/position');
+    // PT-strUSD/USDC on Morpho, 2026-11-07: 9.51 % today, 9.73 % after Pendle's $41,470 reference debt.
+    const r = borrowAfter(9.51, 20_735, { debtUsd: 41_470, borrowPct: 9.73 }, 17.05);
+    expect(r.source).toBe('pendle');
+    expect(r.pct).toBeCloseTo(9.62, 2);
+    expect(borrowAfter(9.51, 20_735, null, 17.05)).toEqual({ pct: 17.05, source: 'curve' });
+    expect(borrowAfter(9.51, 20_735, null, null)).toEqual({ pct: 9.51, source: 'spot' });
+    // Past Pendle's (small) reference: the curve, at least the reference's rate — never a line extrapolated to 297 %.
+    expect(borrowAfter(9.77, 20_000, { debtUsd: 2_000, borrowPct: 35.78 }, null)).toEqual({ pct: 35.78, source: 'pendle' });
+    expect(borrowAfter(5.66, 9_000, { debtUsd: 7_202, borrowPct: 13.15 }, 20.1)).toEqual({ pct: 20.1, source: 'curve' });
+  });
+});

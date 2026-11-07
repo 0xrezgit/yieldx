@@ -28,7 +28,7 @@ type Box = PendleLoopBox & {
   iconUrl?: string | null;
   minOpenUsd?: number | null;
   risks?: Parameters<typeof parseRisk>[0];
-  data?: (PendleLoopBox['data'] & { maxLeverage?: number; maxApy?: number; serviceFeeRate?: number; reference?: { fixedApy?: number } | null }) | null;
+  data?: (PendleLoopBox['data'] & { maxLeverage?: number; maxApy?: number; serviceFeeRate?: number; reference?: { fixedApy?: number; positionUsd?: number; leverage?: number; borrowApy?: number } | null }) | null;
 };
 
 const fin = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
@@ -40,6 +40,14 @@ function curveOf(d: NonNullable<Box['data']>): LoopBox['borrowCurve'] {
   const pts = (d.borrowRateCurve ?? []).filter((p) => fin(p.utilization) && fin(p.borrowApy)).map((p) => ({ u: p.utilization, rate: p.borrowApy * 100 }));
   if (pts.length < 2 || !fin(d.totalSupplyUsd) || !(d.totalSupplyUsd > 0) || !fin(d.utilization)) return null;
   return { suppliedUsd: d.totalSupplyUsd, borrowedUsd: d.totalSupplyUsd * d.utilization, points: pts.sort((a, b) => a.u - b.u), source: 'منحنی نرخ بازار وام طبق PendleLoop' };
+}
+
+/** PendleLoop's reference position: the borrow APY (%) after its debt; null when incomplete. */
+function refOf(d: NonNullable<Box['data']>): LoopBox['borrowRef'] {
+  const r = d.reference;
+  if (!r || !fin(r.positionUsd) || !fin(r.leverage) || !(r.leverage > 1) || !fin(r.borrowApy) || r.borrowApy < 0) return null;
+  const debtUsd = r.positionUsd * (1 - 1 / r.leverage);
+  return debtUsd > 0 ? { debtUsd, borrowPct: r.borrowApy * 100 } : null;
 }
 
 /** A box as the page needs it; null for long/short, broken or expired boxes. */
@@ -73,6 +81,7 @@ export function loopBoxOf(b: Box, now = Date.now()): LoopBox | null {
     utilization: fin(d.utilization) ? d.utilization : null,
     serviceFeeRate: fin(d.serviceFeeRate) ? d.serviceFeeRate : null,
     borrowCurve: curveOf(d),
+    borrowRef: refOf(d),
     minOpenUsd: fin(b.minOpenUsd) ? b.minOpenUsd : null,
     isDepegged: b.isDepegged === true,
     risk: parseRisk(b.risks),
